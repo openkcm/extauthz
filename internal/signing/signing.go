@@ -137,7 +137,7 @@ func (sk *signingKey) ServePublicKey(ctx context.Context, address string) error 
 			// encode and return the response as JSON
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
-			//nolint:errcheck
+
 			err = json.NewEncoder(w).Encode(response)
 			if err != nil {
 				http.Error(w, "could not encode response", http.StatusInternalServerError)
