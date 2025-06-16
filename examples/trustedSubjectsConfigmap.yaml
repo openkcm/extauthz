@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: extauthz-trusted-subjects
+immutable: false
+data:
+  trustedSubjects.yaml: |-
+    office-0815:
+      - CN=client
+      - CN=client2
+    cf-eu10:
+      - CN=service-manager,L=service-manager,OU=xxxxx,OU=Canary,OU=SAP Cloud Platform Clients,O=SAP SE,C=DE
+    cf-eu11:
+      - CN=service-manager,L=service-manager,OU=yyyy,OU=SAP Cloud Platform Clients,O=SAP SE,C=DE

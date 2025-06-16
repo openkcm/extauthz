@@ -1,0 +1,235 @@
+# Default values for extauthz.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# Override the "name" value, which is used to annotate some of
+# the resources that are created by this Chart (using "app.kubernetes.io/name").
+# +docs:property
+nameOverride: ""
+
+# Override the "fullname" value. This value is used as part of
+# most of the names of the resources created by this Helm chart.
+# +docs:property
+fullnameOverride: ""
+
+# This namespace allows you to define where the services are installed into.
+# If not set then they use the namespace of the release.
+# This is helpful when installing a chart dependency (sub chart).
+namespace: ""
+
+# This will set the replicaset count more information can be found here: https://kubernetes.io/docs/concepts/workloads/controllers/replicaset/
+replicaCount: 1
+
+# This sets the container image more information can be found here: https://kubernetes.io/docs/concepts/containers/images/
+image:
+  # The container registry to pull the image from.
+  # For example:
+  #   registry: kms.common.repositories.cloud.sap
+  #   repository: cmk
+  # +docs:property
+  registry: kms.common.repositories.cloud.sap
+
+  # The container image
+  # +docs:property
+  repository: extauthz
+
+  # Override the image tag to deploy by setting this variable.
+  # If no value is set, the chart's appVersion is used.
+  # +docs:property
+  tag: ""
+
+  # Setting a digest will override any tag.
+  # +docs:property
+  # digest: sha256:0e072dddd1f7f8fc8909a2ca6f65e76c5f0d2fcfb8be47935ae3457e8bbceb20
+
+  # Kubernetes imagePullPolicy.
+  pullPolicy: IfNotPresent
+
+  # # Setting the arguments for the container
+  # # +docs:property
+  # args:
+  #   - --graceful-shutdown=2
+  #   - --graceful-message=Graceful shutdown in %d seconds
+
+# This is for the secretes for pulling an image from a private repository more information can be found here: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
+imagePullSecrets:
+  - name: "registry-access"
+
+# This section builds out the service account more information can be found here: https://kubernetes.io/docs/concepts/security/service-accounts/
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Automatically mount a ServiceAccount's API credentials?
+  automount: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+# This is for setting Kubernetes Annotations to a Pod.
+# For more information checkout: https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations/
+podAnnotations: {}
+# This is for setting Kubernetes Labels to a Pod.
+# For more information checkout: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/
+podLabels: {}
+
+podSecurityContext: {}
+  # fsGroup: 2000
+
+securityContext: {}
+  # capabilities:
+  #   drop:
+  #   - ALL
+  # readOnlyRootFilesystem: true
+  # runAsNonRoot: true
+  # runAsUser: 1000
+
+podDisruptionBudget:
+  # Enable or disable the PodDisruptionBudget resource.
+  #
+  # This prevents downtime during voluntary disruptions such as during a Node upgrade.
+  # For example, the PodDisruptionBudget will block `kubectl drain`
+  # Pod is currently running.
+  enabled: false
+
+  # This configures the minimum available pods for disruptions. It can either be set to
+  # an integer (e.g. 1) or a percentage value (e.g. 25%).
+  # It cannot be used if `maxUnavailable` is set.
+  # +docs:property
+  # +docs:type=unknown
+  # minAvailable: 1
+
+  # This configures the maximum unavailable pods for disruptions. It can either be set to
+  # an integer (e.g. 1) or a percentage value (e.g. 25%).
+  # it cannot be used if `minAvailable` is set.
+  # +docs:property
+  # +docs:type=unknown
+  # maxUnavailable: 1
+
+# This is for setting up a service more information can be found here: https://kubernetes.io/docs/concepts/services-networking/service/
+service:
+  # Labels to add to the service
+  labels: {}
+  # Annotations to add to the service
+  annotations: {}
+  # This sets the service type more information can be found here: https://kubernetes.io/docs/concepts/services-networking/service/#publishing-services-service-types
+  type: ClusterIP
+  # This sets the ports more information can be found here: https://kubernetes.io/docs/concepts/services-networking/service/#field-spec-ports
+  ports:
+    - name: grpc
+      protocol: TCP
+      port: 9092
+      targetPort: 9092
+    - name: http-status
+      protocol: TCP
+      port: 8080
+      targetPort: 8080
+
+resources: {}
+  # We usually recommend not to specify default resources and to leave this as a conscious
+  # choice for the user. This also increases chances charts run on environments with little
+  # resources, such as Minikube. If you do want to specify resources, uncomment the following
+  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  # limits:
+  #   cpu: 100m
+  #   memory: 128Mi
+  # requests:
+  #   cpu: 100m
+  #   memory: 128Mi
+
+# # This is to setup the liveness and readiness probes more information can be found here: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
+# livenessProbe:
+#   httpGet:
+#     path: /probe/healthz
+#     port: http-status
+#     scheme: HTTP
+#     failureThreshold: 1
+#     periodSeconds: 10
+# readinessProbe:
+#   httpGet:
+#     path: /probe/healthz
+#     port: http-status
+#     scheme: HTTP
+#     failureThreshold: 1
+#     periodSeconds: 10
+
+# This section is for setting up autoscaling more information can be found here: https://kubernetes.io/docs/concepts/workloads/autoscaling/
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 100
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80
+
+# Additional containers on the output Deployment definition.
+extraContainers: []
+
+# Additional ens on the output Deployment definition.
+extraEnvs: []
+# Additional envsFrom on the output Deployment definition.
+extraEnvsFrom: []
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# Additional volumes on the output Deployment definition.
+extraVolumes:
+  - name: extauthz-trusted-subjects-volume
+    configMap:
+      name: extauthz-trusted-subjects
+  - name: extauthz-policies-volume
+    projected:
+      sources:
+        - configMap:
+            name: extauthz-systems-policies
+        - configMap:
+            name: extauthz-users-policies
+
+# Additional volumeMounts on the output Deployment definition.
+extraVolumeMounts:
+  - name: extauthz-trusted-subjects-volume
+    mountPath: /etc/extauthz-mtls
+    readOnly: true
+  - name: extauthz-policies-volume
+    mountPath: /etc/extauthz-policies
+    readOnly: true
+
+# Additional ports on the output Deployment definition.
+extraPorts:
+  - name: grpc
+    protocol: TCP
+    containerPort: 9092
+  - name: http-status
+    protocol: TCP
+    containerPort: 8080
+
+# Application configuration: using a flat structure following
+# https://helm.sh/docs/chart_best_practices/values/#flat-or-nested-values
+config:
+  # Based on github.com/openkcm/common-sdk/pkg/commoncfg
+  environment: development
+  logger:
+    level: debug # one of: debug, info, warn, error
+    format: json # one of: json, text
+  status: # status server configuration
+    enabled: true
+    address: :8080
+    profiling: true
+
+  # Based on github.com/openkcm/extauthz/pkg/config  
+  grpcServer:
+    address: :9092
+
+  policyPath: /etc/extauthz-policies
+  mtlsTrustedSubjectsYaml: /etc/extauthz-mtls/trustedSubjects.yaml
+  # jwtOperationMode: default
+  # jwtk8sProvidersAPIGroup: /apis/gateway.extensions.security.cloud.sap/v1alpha1
+  # jwtk8sProvidersName: jwtproviders
+  # jwtk8sProvidersNamespace: default
+
+  # Client Data handling
+  clientData:
+    withRegion: true
+    withType: true

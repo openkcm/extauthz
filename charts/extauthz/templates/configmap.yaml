@@ -1,0 +1,65 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "extauthz.name" . }}-config
+  namespace: {{ include "extauthz.namespace" . }}
+  labels:
+    {{- include "extauthz.labels" . | nindent 4 }}
+immutable: {{ .Values.config.isImmutable | default false }}
+data:
+  config.yaml: |-
+    # Based on github.com/openkcm/common-sdk/pkg/commoncfg
+    application:
+      name: {{ include "extauthz.name" . }}
+
+    {{- with .Values.config.environment }}
+      environment: {{ . }}
+    {{- end }}
+
+    {{- with .Values.config.labels }}
+      labels:
+        {{- toYaml . | nindent 8 }}
+    {{- end}}
+
+    {{- with .Values.config.logger }}
+    logger:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+
+    {{- with .Values.config.status }}
+    status:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+
+    {{- with .Values.config.telemetry }}
+    telemetry:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+
+    # Based on github.com/openkcm/extauthz/pkg/config
+    {{- with .Values.config.grpcServer }}
+    grpcServer:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+
+    # Path to Cedar policy files
+    policyPath: {{ .Values.config.policyPath }}
+
+    # Client Certificate handling
+    mtls:
+      trustedSubjectsYaml: {{ .Values.config.mtlsTrustedSubjectsYaml }}
+
+    # JWT Token handling
+    jwt:
+      operationMode: {{ .Values.config.jwtOperationMode | default "default" }}
+      k8sProviders:
+        apiGroup: {{ .Values.config.jwtk8sProvidersAPIGroup | default "/apis/gateway.extensions.security.cloud.sap/v1alpha1" }}
+        name: {{ .Values.config.jwtk8sProvidersName | default "jwtproviders" }}
+        namespace: {{ .Values.config.jwtk8sProvidersNamespace | default "default" }}
+
+    # Client Data handling
+    clientData:
+      publicKeyAddress: {{ .Values.config.clientData.withRegion | default ":5555" }}
+      signingKeyRefreshIntervalS: {{ .Values.config.clientData.withRegion | default 21600 }}
+      withRegion: {{ .Values.config.clientData.withRegion | default false }}
+      withType: {{ .Values.config.clientData.withType | default false }}
