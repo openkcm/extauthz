@@ -1,0 +1,189 @@
+package extauthz
+
+import (
+	"bytes"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/sha256"
+	"crypto/tls"
+	"crypto/x509"
+	"encoding/base64"
+	"encoding/binary"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"testing"
+	"time"
+
+	"github.com/golang-jwt/jwt/v5"
+
+	"github.com/openkcm/extauthz/internal/jwthandler"
+	"github.com/openkcm/extauthz/internal/policy"
+)
+
+func TestCheckAuthHeader(t *testing.T) {
+	// create a JWKS test server
+	var jwksResponse []byte
+	mux := http.NewServeMux()
+	mux.HandleFunc("/jwks", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		fmt.Fprintln(w, string(jwksResponse))
+	})
+	ts := httptest.NewTLSServer(mux)
+	defer ts.Close()
+	issuerURL, err := url.Parse(ts.URL)
+	if err != nil {
+		t.Fatalf("could not parse issuer URL: %s", err)
+	}
+	jwksURI, err := url.Parse(ts.URL + "/jwks")
+	if err != nil {
+		t.Fatalf("could not parse JWKS URI: %s", err)
+	}
+
+	// create a JWT token
+	token := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
+		"sub":  "me",
+		"mail": "me@my.world",
+		"iss":  issuerURL.String(),
+		"exp":  time.Now().Add(48 * time.Hour).Unix(),
+	})
+	token.Header["kid"] = rsaKeyID
+	token.Header["jku"] = jwksURI.String()
+	tokenString, err := token.SignedString(rsaPrivateKey)
+	if err != nil {
+		t.Fatalf("could not sign token: %s", err)
+	}
+
+	// create invalid token
+	rsaPrivateKeyInvalid, err := rsa.GenerateKey(rand.Reader, 4096)
+	if err != nil {
+		t.Fatalf("could not generate RSA key: %s", err)
+	}
+	tokenInvalid := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
+		"sub":  "me",
+		"mail": "me@my.world",
+		"iss":  "https://invalid.issuer",
+		"exp":  time.Now().Add(48 * time.Hour).Unix(),
+	})
+	tokenInvalid.Header["kid"] = rsaKeyID
+	tokenInvalid.Header["jku"] = jwksURI.String()
+	tokenStringInvalid, err := tokenInvalid.SignedString(rsaPrivateKeyInvalid)
+	if err != nil {
+		t.Fatalf("could not sign token: %s", err)
+	}
+
+	// create a x509 certificate
+	certDER, err := createX509CertDER(time.Now(), time.Now().Add(5*time.Minute))
+	if err != nil {
+		t.Fatalf("could not create x509 certificate: %s", err)
+	}
+
+	// create the JWKS response
+	eBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(eBytes, uint64(rsaPrivateKey.E))
+	eBytes = bytes.TrimLeft(eBytes, "\x00")
+	sum := sha256.Sum256(certDER)
+	jwksResponse, err = json.Marshal(map[string]any{
+		"keys": []map[string]any{{
+			"kty":      "RSA",
+			"x5t#S256": base64.RawURLEncoding.EncodeToString(sum[:]),
+			"e":        base64.RawURLEncoding.EncodeToString(eBytes),
+			"use":      "sig",
+			"kid":      rsaKeyID,
+			"x5c":      []string{base64.StdEncoding.EncodeToString(certDER)},
+			"alg":      "RS256",
+			"n":        base64.RawURLEncoding.EncodeToString(rsaPrivateKey.N.Bytes()),
+		}},
+	})
+	if err != nil {
+		t.Fatalf("could not marshal JWKS response: %s", err)
+	}
+
+	// create the test cases
+	tests := []struct {
+		name       string
+		authHeader string
+
+		wantCheckResultCode checkResultCode
+		wantSubject         string
+		wantRegion          string
+		wantEmail           string
+	}{
+		{
+			name:                "zero values",
+			wantCheckResultCode: UNAUTHENTICATED,
+		}, {
+			name:                "invalid auth header 1",
+			authHeader:          "Foo123",
+			wantCheckResultCode: UNAUTHENTICATED,
+		}, {
+			name:                "invalid auth header 2",
+			authHeader:          "Foo 123",
+			wantCheckResultCode: UNAUTHENTICATED,
+		}, {
+			name:                "invalid auth header 3",
+			authHeader:          "Bearer 123",
+			wantCheckResultCode: UNAUTHENTICATED,
+		}, {
+			name:                "unauthorized",
+			authHeader:          "Bearer " + tokenStringInvalid,
+			wantCheckResultCode: DENIED,
+		}, {
+			name:                "authorized",
+			authHeader:          "Bearer " + tokenString,
+			wantCheckResultCode: ALLOWED,
+			wantSubject:         "me",
+			wantEmail:           "me@my.world",
+		},
+	}
+
+	// run the tests
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// Arrange
+			// create a provider, which trusts the http test server certificate
+			certpool := x509.NewCertPool()
+			certpool.AddCert(ts.Certificate())
+			cl := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: certpool}}}
+			p, err := jwthandler.NewProvider(issuerURL, []string{},
+				jwthandler.WithClient(cl),
+				jwthandler.WithCustomJWKSURI(jwksURI),
+			)
+			if err != nil {
+				t.Fatalf("could not create provider: %s", err)
+			}
+			hdl, err := jwthandler.NewHandler(jwthandler.WithProvider(p))
+			if err != nil {
+				t.Fatalf("could not create handler: %s", err)
+			}
+			pe, err := policy.NewEngine(policy.WithBytes("my policies", []byte(cedarpolicies)))
+			if err != nil {
+				t.Fatalf("could not create policy engine: %s", err)
+			}
+			srv, err := NewServer(nil,
+				WithPolicyEngine(pe),
+				WithJWTHandler(hdl),
+			)
+			if err != nil {
+				t.Fatalf("could not create server: %s", err)
+			}
+
+			// Act
+			result := srv.checkAuthHeader(t.Context(), tc.authHeader, "GET", "my.service.com", "/foo/bar")
+
+			// Assert
+			if result.is != tc.wantCheckResultCode {
+				t.Errorf("expected: %v, got: %v", tc.wantCheckResultCode, result.is)
+			}
+			if result.subject != tc.wantSubject {
+				t.Errorf("expected: %v, got: %v", tc.wantSubject, result.subject)
+			}
+			if result.email != tc.wantEmail {
+				t.Errorf("expected: %v, got: %v", tc.wantEmail, result.email)
+			}
+		})
+	}
+}

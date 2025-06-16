@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: extauthz-users-policies
+immutable: false
+data:
+  users.cedar: |-
+    // Users based on JWT accessing the CMK Backend via the CMK UI
+    permit (
+      principal is Subject,
+      action in [Action::"GET", Action::"POST"],
+      resource is Route
+    ) when {
+      context.type == "jwt"
+      && context.route like "myorg.com/cmk/*"
+      && context.issuer == "https://iam.myorg.com/"
+    };

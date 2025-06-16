@@ -1,0 +1,41 @@
+# Example configuration file for extauthz
+
+# Based on github.com/openkcm/common-sdk/pkg/commoncfg
+application:
+  name: extauthz
+  environment: development
+
+logger:
+  level: debug # one of: debug, info, warn, error
+  format: text # one of: json, text
+
+status: # status server configuration
+  enabled: true
+  address: :8080
+  profiling: true
+
+# Based on github.com/openkcm/extauthz/pkg/config
+grpcServer: # ext_authz gRPC server configuration
+  address: :9092
+
+# Path to Cedar policy files
+policyPath: ./
+
+# Client Certificate handling
+mtls:
+  trustedSubjectsYaml: ./trustedSubjects.yaml
+
+# JWT Token handling
+jwt:
+  operationMode: default # one of: default, sapias
+  k8sProviders:
+    apiGroup: "/apis/gateway.extensions.security.cloud.sap/v1alpha1"
+    name: "jwtproviders"
+    namespace: "default"
+
+# Client Data handling
+clientData:
+  publicKeyAddress: :5555
+  signingKeyRefreshIntervalS: 21600 # 6 hours
+  withRegion: false
+  withType: false
