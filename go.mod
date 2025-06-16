@@ -6,14 +6,13 @@ toolchain go1.24.4
 
 require (
 	github.com/cedar-policy/cedar-go v1.2.1
-	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/envoyproxy/go-control-plane/envoy v1.32.4
 	github.com/go-andiamo/splitter v1.2.5
 	github.com/go-jose/go-jose/v4 v4.1.0
 	github.com/gogo/googleapis v1.4.1
 	github.com/golang-jwt/jwt/v5 v5.2.2
 	github.com/google/uuid v1.6.0
-	github.com/openkcm/common-sdk v0.2.2
+	github.com/openkcm/common-sdk v0.3.0
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/samber/oops v1.18.1
 	github.com/veqryn/slog-context v0.8.0
