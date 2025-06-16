@@ -10,7 +10,7 @@ require (
 	github.com/gogo/googleapis v1.4.1
 	github.com/golang-jwt/jwt/v5 v5.2.2
 	github.com/google/uuid v1.6.0
-	github.com/openkcm/common-sdk v0.2.2
+	github.com/openkcm/common-sdk v0.3.0
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/samber/oops v1.18.1
 	github.com/veqryn/slog-context v0.8.0
