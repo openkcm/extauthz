@@ -1,7 +1,6 @@
 package extauthz
 
 import (
-	"context"
 	"crypto/x509"
 	"log"
 	"reflect"
@@ -137,7 +136,7 @@ func TestCheckClientCert(t *testing.T) {
 			srv.trustedSubjectToRegion = tc.trustedSubjects
 
 			// Act
-			result := srv.checkClientCert(context.Background(), tc.certHeader, "GET", "my.service.com", "/foo/bar")
+			result := srv.checkClientCert(t.Context(), tc.certHeader, "GET", "my.service.com", "/foo/bar")
 
 			// Assert
 			if result.is != tc.wantCheckResultCode {

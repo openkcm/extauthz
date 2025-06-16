@@ -126,7 +126,7 @@ func (handler *Handler) ParseAndValidate(ctx context.Context, rawToken string, u
 	if issuer == "" {
 		issuer, _ = claims["iss"].(string)
 		if issuer == "" { // in case its empty
-			return errors.Join(ErrInvalidToken, fmt.Errorf("missing iss in token claims"))
+			return errors.Join(ErrInvalidToken, errors.New("missing iss in token claims"))
 		}
 	}
 	issuerURL, err := url.Parse(issuer)
@@ -153,7 +153,7 @@ func (handler *Handler) ParseAndValidate(ctx context.Context, rawToken string, u
 		}
 	}
 	if keyID == "" {
-		return errors.Join(ErrInvalidToken, fmt.Errorf("missing kid in token header"))
+		return errors.Join(ErrInvalidToken, errors.New("missing kid in token header"))
 	}
 
 	// let the provider lookup the key for the key ID
@@ -170,7 +170,7 @@ func (handler *Handler) ParseAndValidate(ctx context.Context, rawToken string, u
 
 	// verify the expiry and not before
 	if standardClaims.Expiry == nil {
-		return errors.Join(ErrInvalidToken, fmt.Errorf("missing exp in token claims"))
+		return errors.Join(ErrInvalidToken, errors.New("missing exp in token claims"))
 	}
 	if err = standardClaims.Validate(jwt.Expected{
 		Time: time.Now(),

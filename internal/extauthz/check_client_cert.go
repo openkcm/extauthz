@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/x509"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"net/url"
 	"strings"
@@ -43,7 +44,7 @@ func parseCert(urlEncodedPem string) (*x509.Certificate, error) {
 	}
 	block, _ := pem.Decode([]byte(pemData))
 	if block == nil {
-		return nil, fmt.Errorf("failed to decode PEM block containing certificate: block is nil")
+		return nil, errors.New("failed to decode PEM block containing certificate: block is nil")
 	}
 	if block.Type != "CERTIFICATE" {
 		return nil, fmt.Errorf("failed to decode PEM block containing certificate: block type is %s", block.Type)

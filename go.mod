@@ -6,6 +6,7 @@ toolchain go1.24.4
 
 require (
 	github.com/cedar-policy/cedar-go v1.2.1
+	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/envoyproxy/go-control-plane/envoy v1.32.4
 	github.com/go-andiamo/splitter v1.2.5
 	github.com/go-jose/go-jose/v4 v4.1.0

@@ -13,6 +13,8 @@ type TestStruct struct {
 }
 
 func TestNewMutator(t *testing.T) {
+	t.Parallel()
+
 	// Arrange
 	baseProv := func() TestStruct {
 		return TestStruct{

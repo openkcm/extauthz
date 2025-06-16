@@ -27,6 +27,10 @@ helm-uninstall:
 	helm uninstall --ignore-not-found $(SERVICE_NAME)
 	kubectl delete --ignore-not-found -f examples/trustedSubjectsConfigmap.yaml
 
+.PHONY: lint
+lint:
+	golangci-lint run -v --fix ./...
+
 .PHONY: test
 test: clean
 	mkdir -p cover/integration cover/unit

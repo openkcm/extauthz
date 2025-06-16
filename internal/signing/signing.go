@@ -96,7 +96,7 @@ func (sk *signingKey) Private() (string, *rsa.PrivateKey, error) {
 	sk.m.Lock()
 	defer sk.m.Unlock()
 	if sk.priv == nil {
-		return "", nil, fmt.Errorf("private key not generated")
+		return "", nil, errors.New("private key not generated")
 	}
 	return sk.keyID, sk.priv, nil
 }
@@ -106,7 +106,7 @@ func (sk *signingKey) PublicPEM() (string, string, error) {
 	sk.m.Lock()
 	defer sk.m.Unlock()
 	if sk.pub == nil {
-		return "", "", fmt.Errorf("public key not generated")
+		return "", "", errors.New("public key not generated")
 	}
 	pubKeyDER, err := x509.MarshalPKIXPublicKey(sk.pub)
 	if err != nil {
@@ -131,7 +131,7 @@ type responsePublicKeys struct {
 // ServePublicKey starts an HTTP server that serves the public key of the signing key.
 func (sk *signingKey) ServePublicKey(ctx context.Context, address string) error {
 	if address == "" {
-		return fmt.Errorf("address cannot be empty")
+		return errors.New("address cannot be empty")
 	}
 	srv := &http.Server{
 		Addr: address,

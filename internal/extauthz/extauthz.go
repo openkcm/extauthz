@@ -2,6 +2,7 @@ package extauthz
 
 import (
 	"crypto/rsa"
+	"errors"
 	"fmt"
 
 	"github.com/openkcm/extauthz/internal/jwthandler"
@@ -27,7 +28,7 @@ type ServerOption func(*Server) error
 func WithTrustedSubjects(m map[string]string) ServerOption {
 	return func(server *Server) error {
 		if m == nil {
-			return fmt.Errorf("trusted subjects map must not be nil")
+			return errors.New("trusted subjects map must not be nil")
 		}
 		server.trustedSubjectToRegion = m
 		return nil
@@ -51,7 +52,7 @@ func WithEnrichHeaderWithType(b bool) ServerOption {
 func WithJWTHandler(hdl *jwthandler.Handler) ServerOption {
 	return func(server *Server) error {
 		if hdl == nil {
-			return fmt.Errorf("jwt handler must not be nil")
+			return errors.New("jwt handler must not be nil")
 		}
 		server.jwtHandler = hdl
 		return nil
@@ -61,7 +62,7 @@ func WithJWTHandler(hdl *jwthandler.Handler) ServerOption {
 func WithPolicyEngine(pe policyEngine) ServerOption {
 	return func(server *Server) error {
 		if pe == nil {
-			return fmt.Errorf("policy engine must not be nil")
+			return errors.New("policy engine must not be nil")
 		}
 		server.policyEngine = pe
 		return nil

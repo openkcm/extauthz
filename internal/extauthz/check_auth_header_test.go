@@ -2,7 +2,6 @@ package extauthz
 
 import (
 	"bytes"
-	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
@@ -29,7 +28,7 @@ func TestCheckAuthHeader(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/jwks", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		// nolint:errcheck
+		//nolint:errcheck
 		fmt.Fprintln(w, string(jwksResponse))
 	})
 	ts := httptest.NewTLSServer(mux)
@@ -172,7 +171,7 @@ func TestCheckAuthHeader(t *testing.T) {
 			}
 
 			// Act
-			result := srv.checkAuthHeader(context.Background(), tc.authHeader, "GET", "my.service.com", "/foo/bar")
+			result := srv.checkAuthHeader(t.Context(), tc.authHeader, "GET", "my.service.com", "/foo/bar")
 
 			// Assert
 			if result.is != tc.wantCheckResultCode {

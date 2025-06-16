@@ -109,8 +109,8 @@ func TestCheck(t *testing.T) {
 				if err != nil {
 					t.Errorf("unexpected error: %s", err)
 				} else {
-					if got.Status.Code != int32(tc.wantCode) {
-						t.Errorf("expected status code %d, but got: %d", tc.wantCode, got.Status.Code)
+					if got.GetStatus().GetCode() != int32(tc.wantCode) {
+						t.Errorf("expected status code %d, but got: %d", tc.wantCode, got.GetStatus().GetCode())
 					}
 				}
 			}

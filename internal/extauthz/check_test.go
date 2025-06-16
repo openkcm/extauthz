@@ -1,7 +1,6 @@
 package extauthz
 
 import (
-	"context"
 	"reflect"
 	"testing"
 
@@ -123,7 +122,7 @@ func TestCheck(t *testing.T) {
 			srv.trustedSubjectToRegion = tc.trustedSubjects
 
 			// Act
-			got, err := srv.Check(context.Background(), tc.request)
+			got, err := srv.Check(t.Context(), tc.request)
 
 			// Assert
 			if tc.wantError {
@@ -137,8 +136,8 @@ func TestCheck(t *testing.T) {
 				if err != nil {
 					t.Errorf("unexpected error: %s", err)
 				} else {
-					if got.Status.Code != int32(tc.wantCode) {
-						t.Errorf("expected code: %v, got: %v", tc.wantCode, got.Status.Code)
+					if got.GetStatus().GetCode() != int32(tc.wantCode) {
+						t.Errorf("expected code: %v, got: %v", tc.wantCode, got.GetStatus().GetCode())
 					}
 				}
 			}

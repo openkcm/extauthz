@@ -3,6 +3,7 @@ package jwthandler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -47,7 +48,7 @@ func WithoutCache() ProviderOption {
 func WithClient(c *http.Client) ProviderOption {
 	return func(provider *Provider) error {
 		if c == nil {
-			return fmt.Errorf("client must not be nil")
+			return errors.New("client must not be nil")
 		}
 		provider.client = c
 		return nil
@@ -58,7 +59,7 @@ func WithClient(c *http.Client) ProviderOption {
 func WithCustomJWKSURI(jwksURI *url.URL) ProviderOption {
 	return func(provider *Provider) error {
 		if jwksURI == nil {
-			return fmt.Errorf("jwksURI must not be nil")
+			return errors.New("jwksURI must not be nil")
 		}
 		provider.jwksURI = jwksURI
 		return nil

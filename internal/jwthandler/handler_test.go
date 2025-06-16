@@ -2,7 +2,6 @@ package jwthandler
 
 import (
 	"bytes"
-	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
@@ -136,7 +135,7 @@ func TestParseAndValidate(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/jwks", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		// nolint:errcheck
+		//nolint:errcheck
 		fmt.Fprintln(w, string(jwksResponse))
 	})
 	ts := httptest.NewTLSServer(mux)
@@ -355,7 +354,7 @@ func TestParseAndValidate(t *testing.T) {
 			}
 
 			// Act
-			err = hdl.ParseAndValidate(context.Background(), tokenString, &claims)
+			err = hdl.ParseAndValidate(t.Context(), tokenString, &claims)
 
 			// Assert
 			if tc.wantError {
@@ -386,7 +385,7 @@ func TestK8sJWTProviderFor(t *testing.T) {
 			wantError: true,
 		}, {
 			name:      "mock error",
-			error:     fmt.Errorf("mock error"),
+			error:     errors.New("mock error"),
 			wantError: true,
 		}, {
 			name:            "invalid response",

@@ -60,16 +60,16 @@ var _ envoy_auth.AuthorizationServer = &Server{}
 func (srv *Server) Check(ctx context.Context, req *envoy_auth.CheckRequest) (*envoy_auth.CheckResponse, error) {
 	// check the header
 	if req == nil ||
-		req.Attributes == nil ||
-		req.Attributes.Request == nil ||
-		req.Attributes.Request.Http == nil ||
-		req.Attributes.Request.Http.Headers == nil {
+		req.GetAttributes() == nil ||
+		req.GetAttributes().GetRequest() == nil ||
+		req.GetAttributes().GetRequest().GetHttp() == nil ||
+		req.GetAttributes().GetRequest().GetHttp().GetHeaders() == nil {
 		slog.Debug("Check() called with nil request")
 		return respondUnauthenticated("Invalid request"), nil
 	}
 
 	// log the header for debugging
-	jsonBytes, err := json.MarshalIndent(req.Attributes.Request.Http, "", "  ")
+	jsonBytes, err := json.MarshalIndent(req.GetAttributes().GetRequest().GetHttp(), "", "  ")
 	if err != nil {
 		slog.Debug("Check() called with invalid request", "error", err)
 		return respondUnauthenticated("Invalid request"), nil
@@ -77,8 +77,8 @@ func (srv *Server) Check(ctx context.Context, req *envoy_auth.CheckRequest) (*en
 	slog.Debug("Check() called", "request", string(jsonBytes))
 
 	// extract client certificate and authorization header
-	certHeader, certHeaderFound := req.Attributes.Request.Http.Headers[HeaderForwardedClientCert]
-	authHeader, authHeaderFound := req.Attributes.Request.Http.Headers[HeaderAuthorization]
+	certHeader, certHeaderFound := req.GetAttributes().GetRequest().GetHttp().GetHeaders()[HeaderForwardedClientCert]
+	authHeader, authHeaderFound := req.GetAttributes().GetRequest().GetHttp().GetHeaders()[HeaderAuthorization]
 
 	// return early if both are missing
 	if !certHeaderFound && !authHeaderFound {
@@ -96,16 +96,16 @@ func (srv *Server) Check(ctx context.Context, req *envoy_auth.CheckRequest) (*en
 		}
 		for _, part := range certHeaderParts {
 			result.merge(srv.checkClientCert(ctx, part,
-				req.Attributes.Request.Http.Method,
-				req.Attributes.Request.Http.Host,
-				req.Attributes.Request.Http.Path))
+				req.GetAttributes().GetRequest().GetHttp().GetMethod(),
+				req.GetAttributes().GetRequest().GetHttp().GetHost(),
+				req.GetAttributes().GetRequest().GetHttp().GetPath()))
 		}
 	}
 	if authHeaderFound {
 		result.merge(srv.checkAuthHeader(ctx, authHeader,
-			req.Attributes.Request.Http.Method,
-			req.Attributes.Request.Http.Host,
-			req.Attributes.Request.Http.Path))
+			req.GetAttributes().GetRequest().GetHttp().GetMethod(),
+			req.GetAttributes().GetRequest().GetHttp().GetHost(),
+			req.GetAttributes().GetRequest().GetHttp().GetPath()))
 	}
 
 	// process the result

@@ -2,7 +2,6 @@ package jwthandler
 
 import (
 	"bytes"
-	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
@@ -144,13 +143,13 @@ func TestSigningKeyFor(t *testing.T) {
 	mux.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		value, _ := responses.Load("wkoc")
-		// nolint:errcheck
+		//nolint:errcheck
 		fmt.Fprintln(w, value)
 	})
 	mux.HandleFunc("/jwks", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		value, _ := responses.Load("jwks")
-		// nolint:errcheck
+		//nolint:errcheck
 		fmt.Fprintln(w, value)
 	})
 	ts := httptest.NewTLSServer(mux)
@@ -258,7 +257,7 @@ func TestSigningKeyFor(t *testing.T) {
 			responses.Store("jwks", string(jwksResponse))
 
 			// Act
-			key, err := p.SigningKeyFor(context.Background(), tc.keyID)
+			key, err := p.SigningKeyFor(t.Context(), tc.keyID)
 
 			// Assert
 			if tc.wantError {
