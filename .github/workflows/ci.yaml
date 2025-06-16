@@ -1,7 +1,6 @@
 name: ci
 permissions:
   contents: read
-  metadata: read
 on:
   push:
     tags:
