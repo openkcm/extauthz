@@ -72,25 +72,6 @@ func NewKey(ctx context.Context, opts ...Option) (*signingKey, error) {
 	return sk, nil
 }
 
-func (sk *signingKey) genKeyPair() error {
-	// Generate a new RSA key pair and key ID
-	privateKey, err := rsa.GenerateKey(rand.Reader, 4096)
-	if err != nil {
-		return fmt.Errorf("could not generate RSA key pair: %w", err)
-	}
-	publicKey := &privateKey.PublicKey
-	keyID := uuid.New().String()
-	slog.Info("Generated new signing key", "keyID", keyID)
-
-	// Set them
-	sk.m.Lock()
-	defer sk.m.Unlock()
-	sk.keyID = keyID
-	sk.priv = privateKey
-	sk.pub = publicKey
-	return nil
-}
-
 // Private returns the ID and private key of the signing key.
 func (sk *signingKey) Private() (string, *rsa.PrivateKey, error) {
 	sk.m.Lock()
@@ -157,7 +138,11 @@ func (sk *signingKey) ServePublicKey(ctx context.Context, address string) error 
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
 			//nolint:errcheck
-			json.NewEncoder(w).Encode(response)
+			err = json.NewEncoder(w).Encode(response)
+			if err != nil {
+				http.Error(w, "could not encode response", http.StatusInternalServerError)
+				return
+			}
 		}),
 	}
 
@@ -178,5 +163,24 @@ func (sk *signingKey) ServePublicKey(ctx context.Context, address string) error 
 		return fmt.Errorf("failed to gracefully shutdown HTTP server for serving the public key: %w", err)
 	}
 	slog.Info("Completed graceful shutdown of HTTP server for serving the public key")
+	return nil
+}
+
+func (sk *signingKey) genKeyPair() error {
+	// Generate a new RSA key pair and key ID
+	privateKey, err := rsa.GenerateKey(rand.Reader, 4096)
+	if err != nil {
+		return fmt.Errorf("could not generate RSA key pair: %w", err)
+	}
+	publicKey := &privateKey.PublicKey
+	keyID := uuid.New().String()
+	slog.Info("Generated new signing key", "keyID", keyID)
+
+	// Set them
+	sk.m.Lock()
+	defer sk.m.Unlock()
+	sk.keyID = keyID
+	sk.priv = privateKey
+	sk.pub = publicKey
 	return nil
 }

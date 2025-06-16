@@ -53,7 +53,7 @@ func WithOperationMode(operationMode JWTOperationMode) HandlerOption {
 	}
 }
 
-// WithProvider registeres the given provider.
+// WithProvider registers the given provider.
 func WithProvider(provider *Provider) HandlerOption {
 	return func(handler *Handler) error {
 		if provider == nil {
@@ -273,7 +273,7 @@ func (handler *Handler) k8sJWTProviderFor(k8sRestClient rest.Interface, issuer s
 		return nil, fmt.Errorf("failed to unmarshal jwtproviders: %w", err)
 	}
 
-	// find the right JWTProvider defintion, create a new provider from it, cache and return it
+	// find the right JWTProvider definition, create a new provider from it, cache and return it
 	for _, provider := range rawProviders.Items {
 		// parse the issuer URL
 		issuerURL, err := url.Parse(provider.Spec.Issuer)

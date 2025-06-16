@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+
 	"github.com/openkcm/extauthz/internal/jwthandler"
 	"github.com/openkcm/extauthz/internal/policy"
 )
@@ -28,7 +29,7 @@ func TestCheckAuthHeader(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/jwks", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		//nolint:errcheck
+
 		fmt.Fprintln(w, string(jwksResponse))
 	})
 	ts := httptest.NewTLSServer(mux)

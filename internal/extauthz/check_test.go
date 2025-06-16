@@ -4,8 +4,10 @@ import (
 	"reflect"
 	"testing"
 
-	envoy_auth "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
 	"github.com/gogo/googleapis/google/rpc"
+
+	envoy_auth "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
+
 	"github.com/openkcm/extauthz/internal/policy"
 	"github.com/openkcm/extauthz/internal/signing"
 )

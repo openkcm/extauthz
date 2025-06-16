@@ -7,6 +7,7 @@ run:
 linters:
   default: all
   disable:
+    - nilerr
     - tagliatelle
     - bodyclose
     - gomoddirectives

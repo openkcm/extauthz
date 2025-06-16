@@ -5,10 +5,11 @@ import (
 	"encoding/json"
 	"log/slog"
 
-	envoy_core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
-	envoy_auth "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
 	"github.com/go-andiamo/splitter"
 	"github.com/openkcm/common-sdk/pkg/auth"
+
+	envoy_core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	envoy_auth "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
 )
 
 const (

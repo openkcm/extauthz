@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
 	"github.com/openkcm/extauthz/internal/testutils"
 )
 
@@ -143,13 +144,13 @@ func TestSigningKeyFor(t *testing.T) {
 	mux.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		value, _ := responses.Load("wkoc")
-		//nolint:errcheck
+
 		fmt.Fprintln(w, value)
 	})
 	mux.HandleFunc("/jwks", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		value, _ := responses.Load("jwks")
-		//nolint:errcheck
+
 		fmt.Fprintln(w, value)
 	})
 	ts := httptest.NewTLSServer(mux)
