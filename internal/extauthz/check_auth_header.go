@@ -23,7 +23,7 @@ func (srv *Server) checkAuthHeader(ctx context.Context, authHeader, method, host
 		Issuer  string `json:"iss"`
 		EMail   string `json:"mail"`
 	}{}
-	if err := srv.jwtHandler.ParseAndValidate(ctx, tokenString, &claims); err != nil {
+	if err := srv.jwtHandler.ParseAndValidate(ctx, tokenString, &claims, method); err != nil {
 		switch {
 		case errors.Is(err, jwthandler.ErrInvalidToken):
 			return checkResult{is: UNAUTHENTICATED,

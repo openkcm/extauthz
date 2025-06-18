@@ -16,10 +16,11 @@ import (
 
 // Provider represents a specific JWT provider.
 type Provider struct {
-	issuerURL *url.URL
-	jwksURI   *url.URL
-	audiences []string
-	client    *http.Client
+	issuerURL     *url.URL
+	jwksURI       *url.URL
+	introspectURL *url.URL
+	audiences     []string
+	client        *http.Client
 
 	// cache the signing keys by key ID
 	signkeys *cache.Cache
@@ -66,6 +67,14 @@ func WithCustomJWKSURI(jwksURI *url.URL) ProviderOption {
 	}
 }
 
+// WithIntrospectTokenURL configures a token introspection endpoint.
+func WithIntrospectTokenURL(introspectURL *url.URL) ProviderOption {
+	return func(provider *Provider) error {
+		provider.introspectURL = introspectURL
+		return nil
+	}
+}
+
 // NewProvider creates a new provider and applies the given options.
 func NewProvider(issuerURL *url.URL, audiences []string, opts ...ProviderOption) (*Provider, error) {
 	provider := &Provider{
@@ -74,6 +83,10 @@ func NewProvider(issuerURL *url.URL, audiences []string, opts ...ProviderOption)
 		client:    http.DefaultClient,
 		signkeys:  cache.New(30*time.Second, 10*time.Minute),
 	}
+	if issuerURL != nil {
+		provider.introspectURL = makeDefaultIntrospectURL(issuerURL)
+	}
+
 	for _, opt := range opts {
 		if err := opt(provider); err != nil {
 			return nil, err
@@ -139,8 +152,9 @@ func (provider *Provider) SigningKeyFor(ctx context.Context, keyID string) (*jos
 }
 
 type wellKnownOpenIDConfiguration struct {
-	Issuer  string `json:"issuer"`
-	JWKSURI string `json:"jwks_uri"`
+	Issuer                string `json:"issuer"`
+	JWKSURI               string `json:"jwks_uri"`
+	IntrospectionEndpoint string `json:"introspection_endpoint,omitempty"` // optional
 }
 
 func (provider *Provider) getWellKnownOpenIDConfiguraton(ctx context.Context) error {
@@ -169,6 +183,61 @@ func (provider *Provider) getWellKnownOpenIDConfiguraton(ctx context.Context) er
 	if err != nil {
 		return fmt.Errorf("could not parse JWKS URI: %w", err)
 	}
+
 	provider.jwksURI = jwksURI
+
+	// Wellknown configuration may provide a token introspection endpoint.
+	if wkoc.IntrospectionEndpoint != "" {
+		provider.introspectURL, err = url.Parse(wkoc.IntrospectionEndpoint)
+		if err != nil {
+			return fmt.Errorf("could not parse introspection endpoint: %w", err)
+		}
+	}
+
+	if provider.introspectURL == nil {
+		provider.introspectURL = makeDefaultIntrospectURL(provider.issuerURL)
+	}
+
 	return nil
+}
+
+type introspection struct {
+	Active bool `json:"active"` // Required. Indicator of whether the presented token is currently active.
+	// Scope     string `json:"scope,omitempty"`      // Optional. Comma-separated list of scope.
+	// ClientID  string `json:"client_id,omitempty"`  // Optional. Client identifier.
+	// Username  string `json:"username,omitemtpy"`   // Optional. User identifier.
+	// TokenType string `json:"token_type,omitempty"` // Optional.
+	// Exp       int64  `json:"exp,omitemtpy"`        // Optional. Integer timestamp, measured in the number of seconds since January 1 1970 UTC, indicating when this token will expire, as defined in JWT [RFC7519].
+	// Iat       int64  `json:"iat,omitempty"`        // Optional. Integer timestamp, measured in the number of seconds since January 1 1970 UTC, indicating when this token was originally issued, as defined in JWT [RFC7519].
+	// Nbf       int64  `json:"nbf,omitempty"`        // Optional. Integer timestamp, measured in the number of seconds since January 1 1970 UTC, indicating when this token is not to be used before, as defined in JWT [RFC7519].
+}
+
+func (provider *Provider) introspect(ctx context.Context, rawToken string) (introspection, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, provider.introspectURL.String(), nil)
+	if err != nil {
+		return introspection{}, fmt.Errorf("creating new http request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	q := req.URL.Query()
+	q.Set("token", rawToken)
+	req.URL.RawQuery = q.Encode()
+
+	resp, err := provider.client.Do(req)
+	if err != nil {
+		return introspection{}, fmt.Errorf("executing http request: %w", err)
+	}
+
+	defer resp.Body.Close()
+
+	var intr introspection
+	if err := json.NewDecoder(resp.Body).Decode(&intr); err != nil {
+		return introspection{}, fmt.Errorf("decoding introspection response: %w", err)
+	}
+
+	return intr, nil
+}
+
+func makeDefaultIntrospectURL(base *url.URL) *url.URL {
+	return base.JoinPath("oauth2", "introspect")
 }

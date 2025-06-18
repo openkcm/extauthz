@@ -20,7 +20,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/openkcm/extauthz/internal/testutils"
 )
@@ -273,6 +276,94 @@ func TestSigningKeyFor(t *testing.T) {
 					t.Errorf("unexpected error: %s", err)
 				}
 			}
+		})
+	}
+}
+
+// localRoundTripper is an http.RoundTripper that executes HTTP transactions by
+// using handler directly, instead of going over an HTTP connection.
+type localRoundTripper struct {
+	handler http.Handler
+}
+
+func (l localRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	w := httptest.NewRecorder()
+	l.handler.ServeHTTP(w, req)
+	return w.Result(), nil
+}
+
+func TestProvider_introspect(t *testing.T) {
+	issuerURL, err := url.Parse("https://example.com")
+	require.NoError(t, err)
+	priv, err := rsa.GenerateKey(rand.Reader, 4096)
+	require.NoError(t, err)
+	token := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
+		"sub":  "me",
+		"mail": "me@my.world",
+		"iss":  issuerURL.String(),
+		"exp":  time.Now().Add(48 * time.Hour).Unix(),
+	})
+	rawToken, err := token.SignedString(priv)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name      string
+		issuerURL *url.URL
+		audiences []string
+		opts      []ProviderOption
+		rawToken  string
+		active    bool
+		want      introspection
+		wantErr   assert.ErrorAssertionFunc
+	}{
+		{
+			name:      "Introspect active token",
+			issuerURL: issuerURL,
+			audiences: []string{"aud1", "aud2"},
+			opts:      []ProviderOption{WithSigningKeyCacheExpiration(30*time.Second, 10*time.Minute)},
+			active:    true,
+			rawToken:  rawToken,
+			want: introspection{
+				Active: true,
+			},
+			wantErr: assert.NoError,
+		},
+		{
+			name:      "Introspect inactive token",
+			issuerURL: issuerURL,
+			audiences: []string{"aud1", "aud2"},
+			opts:      []ProviderOption{WithSigningKeyCacheExpiration(30*time.Second, 10*time.Minute)},
+			active:    false,
+			rawToken:  rawToken,
+			want: introspection{
+				Active: false,
+			},
+			wantErr: assert.NoError,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.opts = append(tt.opts, WithClient(&http.Client{
+				Transport: localRoundTripper{
+					http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+						if err := json.NewEncoder(w).Encode(introspection{Active: tt.active}); err != nil {
+							w.WriteHeader(http.StatusInternalServerError)
+						}
+					}),
+				},
+			}))
+
+			if err != nil {
+				t.Fatalf("failed to parse URL: %s", err)
+			}
+			provider, err := NewProvider(tt.issuerURL, tt.audiences, tt.opts...)
+			require.NoError(t, err)
+
+			got, err := provider.introspect(t.Context(), tt.rawToken)
+			if !tt.wantErr(t, err, fmt.Sprintf("introspect(ctx, %v)", tt.rawToken)) {
+				return
+			}
+			assert.Equalf(t, tt.want, got, "introspect(ctx, %v)", tt.rawToken)
 		})
 	}
 }

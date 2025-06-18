@@ -11,6 +11,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -31,6 +32,10 @@ func TestCheckAuthHeader(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 
 		fmt.Fprintln(w, string(jwksResponse))
+	})
+	mux.HandleFunc("/oauth2/introspect", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"active": true}`)
 	})
 	ts := httptest.NewTLSServer(mux)
 	defer ts.Close()
