@@ -3,6 +3,7 @@ package extauthz
 import (
 	"context"
 	"errors"
+	"net/http"
 	"strings"
 
 	"github.com/openkcm/extauthz/internal/jwthandler"
@@ -23,7 +24,9 @@ func (srv *Server) checkAuthHeader(ctx context.Context, authHeader, method, host
 		Issuer  string `json:"iss"`
 		EMail   string `json:"mail"`
 	}{}
-	if err := srv.jwtHandler.ParseAndValidate(ctx, tokenString, &claims); err != nil {
+
+	allowIntrospectCache := method == http.MethodGet // Allow using cache for token introspection for GET requests
+	if err := srv.jwtHandler.ParseAndValidate(ctx, tokenString, &claims, allowIntrospectCache); err != nil {
 		switch {
 		case errors.Is(err, jwthandler.ErrInvalidToken):
 			return checkResult{is: UNAUTHENTICATED,

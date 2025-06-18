@@ -23,7 +23,7 @@ import (
 type JWTOperationMode uint
 
 const (
-	// operation modes to tweek the behavior of the handler to the related provider
+	// operation modes to tweak the behavior of the handler to the related provider
 	DefaultMode JWTOperationMode = iota
 	SAPIAS
 )
@@ -37,7 +37,7 @@ type Handler struct {
 	k8sJWTProvidersCRDNamespace string
 
 	// cache the providers by issuer
-	providers       *cache.Cache // like map[string]*Provider
+	cache           *cache.Cache // map[string]*Provider or introspection
 	expiration      time.Duration
 	cleanupInterval time.Duration
 }
@@ -73,7 +73,7 @@ func WithK8sJWTProviders(enabled bool, crdAPIGroup, crdName, crdNamespace string
 		handler.k8sJWTProvidersCRDAPIGroup = crdAPIGroup
 		handler.k8sJWTProvidersCRDName = crdName
 		handler.k8sJWTProvidersCRDNamespace = crdNamespace
-		handler.providers = cache.New(handler.expiration, handler.cleanupInterval)
+		handler.cache = cache.New(handler.expiration, handler.cleanupInterval)
 		return nil
 	}
 }
@@ -81,7 +81,9 @@ func WithK8sJWTProviders(enabled bool, crdAPIGroup, crdName, crdNamespace string
 // WithProviderCacheExpiration configures the expiration of cached providers.
 func WithProviderCacheExpiration(expiration, cleanup time.Duration) HandlerOption {
 	return func(handler *Handler) error {
-		handler.providers = cache.New(expiration, handler.cleanupInterval)
+		handler.expiration = expiration
+		handler.cleanupInterval = cleanup
+		handler.cache = cache.New(expiration, cleanup)
 		return nil
 	}
 }
@@ -90,7 +92,7 @@ func WithProviderCacheExpiration(expiration, cleanup time.Duration) HandlerOptio
 func NewHandler(opts ...HandlerOption) (*Handler, error) {
 	handler := &Handler{
 		operationMode: DefaultMode,
-		providers:     cache.New(30*time.Second, 10*time.Minute),
+		cache:         cache.New(30*time.Second, 10*time.Minute),
 	}
 	for _, opt := range opts {
 		if err := opt(handler); err != nil {
@@ -102,10 +104,10 @@ func NewHandler(opts ...HandlerOption) (*Handler, error) {
 
 // RegisterProvider registers a provider with the handler.
 func (handler *Handler) RegisterProvider(provider *Provider) {
-	handler.providers.Set(provider.issuerURL.Host, provider, cache.DefaultExpiration)
+	handler.cache.Set(provider.issuerURL.Host, provider, cache.DefaultExpiration)
 }
 
-func (handler *Handler) ParseAndValidate(ctx context.Context, rawToken string, userclaims any) error {
+func (handler *Handler) ParseAndValidate(ctx context.Context, rawToken string, userclaims any, allowIntrospectCache bool) error {
 	// parse the token - at the moment we only support RS256
 	token, err := jwt.ParseSigned(rawToken, []jose.SignatureAlgorithm{jose.RS256})
 	if err != nil {
@@ -187,6 +189,16 @@ func (handler *Handler) ParseAndValidate(ctx context.Context, rawToken string, u
 		}
 	}
 
+	// Verify if token is not revoked
+	intr, err := handler.introspect(ctx, provider, rawToken, allowIntrospectCache)
+	if err != nil {
+		return fmt.Errorf("introspecting token: %w", err)
+	}
+
+	if !intr.Active {
+		return ErrInvalidToken
+	}
+
 	return nil
 }
 
@@ -194,7 +206,7 @@ func (handler *Handler) ParseAndValidate(ctx context.Context, rawToken string, u
 // provider in the internal cache or queries the k8s cluster for the provider.
 func (handler *Handler) ProviderFor(issuer string) (*Provider, error) {
 	// check the cache first
-	if providerInterface, found := handler.providers.Get(issuer); found {
+	if providerInterface, found := handler.cache.Get(issuer); found {
 		if key, ok := providerInterface.(*Provider); ok {
 			return key, nil
 		}
@@ -215,11 +227,31 @@ func (handler *Handler) ProviderFor(issuer string) (*Provider, error) {
 		// that this item does not have a custom expiration, but uses
 		// the configured expiration of the cache.
 		// https://pkg.go.dev/github.com/patrickmn/go-cache#Cache.Set
-		handler.providers.Set(issuer, p, cache.DefaultExpiration)
+		handler.cache.Set(issuer, p, cache.DefaultExpiration)
 		return p, nil
 	}
 
 	return nil, errors.Join(ErrNoProvider, fmt.Errorf("no provider found for issuer %s", issuer))
+}
+
+// introspect a JWT token.
+func (handler *Handler) introspect(ctx context.Context, provider *Provider, rawToken string, allowCache bool) (introspection, error) {
+	cacheKey := "introspect_" + "rawToken"
+	if allowCache {
+		cache, ok := handler.cache.Get(cacheKey)
+		if ok {
+			//nolint:forcetypeassert
+			return cache.(introspection), nil
+		}
+	}
+
+	intr, err := provider.introspect(ctx, rawToken)
+	if err != nil {
+		return intr, fmt.Errorf("introspecting token: %w", err)
+	}
+
+	handler.cache.Set(cacheKey, intr, 0)
+	return intr, nil
 }
 
 type RemoteJWKS struct {

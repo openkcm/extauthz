@@ -82,7 +82,7 @@ func TestNewHandler(t *testing.T) {
 				}),
 			},
 			checkFunc: func(h *Handler) error {
-				if _, found := h.providers.Get(providerUrl.Host); !found {
+				if _, found := h.cache.Get(providerUrl.Host); !found {
 					return errors.New("expected providers to be initialized")
 				}
 				return nil
@@ -138,6 +138,25 @@ func TestParseAndValidate(t *testing.T) {
 
 		fmt.Fprintln(w, string(jwksResponse))
 	})
+
+	mux.HandleFunc("/oauth2/introspect/fail", func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewEncoder(w).Encode(introspection{Active: false}); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+	})
+
+	mux.HandleFunc("/oauth2/introspect/success", func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewEncoder(w).Encode(introspection{Active: true}); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+	})
+
+	mux.HandleFunc("/oauth2/introspect", func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewEncoder(w).Encode(introspection{Active: true}); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+	})
+
 	ts := httptest.NewTLSServer(mux)
 	defer ts.Close()
 	providerURL, err := url.Parse(ts.URL)
@@ -194,10 +213,11 @@ func TestParseAndValidate(t *testing.T) {
 
 	// create the test cases
 	tests := []struct {
-		name          string
-		operationMode JWTOperationMode
-		token         *jwt.Token
-		wantError     bool
+		name            string
+		operationMode   JWTOperationMode
+		token           *jwt.Token
+		providerOptions []ProviderOption
+		wantError       bool
 	}{
 		{
 			name:          "zero values",
@@ -312,6 +332,34 @@ func TestParseAndValidate(t *testing.T) {
 				"aud":  []string{"aud1", "aud2"},
 			}),
 			wantError: false,
+		}, {
+			name:          "revoked token",
+			operationMode: DefaultMode,
+			token: jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
+				"sub":  "me",
+				"mail": "me@my.world",
+				"iss":  providerURL.String(),
+				"exp":  time.Now().Add(48 * time.Hour).Unix(),
+				"aud":  []string{"aud1", "aud2"},
+			}),
+			providerOptions: []ProviderOption{
+				WithIntrospectTokenURL(providerURL.JoinPath("oauth2", "introspect", "fail")),
+			},
+			wantError: true,
+		}, {
+			name:          "Active token",
+			operationMode: DefaultMode,
+			token: jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
+				"sub":  "me",
+				"mail": "me@my.world",
+				"iss":  providerURL.String(),
+				"exp":  time.Now().Add(48 * time.Hour).Unix(),
+				"aud":  []string{"aud1", "aud2"},
+			}),
+			providerOptions: []ProviderOption{
+				WithIntrospectTokenURL(providerURL.JoinPath("oauth2", "introspect", "success")),
+			},
+			wantError: false,
 		},
 	}
 
@@ -323,10 +371,11 @@ func TestParseAndValidate(t *testing.T) {
 			certpool := x509.NewCertPool()
 			certpool.AddCert(ts.Certificate())
 			cl := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: certpool}}}
-			p, err := NewProvider(providerURL, []string{"aud1"},
+			opts := append([]ProviderOption{
 				WithClient(cl),
 				WithCustomJWKSURI(jwksURI),
-			)
+			}, tc.providerOptions...)
+			p, err := NewProvider(providerURL, []string{"aud1"}, opts...)
 			if err != nil {
 				t.Fatalf("could not create provider: %s", err)
 			}
@@ -354,7 +403,7 @@ func TestParseAndValidate(t *testing.T) {
 			}
 
 			// Act
-			err = hdl.ParseAndValidate(t.Context(), tokenString, &claims)
+			err = hdl.ParseAndValidate(t.Context(), tokenString, &claims, false)
 
 			// Assert
 			if tc.wantError {
