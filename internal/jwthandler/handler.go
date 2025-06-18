@@ -107,7 +107,7 @@ func (handler *Handler) RegisterProvider(provider *Provider) {
 	handler.cache.Set(provider.issuerURL.Host, provider, cache.DefaultExpiration)
 }
 
-func (handler *Handler) ParseAndValidate(ctx context.Context, rawToken string, userclaims any, method string) error {
+func (handler *Handler) ParseAndValidate(ctx context.Context, rawToken string, userclaims any, allowIntrospectCache bool) error {
 	// parse the token - at the moment we only support RS256
 	token, err := jwt.ParseSigned(rawToken, []jose.SignatureAlgorithm{jose.RS256})
 	if err != nil {
@@ -190,7 +190,7 @@ func (handler *Handler) ParseAndValidate(ctx context.Context, rawToken string, u
 	}
 
 	// Verify if token is not revoked
-	intr, err := handler.introspect(ctx, provider, rawToken, method)
+	intr, err := handler.introspect(ctx, provider, rawToken, allowIntrospectCache)
 	if err != nil {
 		return fmt.Errorf("introspecting token: %w", err)
 	}
@@ -234,10 +234,10 @@ func (handler *Handler) ProviderFor(issuer string) (*Provider, error) {
 	return nil, errors.Join(ErrNoProvider, fmt.Errorf("no provider found for issuer %s", issuer))
 }
 
-// introspect a JWT token. It uses cache for GET requests.
-func (handler *Handler) introspect(ctx context.Context, provider *Provider, rawToken string, reqMethod string) (introspection, error) {
+// introspect a JWT token.
+func (handler *Handler) introspect(ctx context.Context, provider *Provider, rawToken string, allowCache bool) (introspection, error) {
 	cacheKey := "introspect_" + "rawToken"
-	if reqMethod == "GET" { // Use cache for GET requests
+	if allowCache {
 		cache, ok := handler.cache.Get(cacheKey)
 		if ok {
 			//nolint:forcetypeassert

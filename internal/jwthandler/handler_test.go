@@ -216,7 +216,6 @@ func TestParseAndValidate(t *testing.T) {
 		name            string
 		operationMode   JWTOperationMode
 		token           *jwt.Token
-		method          string
 		providerOptions []ProviderOption
 		wantError       bool
 	}{
@@ -234,7 +233,6 @@ func TestParseAndValidate(t *testing.T) {
 				"exp":     time.Now().Add(48 * time.Hour).Unix(),
 				"aud":     []string{"aud1"},
 			}),
-			method:    "GET",
 			wantError: true,
 		}, {
 			name:          "invalid token: wrong issuer",
@@ -246,7 +244,6 @@ func TestParseAndValidate(t *testing.T) {
 				"exp":  time.Now().Add(48 * time.Hour).Unix(),
 				"aud":  []string{"aud1"},
 			}),
-			method:    "GET",
 			wantError: true,
 		}, {
 			name:          "invalid token: no audience",
@@ -257,7 +254,6 @@ func TestParseAndValidate(t *testing.T) {
 				"iss":  providerURL.String(),
 				"exp":  time.Now().Add(48 * time.Hour).Unix(),
 			}),
-			method:    "GET",
 			wantError: true,
 		}, {
 			name:          "invalid token: wrong audience",
@@ -269,7 +265,6 @@ func TestParseAndValidate(t *testing.T) {
 				"exp":  time.Now().Add(48 * time.Hour).Unix(),
 				"aud":  []string{"vip"},
 			}),
-			method:    "GET",
 			wantError: true,
 		}, {
 			name:          "invalid token: not before",
@@ -282,7 +277,6 @@ func TestParseAndValidate(t *testing.T) {
 				"exp":  time.Now().Add(48 * time.Hour).Unix(),
 				"aud":  []string{"aud1", "aud2"},
 			}),
-			method:    "GET",
 			wantError: true,
 		}, {
 			name:          "invalid token: expired",
@@ -294,7 +288,6 @@ func TestParseAndValidate(t *testing.T) {
 				"exp":  time.Now().Add(-48 * time.Hour).Unix(),
 				"aud":  []string{"aud1", "aud2"},
 			}),
-			method:    "GET",
 			wantError: true,
 		}, {
 			name:          "invalid token: no expiry",
@@ -305,7 +298,6 @@ func TestParseAndValidate(t *testing.T) {
 				"iss":  providerURL.String(),
 				"aud":  []string{"aud1", "aud2"},
 			}),
-			method:    "GET",
 			wantError: true,
 		}, {
 			name:          "valid token",
@@ -317,7 +309,6 @@ func TestParseAndValidate(t *testing.T) {
 				"exp":  time.Now().Add(48 * time.Hour).Unix(),
 				"aud":  []string{"aud1", "aud2"},
 			}),
-			method:    "GET",
 			wantError: false,
 		}, {
 			name:          "valid IAS token with ias_iss",
@@ -329,7 +320,6 @@ func TestParseAndValidate(t *testing.T) {
 				"exp":     time.Now().Add(48 * time.Hour).Unix(),
 				"aud":     []string{"aud1", "aud2"},
 			}),
-			method:    "GET",
 			wantError: false,
 		}, {
 			name:          "valid IAS token with iss",
@@ -341,7 +331,6 @@ func TestParseAndValidate(t *testing.T) {
 				"exp":  time.Now().Add(48 * time.Hour).Unix(),
 				"aud":  []string{"aud1", "aud2"},
 			}),
-			method:    "GET",
 			wantError: false,
 		}, {
 			name:          "revoked token",
@@ -356,7 +345,6 @@ func TestParseAndValidate(t *testing.T) {
 			providerOptions: []ProviderOption{
 				WithIntrospectTokenURL(providerURL.JoinPath("oauth2", "introspect", "fail")),
 			},
-			method:    "GET",
 			wantError: true,
 		}, {
 			name:          "Active token",
@@ -371,7 +359,6 @@ func TestParseAndValidate(t *testing.T) {
 			providerOptions: []ProviderOption{
 				WithIntrospectTokenURL(providerURL.JoinPath("oauth2", "introspect", "success")),
 			},
-			method:    "GET",
 			wantError: false,
 		},
 	}
@@ -416,7 +403,7 @@ func TestParseAndValidate(t *testing.T) {
 			}
 
 			// Act
-			err = hdl.ParseAndValidate(t.Context(), tokenString, &claims, tc.method)
+			err = hdl.ParseAndValidate(t.Context(), tokenString, &claims, false)
 
 			// Assert
 			if tc.wantError {

@@ -149,17 +149,17 @@ func (s *handlerTestSuite) Test_ParseAndValidate_IntrospectionCache() {
 
 	// Act
 	s.jwks.tokenActive = true
-	err = s.hdl.ParseAndValidate(context.Background(), tokenString, &claims, "GET")
+	err = s.hdl.ParseAndValidate(context.Background(), tokenString, &claims, true)
 	s.Require().NoError(err)
 
 	s.jwks.tokenActive = false
 
 	// Should not return an error because we use cache for GET requests
-	err = s.hdl.ParseAndValidate(context.Background(), tokenString, &claims, "GET")
+	err = s.hdl.ParseAndValidate(context.Background(), tokenString, &claims, true)
 	s.Require().NoError(err)
 
 	// Should invalidate cache for POST request
-	err = s.hdl.ParseAndValidate(context.Background(), tokenString, &claims, "POST")
+	err = s.hdl.ParseAndValidate(context.Background(), tokenString, &claims, false)
 	s.Require().Error(err)
 
 	time.Sleep(35 * time.Second)
@@ -167,6 +167,6 @@ func (s *handlerTestSuite) Test_ParseAndValidate_IntrospectionCache() {
 
 	// Should invalidate cache after 30 seconds.
 	s.hdl.RegisterProvider(s.provider)
-	err = s.hdl.ParseAndValidate(context.Background(), tokenString, &claims, "GET")
+	err = s.hdl.ParseAndValidate(context.Background(), tokenString, &claims, true)
 	s.Require().NoError(err)
 }
