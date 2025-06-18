@@ -1,4 +1,4 @@
-name: Publish to GHCR
+name: Publish
 on:
   push:
     tags:
@@ -16,7 +16,7 @@ env:
   OCI_URL: ghcr.io/openkcm
 
 jobs:
-  release_tag:
+  release-next-version-tag:
     name: Release version
     runs-on: ubuntu-24.04
     steps:
@@ -30,29 +30,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          token: ${{ steps.generate-token.outputs.token }}
           fetch-tags: true
           fetch-depth: 0
           submodules: recursive
-
-      - name: Extract repository name
-        id: repo
-        run: |
-          echo "repo_name=$(basename "$GITHUB_REPOSITORY")" >> $GITHUB_ENV
-
-      - name: Generate Build Version
-        uses: hashicorp/actions-generate-metadata@f6f1ca9cededa05d841a58d171064faf3de8ec74 #main
-        id: execute
-        with:
-          repositoryOwner: ${{ github.repository_owner }}
-          repository: ${{ github.repository }}
-          version: cat VERSION
-          product: ${{ env.repo_name }}
-          metadataFileName: ${{ github.workspace }}/build_version.json
-
-      - name: Print Build Version
-        shell: bash
-        run: cat ${{ github.workspace }}/build_version.json
 
       - name: Checkout build (taskfiles) repo
         run: |
@@ -62,26 +42,38 @@ jobs:
         uses: arduino/setup-task@b91d5d2c96a56797b48ac1e0e89220bf64044611 #v2.0.0
         with:
           version: 3.x
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Read and validate VERSION
-        id: version
+      - name: Set up environment
         run: |
-          VERSION=$(task version)
-          if [[ ! "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-dev(-[0-9a-f]*)?)?$ ]]; then
-            echo "Invalid version format: $VERSION"
-            exit 1
-          fi
-          echo "New version: $VERSION"
-          echo "version=$VERSION" >> $GITHUB_ENV
+          echo "repo_name=$(basename "$GITHUB_REPOSITORY")" >> $GITHUB_ENV
+          echo "version=$(task version)" >> $GITHUB_ENV
 
-      - name: Skip release if version is a dev version
-        if: contains(env.version, '-dev')
-        run: |
-          echo "Skipping development version release: ${{ env.version }}"
-          echo "SKIP=true" >> $GITHUB_ENV
-          exit 0
+      - name: Generate Build Version
+        uses: hashicorp/actions-generate-metadata@f6f1ca9cededa05d841a58d171064faf3de8ec74 #main
+        with:
+          repositoryOwner: ${{ github.repository_owner }}
+          repository: ${{ github.repository }}
+          version: ${{ env.version }}
+          product: ${{ env.repo_name }}
+          metadataFileName: ${{ github.workspace }}/build_version.json
+
+      - name: Print Build Version
+        run: cat ${{ github.workspace }}/build_version.json
+
+      - name: Run trivy repository security scanner
+        uses: aquasecurity/trivy-action@76071ef0d7ec797419534a183b498b4d6366cf37 #v0.31.0
+        with:
+          token-setup-trivy: ${{ steps.generate-token.outputs.token }}
+          scan-type: repository
+          format: json
+          output: trivy-repository-vuln.json
+          severity: CRITICAL,HIGH,MEDIUM
+
+      - name: Run tfsec security scanner
+        uses: aquasecurity/tfsec-action@b466648d6e39e7c75324f25d83891162a721f2d6 #v1.0.3
+        with:
+          github_token:  ${{ steps.generate-token.outputs.token }}
+          format: json
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 # v3.6.0
@@ -100,7 +92,7 @@ jobs:
 
       - name: Set up Docker Buildx
         timeout-minutes: 5
-        uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2 # v3.10.0
+        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
         with:
           version: latest
 
