@@ -37,7 +37,7 @@ type Handler struct {
 	k8sJWTProvidersCRDNamespace string
 
 	// cache the providers by issuer
-	cache           *cache.Cache // like map[string]*Provider
+	cache           *cache.Cache // map[string]*Provider or introspection
 	expiration      time.Duration
 	cleanupInterval time.Duration
 }
