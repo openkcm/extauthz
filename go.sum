@@ -2,8 +2,8 @@ github.com/Dynatrace/OneAgent-SDK-for-Go v1.1.0 h1:fYtSrInkNuXIuvE46i/SI0+Yr1HvD
 github.com/Dynatrace/OneAgent-SDK-for-Go v1.1.0/go.mod h1:kCcKw+7c9+/LExeIms6kv2eTbedu+mF/ByuG3SUDVzM=
 github.com/beorn7/perks v1.0.1 h1:VlbKKnNfV8bJzeqoa4cOKqO6bYr3WgKZxO8Z16+hsOM=
 github.com/beorn7/perks v1.0.1/go.mod h1:G2ZrVWU2WbWT9wwq4/hrbKbnv/1ERSJQ0ibhJ6rlkpw=
-github.com/cedar-policy/cedar-go v1.2.1 h1:f4Ie1j6OT2TqtmnbVcR7OyJWfyPEUvYrFYaurQZhTAo=
-github.com/cedar-policy/cedar-go v1.2.1/go.mod h1:Ahhlu3DxDzvGTR88v/+j/EeiMEyvta11hlkdDgj4AZU=
+github.com/cedar-policy/cedar-go v1.2.3 h1:kVqbSmNM7VwQGe/6FggwiYINmVjzpfPoPOyMh6KsGhM=
+github.com/cedar-policy/cedar-go v1.2.3/go.mod h1:Ahhlu3DxDzvGTR88v/+j/EeiMEyvta11hlkdDgj4AZU=
 github.com/cenkalti/backoff/v5 v5.0.2 h1:rIfFVxEf1QsI7E1ZHfp/B4DF/6QBAUhmgkxc0H7Zss8=
 github.com/cenkalti/backoff/v5 v5.0.2/go.mod h1:rkhZdG3JZukswDf7f0cwqPNk4K0sa+F97BxZthm/crw=
 github.com/cespare/xxhash/v2 v2.3.0 h1:UL815xU9SqsFlibzuggzjXhog7bL6oX9BbNZnL2UFvs=
