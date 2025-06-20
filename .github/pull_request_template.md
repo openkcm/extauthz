@@ -2,6 +2,8 @@
 Possible values:
 - category:       breaking|feat|doc|build|chore|ci|docs|fix|perf|refactor|revert|style|test
 - description:   <short description of the PR>
+
+Following the conventional commits: https://www.conventionalcommits.org
 -->
 
 **What this PR does / why we need it**:
