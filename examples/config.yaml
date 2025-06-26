@@ -29,7 +29,7 @@ mtls:
 jwt:
   operationMode: default # one of: default, sapias
   k8sProviders:
-    apiGroup: "/apis/gateway.extensions.security.cloud.sap/v1alpha1"
+    apiGroup: "/apis/gateway.extensions.envoyproxy.io/v1alpha1"
     name: "jwtproviders"
     namespace: "default"
 
