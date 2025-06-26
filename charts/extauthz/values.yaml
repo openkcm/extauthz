@@ -225,7 +225,7 @@ config:
   policyPath: /etc/extauthz-policies
   mtlsTrustedSubjectsYaml: /etc/extauthz-mtls/trustedSubjects.yaml
   # jwtOperationMode: default
-  # jwtk8sProvidersAPIGroup: /apis/gateway.extensions.security.cloud.sap/v1alpha1
+  # jwtk8sProvidersAPIGroup: /apis/gateway.extensions.envoyproxy.io/v1alpha1
   # jwtk8sProvidersName: jwtproviders
   # jwtk8sProvidersNamespace: default
 
