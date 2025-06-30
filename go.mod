@@ -12,7 +12,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/openkcm/common-sdk v0.3.0
 	github.com/patrickmn/go-cache v2.1.0+incompatible
-	github.com/samber/oops v1.18.1
+	github.com/samber/oops v1.19.0
 	github.com/stretchr/testify v1.10.0
 	github.com/veqryn/slog-context v0.8.0
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250603155806-513f23925822
@@ -60,7 +60,7 @@ require (
 	github.com/prometheus/procfs v0.16.1 // indirect
 	github.com/rogpeppe/go-internal v1.14.1 // indirect
 	github.com/sagikazarmark/locafero v0.9.0 // indirect
-	github.com/samber/lo v1.50.0 // indirect
+	github.com/samber/lo v1.51.0 // indirect
 	github.com/samber/slog-formatter v1.2.0 // indirect
 	github.com/samber/slog-multi v1.4.0 // indirect
 	github.com/sourcegraph/conc v0.3.0 // indirect
