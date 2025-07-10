@@ -96,6 +96,7 @@ func (srv *Server) Check(ctx context.Context, req *envoy_auth.CheckRequest) (*en
 			return respondUnauthenticated("Invalid certificate header"), nil
 		}
 		for _, part := range certHeaderParts {
+			slog.Debug("Check() processing certificate part", "part", part)
 			result.merge(srv.checkClientCert(ctx, part,
 				req.GetAttributes().GetRequest().GetHttp().GetMethod(),
 				req.GetAttributes().GetRequest().GetHttp().GetHost(),
@@ -103,6 +104,7 @@ func (srv *Server) Check(ctx context.Context, req *envoy_auth.CheckRequest) (*en
 		}
 	}
 	if authHeaderFound {
+		slog.Debug("Check() processing authorization header", "header", authHeader)
 		result.merge(srv.checkAuthHeader(ctx, authHeader,
 			req.GetAttributes().GetRequest().GetHttp().GetMethod(),
 			req.GetAttributes().GetRequest().GetHttp().GetHost(),
@@ -110,6 +112,7 @@ func (srv *Server) Check(ctx context.Context, req *envoy_auth.CheckRequest) (*en
 	}
 
 	// process the result
+	slog.Debug("Check() result", "result", result.is, "info", result.info, "subject", result.subject)
 	switch result.is {
 	case ALLOWED:
 		clientData := &auth.ClientData{

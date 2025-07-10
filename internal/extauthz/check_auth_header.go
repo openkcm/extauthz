@@ -3,6 +3,8 @@ package extauthz
 import (
 	"context"
 	"errors"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -36,10 +38,16 @@ func (srv *Server) checkAuthHeader(ctx context.Context, authHeader, method, host
 				info: "No provider found"}
 		}
 		return checkResult{is: UNAUTHENTICATED,
-			info: err.Error()}
+			info: fmt.Sprintf("Error from JWT validation: %v", err)}
 	}
 
 	// check the policies
+	slog.Debug("Checking policies for JWT",
+		"subject", claims.Subject,
+		"issuer", claims.Issuer,
+		"method", method,
+		"host", host,
+		"path", path)
 	allowed, reason, err := srv.policyEngine.Check(claims.Subject, method, host+path,
 		map[string]string{
 			"type":   "jwt",
@@ -47,11 +55,11 @@ func (srv *Server) checkAuthHeader(ctx context.Context, authHeader, method, host
 		})
 	if err != nil {
 		return checkResult{is: UNAUTHENTICATED,
-			info: err.Error()}
+			info: fmt.Sprintf("Error from policy engine: %v", err)}
 	}
 	if !allowed {
 		return checkResult{is: DENIED,
-			info: reason}
+			info: fmt.Sprintf("Reason from policy engine: %v", reason)}
 	}
 
 	return checkResult{
