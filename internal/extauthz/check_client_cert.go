@@ -6,6 +6,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"strings"
 	"time"
@@ -102,6 +103,12 @@ func (srv *Server) checkClientCert(_ context.Context, certHeader, method, host, 
 	}
 
 	// check the policies
+	slog.Debug("Checking policies for x509",
+		"subject", subject,
+		"issuer", crt.Issuer.String(),
+		"method", method,
+		"host", host,
+		"path", path)
 	allowed, reason, err := srv.policyEngine.Check(subject, method, host+path,
 		map[string]string{
 			"type":   "x509",
@@ -109,11 +116,11 @@ func (srv *Server) checkClientCert(_ context.Context, certHeader, method, host, 
 		})
 	if err != nil {
 		return checkResult{is: UNAUTHENTICATED,
-			info: err.Error()}
+			info: fmt.Sprintf("Error from policy engine: %v", err)}
 	}
 	if !allowed {
 		return checkResult{is: DENIED,
-			info: reason}
+			info: fmt.Sprintf("Reason from policy engine: %v", reason)}
 	}
 
 	// extract the email address from the certificate
