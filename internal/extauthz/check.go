@@ -2,7 +2,6 @@ package extauthz
 
 import (
 	"context"
-	"encoding/json"
 	"log/slog"
 
 	"github.com/go-andiamo/splitter"
@@ -70,12 +69,16 @@ func (srv *Server) Check(ctx context.Context, req *envoy_auth.CheckRequest) (*en
 	}
 
 	// log the header for debugging
-	jsonBytes, err := json.MarshalIndent(req.GetAttributes().GetRequest().GetHttp(), "", "  ")
-	if err != nil {
-		slog.Debug("Check() called with invalid request", "error", err)
-		return respondUnauthenticated("Invalid request"), nil
-	}
-	slog.Debug("Check() called", "request", string(jsonBytes))
+	httpreq := req.GetAttributes().GetRequest().GetHttp()
+	slog.Debug("Check() called",
+		"id", httpreq.GetId(),
+		"protocol", httpreq.GetProtocol(),
+		"method", httpreq.GetMethod(),
+		"sheme", httpreq.GetScheme(),
+		"host", httpreq.GetHost(),
+		"path", httpreq.GetPath(),
+		"headers", httpreq.GetHeaders(),
+	)
 
 	// extract client certificate and authorization header
 	certHeader, certHeaderFound := req.GetAttributes().GetRequest().GetHttp().GetHeaders()[HeaderForwardedClientCert]
@@ -104,7 +107,7 @@ func (srv *Server) Check(ctx context.Context, req *envoy_auth.CheckRequest) (*en
 		}
 	}
 	if authHeaderFound {
-		slog.Debug("Check() processing authorization header", "header", authHeader)
+		slog.Debug("Check() processing authorization header")
 		result.merge(srv.checkAuthHeader(ctx, authHeader,
 			req.GetAttributes().GetRequest().GetHttp().GetMethod(),
 			req.GetAttributes().GetRequest().GetHttp().GetHost(),
