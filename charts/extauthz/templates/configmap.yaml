@@ -53,7 +53,8 @@ data:
     jwt:
       operationMode: {{ .Values.config.jwtOperationMode | default "default" }}
       k8sProviders:
-        apiGroup: {{ .Values.config.jwtk8sProvidersAPIGroup | default "/apis/gateway.extensions.envoyproxy.io/v1alpha1" }}
+        apiGroup: {{ .Values.config.jwtk8sProvidersAPIGroup | default "gateway.extensions.envoyproxy.io" }}
+        apiVersion: {{ .Values.config.jwtk8sProvidersAPIVersion | default "v1alpha1" }}
         name: {{ .Values.config.jwtk8sProvidersName | default "jwtproviders" }}
         namespace: {{ .Values.config.jwtk8sProvidersNamespace | default "default" }}
 

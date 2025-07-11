@@ -219,6 +219,7 @@ func (provider *Provider) introspect(ctx context.Context, rawToken string) (intr
 	}
 
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Authorization", "Bearer "+rawToken)
 	q := req.URL.Query()
 	q.Set("token", rawToken)
 	req.URL.RawQuery = q.Encode()
@@ -227,7 +228,6 @@ func (provider *Provider) introspect(ctx context.Context, rawToken string) (intr
 	if err != nil {
 		return introspection{}, fmt.Errorf("executing http request: %w", err)
 	}
-
 	defer resp.Body.Close()
 
 	var intr introspection
