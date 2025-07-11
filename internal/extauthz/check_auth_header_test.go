@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"reflect"
 	"testing"
 	"time"
 
@@ -50,10 +51,11 @@ func TestCheckAuthHeader(t *testing.T) {
 
 	// create a JWT token
 	token := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
-		"sub":  "me",
-		"mail": "me@my.world",
-		"iss":  issuerURL.String(),
-		"exp":  time.Now().Add(48 * time.Hour).Unix(),
+		"sub":    "me",
+		"mail":   "me@my.world",
+		"iss":    issuerURL.String(),
+		"exp":    time.Now().Add(48 * time.Hour).Unix(),
+		"groups": []string{"groupA", "groupB"},
 	})
 	token.Header["kid"] = rsaKeyID
 	token.Header["jku"] = jwksURI.String()
@@ -68,10 +70,11 @@ func TestCheckAuthHeader(t *testing.T) {
 		t.Fatalf("could not generate RSA key: %s", err)
 	}
 	tokenInvalid := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
-		"sub":  "me",
-		"mail": "me@my.world",
-		"iss":  "https://invalid.issuer",
-		"exp":  time.Now().Add(48 * time.Hour).Unix(),
+		"sub":    "me",
+		"mail":   "me@my.world",
+		"iss":    "https://invalid.issuer",
+		"exp":    time.Now().Add(48 * time.Hour).Unix(),
+		"groups": []string{"groupA", "groupB"},
 	})
 	tokenInvalid.Header["kid"] = rsaKeyID
 	tokenInvalid.Header["jku"] = jwksURI.String()
@@ -116,6 +119,7 @@ func TestCheckAuthHeader(t *testing.T) {
 		wantSubject         string
 		wantRegion          string
 		wantEmail           string
+		wantGroups          []string
 	}{
 		{
 			name:                "zero values",
@@ -142,6 +146,7 @@ func TestCheckAuthHeader(t *testing.T) {
 			wantCheckResultCode: ALLOWED,
 			wantSubject:         "me",
 			wantEmail:           "me@my.world",
+			wantGroups:          []string{"groupA", "groupB"},
 		},
 	}
 
@@ -188,6 +193,9 @@ func TestCheckAuthHeader(t *testing.T) {
 			}
 			if result.email != tc.wantEmail {
 				t.Errorf("expected: %v, got: %v", tc.wantEmail, result.email)
+			}
+			if !reflect.DeepEqual(result.groups, tc.wantGroups) {
+				t.Errorf("expected: %v, got: %v", tc.wantGroups, result.groups)
 			}
 		})
 	}
