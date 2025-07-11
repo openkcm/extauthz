@@ -22,9 +22,10 @@ func (srv *Server) checkAuthHeader(ctx context.Context, authHeader, method, host
 
 	// parse and validate the token and extract the claims
 	claims := struct {
-		Subject string `json:"sub"`
-		Issuer  string `json:"iss"`
-		EMail   string `json:"mail"`
+		Subject string   `json:"sub"`
+		Issuer  string   `json:"iss"`
+		EMail   string   `json:"mail"`
+		Groups  []string `json:"groups,omitempty"`
 	}{}
 
 	allowIntrospectCache := method == http.MethodGet // Allow using cache for token introspection for GET requests
@@ -67,5 +68,6 @@ func (srv *Server) checkAuthHeader(ctx context.Context, authHeader, method, host
 		is:      ALLOWED,
 		subject: claims.Subject,
 		email:   claims.EMail,
+		groups:  claims.Groups,
 	}
 }
