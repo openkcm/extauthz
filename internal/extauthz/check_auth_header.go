@@ -29,6 +29,7 @@ func (srv *Server) checkAuthHeader(ctx context.Context, authHeader, method, host
 
 	allowIntrospectCache := method == http.MethodGet // Allow using cache for token introspection for GET requests
 	if err := srv.jwtHandler.ParseAndValidate(ctx, tokenString, &claims, allowIntrospectCache); err != nil {
+		slog.Debug("JWT validation failed", "error", err)
 		switch {
 		case errors.Is(err, jwthandler.ErrInvalidToken):
 			return checkResult{is: UNAUTHENTICATED,
