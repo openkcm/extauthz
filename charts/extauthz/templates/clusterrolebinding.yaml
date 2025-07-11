@@ -1,0 +1,13 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "extauthz.serviceAccountName" . }}-jwtprovider-clusterrolebinding
+subjects:
+- kind: ServiceAccount
+  name: {{ include "extauthz.serviceAccountName" . }}
+  namespace: {{ include "extauthz.namespace" . }}
+roleRef:
+  kind: ClusterRole
+  name: {{ include "extauthz.serviceAccountName" . }}-jwtprovider-clusterrole
+  apiGroup: rbac.authorization.k8s.io

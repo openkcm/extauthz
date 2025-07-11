@@ -291,6 +291,7 @@ func (handler *Handler) k8sRestClient() (rest.Interface, error) {
 
 // k8sJWTProviderFor queries the k8s cluster for JWT providers.
 func (handler *Handler) k8sJWTProviderFor(k8sRestClient rest.Interface, issuer string) (*Provider, error) {
+	slog.Debug("Querying k8s for JWT provider", "issuer", issuer)
 	// query the jwtproviders
 	result, err := k8sRestClient.Get().
 		AbsPath(handler.k8sJWTProvidersCRDAPIGroup).
@@ -306,7 +307,9 @@ func (handler *Handler) k8sJWTProviderFor(k8sRestClient rest.Interface, issuer s
 	}
 
 	// find the right JWTProvider definition, create a new provider from it, cache and return it
+	slog.Debug("Found k8s JWT providers", "count", len(rawProviders.Items))
 	for _, provider := range rawProviders.Items {
+		slog.Debug("Checking k8s JWT provider", "name", provider.Spec.Name, "issuer", provider.Spec.Issuer)
 		// parse the issuer URL
 		issuerURL, err := url.Parse(provider.Spec.Issuer)
 		if err != nil {
