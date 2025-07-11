@@ -30,11 +30,12 @@ const (
 
 // Handler tracks the set of identity providers to support multi tenancy.
 type Handler struct {
-	operationMode               JWTOperationMode
-	k8sJWTProvidersEnabled      bool
-	k8sJWTProvidersCRDAPIGroup  string
-	k8sJWTProvidersCRDName      string
-	k8sJWTProvidersCRDNamespace string
+	operationMode                JWTOperationMode
+	k8sJWTProvidersEnabled       bool
+	k8sJWTProvidersCRDAPIGroup   string
+	k8sJWTProvidersCRDAPIVersion string
+	k8sJWTProvidersCRDName       string
+	k8sJWTProvidersCRDNamespace  string
 
 	// cache the providers by issuer
 	cache           *cache.Cache // map[string]*Provider or introspection
@@ -66,11 +67,12 @@ func WithProvider(provider *Provider) HandlerOption {
 
 // WithK8sJWTProviders enables the use of k8s custom resource definitions
 // for JWT providers.
-func WithK8sJWTProviders(enabled bool, crdAPIGroup, crdName, crdNamespace string) HandlerOption {
+func WithK8sJWTProviders(enabled bool, crdAPIGroup, crdAPIVersion, crdName, crdNamespace string) HandlerOption {
 	return func(handler *Handler) error {
-		slog.Debug("Using k8s JWT providers", "enabled", enabled, "apiGroup", crdAPIGroup, "name", crdName, "namespace", crdNamespace)
+		slog.Debug("Using k8s JWT providers", "enabled", enabled, "apiGroup", crdAPIGroup, "apiVersion", crdAPIVersion, "name", crdName, "namespace", crdNamespace)
 		handler.k8sJWTProvidersEnabled = enabled
 		handler.k8sJWTProvidersCRDAPIGroup = crdAPIGroup
+		handler.k8sJWTProvidersCRDAPIVersion = crdAPIVersion
 		handler.k8sJWTProvidersCRDName = crdName
 		handler.k8sJWTProvidersCRDNamespace = crdNamespace
 		handler.cache = cache.New(handler.expiration, handler.cleanupInterval)
@@ -294,7 +296,10 @@ func (handler *Handler) k8sJWTProviderFor(k8sRestClient rest.Interface, issuer s
 	slog.Debug("Querying k8s for JWT provider", "issuer", issuer)
 	// query the jwtproviders
 	result, err := k8sRestClient.Get().
-		AbsPath(handler.k8sJWTProvidersCRDAPIGroup).
+		AbsPath(fmt.Sprintf("/apis/%s/%s",
+			handler.k8sJWTProvidersCRDAPIGroup,
+			handler.k8sJWTProvidersCRDAPIVersion,
+		)).
 		Namespace(handler.k8sJWTProvidersCRDNamespace).
 		Resource(handler.k8sJWTProvidersCRDName).
 		DoRaw(context.Background())

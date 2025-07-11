@@ -39,6 +39,7 @@ func createExtAuthZServer(ctx context.Context, cfg *config.Config) (*extauthz.Se
 		jwthandler.WithOperationMode(jwtOperationMode),
 		jwthandler.WithK8sJWTProviders(true,
 			cfg.JWT.K8sProviders.APIGroup,
+			cfg.JWT.K8sProviders.APIVersion,
 			cfg.JWT.K8sProviders.Name,
 			cfg.JWT.K8sProviders.Namespace,
 		),

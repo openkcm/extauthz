@@ -53,9 +53,10 @@ type JWT struct {
 }
 
 type K8sProviders struct {
-	APIGroup  string
-	Name      string
-	Namespace string
+	APIGroup   string // e.g. "gateway.extensions.envoyproxy.io"
+	APIVersion string // e.g. "v1alpha1"
+	Name       string // e.g. "jwtproviders"
+	Namespace  string // e.g. "default"
 }
 
 // ClientData defines the information passed as header to consuming backend services.

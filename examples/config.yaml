@@ -29,7 +29,8 @@ mtls:
 jwt:
   operationMode: default # one of: default, sapias
   k8sProviders:
-    apiGroup: "/apis/gateway.extensions.envoyproxy.io/v1alpha1"
+    apiGroup: "gateway.extensions.envoyproxy.io"
+    apiVersion: "v1alpha1"
     name: "jwtproviders"
     namespace: "default"
 

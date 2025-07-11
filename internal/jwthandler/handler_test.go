@@ -90,7 +90,7 @@ func TestNewHandler(t *testing.T) {
 		}, {
 			name: "with k8s providers",
 			opts: []HandlerOption{
-				WithK8sJWTProviders(true, "crdAPIGroup", "crdName", "crdNameSpace"),
+				WithK8sJWTProviders(true, "crdAPIGroup", "crdAPIVersion", "crdName", "crdNameSpace"),
 			},
 			checkFunc: func(h *Handler) error {
 				if !h.k8sJWTProvidersEnabled {
@@ -538,7 +538,7 @@ func TestK8sJWTProviderFor(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			// Arrange
-			hdl, err := NewHandler(WithK8sJWTProviders(true, "crdAPIGroup", "crdName", "crdNameSpace"))
+			hdl, err := NewHandler(WithK8sJWTProviders(true, "crdAPIGroup", "crdAPIVersion", "crdName", "crdNameSpace"))
 			if err != nil {
 				t.Fatalf("could not create handler: %s", err)
 			}

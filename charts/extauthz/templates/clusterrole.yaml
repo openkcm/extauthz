@@ -4,6 +4,6 @@ kind: ClusterRole
 metadata:
   name: {{ include "extauthz.serviceAccountName" . }}-jwtprovider-clusterrole
 rules:
-- apiGroups: [ "{{ .Values.config.jwtk8sProvidersAPIGroup | default "/apis/gateway.extensions.envoyproxy.io/v1alpha1" }}" ]
+- apiGroups: [ "{{ .Values.config.jwtk8sProvidersAPIGroup | default "gateway.extensions.envoyproxy.io" }}" ]
   resources: [ "{{ .Values.config.jwtk8sProvidersName | default "jwtproviders" }}" ]
   verbs: ["get", "list"]
