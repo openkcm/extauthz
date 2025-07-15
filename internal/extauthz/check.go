@@ -39,6 +39,7 @@ type checkResult struct {
 	subject string
 	email   string
 	region  string
+	groups  []string
 }
 
 // merge updates the result if the other result is more restrictive
@@ -50,6 +51,7 @@ func (cr *checkResult) merge(other checkResult) {
 		cr.subject = other.subject
 		cr.email = other.email
 		cr.region = other.region
+		cr.groups = other.groups
 	}
 }
 
@@ -137,6 +139,9 @@ func (srv *Server) Check(ctx context.Context, req *envoy_auth.CheckRequest) (*en
 		}
 		if srv.enrichHeaderWithRegion && result.region != "" {
 			clientData.Region = result.region
+		}
+		if len(result.groups) > 0 {
+			clientData.Groups = result.groups
 		}
 		// get the public key
 		keyID, publicKey, err := srv.signingKeyFunc()
