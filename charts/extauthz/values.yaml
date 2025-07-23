@@ -218,9 +218,11 @@ config:
     address: :8080
     profiling: true
 
-  # Based on github.com/openkcm/extauthz/pkg/config  
+  # Based on github.com/openkcm/extauthz/pkg/config
   grpcServer:
     address: :9092
+    flags:
+      health: true
 
   policyPath: /etc/extauthz-policies
   mtlsTrustedSubjectsYaml: /etc/extauthz-mtls/trustedSubjects.yaml
