@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
-	"time"
 
 	"github.com/openkcm/common-sdk/pkg/health"
 	"google.golang.org/grpc"
@@ -28,18 +27,18 @@ func createGRPCServer(_ context.Context, cfg *config.GRPCServer) (*grpc.Server, 
 
 	enforcementPolicy := keepalive.EnforcementPolicy{
 		// If a client pings more than once every 15 sec, terminate the connection
-		MinTime: time.Duration(cfg.EfPolMinTime) * time.Second,
+		MinTime: cfg.EfPolMinTime,
 		// Allow pings even when there are no active streams
 		PermitWithoutStream: cfg.EfPolPermitWithoutStream,
 	}
 	opts = append(opts, grpc.KeepaliveEnforcementPolicy(enforcementPolicy))
 
 	serverParameters := keepalive.ServerParameters{
-		MaxConnectionIdle:     time.Duration(cfg.Attributes.MaxConnectionIdle) * time.Second,
-		MaxConnectionAge:      time.Duration(cfg.Attributes.MaxConnectionAge) * time.Second,
-		MaxConnectionAgeGrace: time.Duration(cfg.Attributes.MaxConnectionAgeGrace) * time.Second,
-		Time:                  time.Duration(cfg.Attributes.Time) * time.Second,
-		Timeout:               time.Duration(cfg.Attributes.Timeout) * time.Second,
+		MaxConnectionIdle:     cfg.Attributes.MaxConnectionIdle,
+		MaxConnectionAge:      cfg.Attributes.MaxConnectionAge,
+		MaxConnectionAgeGrace: cfg.Attributes.MaxConnectionAgeGrace,
+		Time:                  cfg.Attributes.Time,
+		Timeout:               cfg.Attributes.Timeout,
 	}
 	opts = append(opts, grpc.KeepaliveParams(serverParameters))
 
