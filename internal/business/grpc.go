@@ -6,8 +6,10 @@ import (
 	"log/slog"
 	"net"
 
-	envoy_auth "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
 	"github.com/openkcm/common-sdk/pkg/commongrpc"
+
+	envoy_auth "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
+
 	"github.com/openkcm/extauthz/internal/config"
 	"github.com/openkcm/extauthz/internal/extauthz"
 )
