@@ -17,6 +17,9 @@ status: # status server configuration
 # Based on github.com/openkcm/extauthz/pkg/config
 grpcServer: # ext_authz gRPC server configuration
   address: :9092
+  flags:
+    health: true
+    reflection: true
 
 # Path to Cedar policy files
 policyPath: ./

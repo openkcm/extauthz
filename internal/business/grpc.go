@@ -6,57 +6,20 @@ import (
 	"log/slog"
 	"net"
 
-	"github.com/openkcm/common-sdk/pkg/health"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/keepalive"
+	"github.com/openkcm/common-sdk/pkg/commongrpc"
 
 	envoy_auth "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
-	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 
 	"github.com/openkcm/extauthz/internal/config"
 	"github.com/openkcm/extauthz/internal/extauthz"
 )
 
-// createGRPCServer creates the gRPC server using the given config
-func createGRPCServer(_ context.Context, cfg *config.GRPCServer) (*grpc.Server, error) {
-	var opts []grpc.ServerOption
-
-	if cfg.MaxRecvMsgSize > 0 {
-		opts = append(opts, grpc.MaxRecvMsgSize(cfg.MaxRecvMsgSize))
-	}
-
-	enforcementPolicy := keepalive.EnforcementPolicy{
-		// If a client pings more than once every 15 sec, terminate the connection
-		MinTime: cfg.EfPolMinTime,
-		// Allow pings even when there are no active streams
-		PermitWithoutStream: cfg.EfPolPermitWithoutStream,
-	}
-	opts = append(opts, grpc.KeepaliveEnforcementPolicy(enforcementPolicy))
-
-	serverParameters := keepalive.ServerParameters{
-		MaxConnectionIdle:     cfg.Attributes.MaxConnectionIdle,
-		MaxConnectionAge:      cfg.Attributes.MaxConnectionAge,
-		MaxConnectionAgeGrace: cfg.Attributes.MaxConnectionAgeGrace,
-		Time:                  cfg.Attributes.Time,
-		Timeout:               cfg.Attributes.Timeout,
-	}
-	opts = append(opts, grpc.KeepaliveParams(serverParameters))
-
-	// create the gRPC server with the given options
-	grpcServer := grpc.NewServer(opts...)
-	return grpcServer, nil
-}
-
 func startGRPCServer(ctx context.Context, cfg *config.Config, extauthzSrv *extauthz.Server) error {
 	// Create a new gRPC server
-	grpcServer, err := createGRPCServer(ctx, &cfg.GRPCServer)
-	if err != nil {
-		return fmt.Errorf("failed to create gRPC server: %w", err)
-	}
+	grpcServer := commongrpc.NewServer(ctx, &cfg.GRPCServer.GRPCServer)
 
 	// Register the ExtAuthZ server and the health server with the gRPC server
 	envoy_auth.RegisterAuthorizationServer(grpcServer, extauthzSrv)
-	healthpb.RegisterHealthServer(grpcServer, &health.GRPCServer{})
 
 	// Start the gRPC listener and server
 	listener, err := net.Listen("tcp", cfg.GRPCServer.Address)
