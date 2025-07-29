@@ -51,38 +51,13 @@ func TestNewHandler(t *testing.T) {
 			opts: []HandlerOption{
 				WithIssuerClaimKeys(DefaultIssuerClaims...),
 			},
-			checkFunc: func(h *Handler) error {
-				found := false
-				for _, key := range h.issuerClaimKeys {
-					if key == "iss" {
-						found = true
-					}
-				}
-
-				if !found {
-					return errors.New("expected iss into issuer claim keys")
-				}
-
-				return nil
-			},
+			checkFunc: issuerClaimHandler("iss"),
 		}, {
 			name: "with issuer claim keys ias_iss",
 			opts: []HandlerOption{
 				WithIssuerClaimKeys("ias_iss"),
 			},
-			checkFunc: func(h *Handler) error {
-				found := false
-				for _, key := range h.issuerClaimKeys {
-					if key == "ias_iss" {
-						found = true
-					}
-				}
-
-				if !found {
-					return errors.New("expected ias_iss into issuer claim keys")
-				}
-				return nil
-			},
+			checkFunc: issuerClaimHandler("ias_iss"),
 		}, {
 			name: "with nil provider",
 			opts: []HandlerOption{
@@ -431,6 +406,23 @@ func TestParseAndValidate(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func issuerClaimHandler(claimKey string) func(h *Handler) error {
+	return func(h *Handler) error {
+		found := false
+		for _, key := range h.issuerClaimKeys {
+			if key == claimKey {
+				found = true
+			}
+		}
+
+		if !found {
+			return fmt.Errorf("expected %s into issuer claim keys", claimKey)
+		}
+
+		return nil
 	}
 }
 
