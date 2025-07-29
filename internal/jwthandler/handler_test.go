@@ -503,13 +503,11 @@ func TestK8sJWTProviderFor(t *testing.T) {
 				Items: []JWTProvider{
 					{
 						Spec: Spec{
-							Issuer:     "https://example.com/",
 							RemoteJwks: RemoteJWKS{URI: "%https://example.com/jwks"},
 							Audiences:  []string{"aud1", "aud2"},
 						},
 					}, {
 						Spec: Spec{
-							Issuer:     "%https://bar.com/",
 							RemoteJwks: RemoteJWKS{URI: "%https://bar.com/jwks"},
 							Audiences:  []string{"aud1", "aud2"},
 						},
@@ -524,15 +522,11 @@ func TestK8sJWTProviderFor(t *testing.T) {
 				Items: []JWTProvider{
 					{
 						Spec: Spec{
-							Issuer:     "https://example.com/",
-							RemoteJwks: RemoteJWKS{URI: "https://example.com/jwks"},
-							Audiences:  []string{"aud1", "aud2"},
+							Issuer: "https://example.com/",
 						},
 					}, {
 						Spec: Spec{
-							Issuer:     "%https://bar.com/",
-							RemoteJwks: RemoteJWKS{URI: "%https://bar.com/jwks"},
-							Audiences:  []string{"aud1", "aud2"},
+							Issuer: "%https://bar.com/",
 						},
 					},
 				},
