@@ -14,14 +14,15 @@ data:
       {{- with .Values.config.environment }}
       environment: {{ . }}
       {{- end }}
-      {{- with .Values.config.featureGates }}
-      featureGates:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
       {{- with .Values.config.labels }}
       labels:
         {{- toYaml . | nindent 8 }}
       {{- end}}
+
+    {{- with .Values.config.featureGates }}
+    featureGates:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
 
     {{- with .Values.config.logger }}
     logger:
