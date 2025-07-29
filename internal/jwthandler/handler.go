@@ -349,8 +349,10 @@ func (handler *Handler) k8sJWTProviderFor(k8sRestClient rest.Interface, issuer s
 
 func extractFromClaims(claims map[string]any, keys ...string) string {
 	for _, key := range keys {
-		if val, ok := claims[key]; ok {
-			return val.(string)
+		if val, exists := claims[key]; exists {
+			if str, ok := val.(string); ok {
+				return str
+			}
 		}
 	}
 	return ""
