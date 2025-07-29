@@ -10,8 +10,8 @@ type Config struct {
 	// gRPC server configuration
 	GRPCServer GRPCServer
 
-	// PolicyPath is the path to Cedar policy files
-	PolicyPath string
+	// Cedar configuration
+	Cedar Cedar
 
 	// Client Certificate handling
 	MTLS MTLS
@@ -21,6 +21,12 @@ type Config struct {
 
 	// Client data handling
 	ClientData ClientData
+}
+
+// Cedar configuration
+type Cedar struct {
+	// PolicyPath is the path to Cedar policy files
+	PolicyPath string
 }
 
 // gRPC server configuration
@@ -36,20 +42,12 @@ type MTLS struct {
 	TrustedSubjectsYaml string
 }
 
-type JWTOperationMode string
-
-const (
-	JWTOperationModeDefault JWTOperationMode = "default"
-	JWTOperationModeSapias  JWTOperationMode = "sapias"
-)
-
 type JWT struct {
-	// OperationMode configures the JWT validation according to the
-	// JWT provider. One of default, sapias
-	OperationMode JWTOperationMode
+	// IssuerClaimKeys configures the JWT issuer keys
+	IssuerClaimKeys []string `yaml:"issuerClaimKeys"`
 
 	// Define providers as k8s custom resources
-	K8sProviders K8sProviders
+	K8sProviders K8sProviders `yaml:"k8sProviders"`
 }
 
 type K8sProviders struct {

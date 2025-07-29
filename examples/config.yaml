@@ -22,7 +22,8 @@ grpcServer: # ext_authz gRPC server configuration
     reflection: true
 
 # Path to Cedar policy files
-policyPath: ./
+cedar:
+  policyPath: ./
 
 # Client Certificate handling
 mtls:
@@ -30,7 +31,9 @@ mtls:
 
 # JWT Token handling
 jwt:
-  operationMode: default # one of: default, sapias
+  issuerClaimKeys:
+    - ias_iss
+    - iss
   k8sProviders:
     apiGroup: "gateway.extensions.envoyproxy.io"
     apiVersion: "v1alpha1"

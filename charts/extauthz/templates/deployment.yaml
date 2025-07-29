@@ -87,7 +87,7 @@ spec:
           {{- end }}
           volumeMounts:
             - name: {{ include "extauthz.name" . }}-config-volume
-              mountPath: /etc/{{ include "extauthz.name" . }}
+              mountPath: /etc/extauthz
               readOnly: true
           {{- with .Values.extraVolumeMounts }}
             {{- toYaml . | nindent 12 }}

@@ -47,24 +47,39 @@ func TestNewHandler(t *testing.T) {
 				WithProviderCacheExpiration(30*time.Second, 10*time.Minute),
 			},
 		}, {
-			name: "with operation mode DefaultMode",
+			name: "with issuer claim keys iss",
 			opts: []HandlerOption{
-				WithOperationMode(DefaultMode),
+				WithIssuerClaimKeys(DefaultIssuerClaims...),
 			},
 			checkFunc: func(h *Handler) error {
-				if h.operationMode != DefaultMode {
-					return errors.New("expected default operation mode")
+				found := false
+				for _, key := range h.issuerClaimKeys {
+					if key == "iss" {
+						found = true
+					}
 				}
+
+				if !found {
+					return errors.New("expected iss into issuer claim keys")
+				}
+
 				return nil
 			},
 		}, {
-			name: "with operation mode SAPIAS",
+			name: "with issuer claim keys ias_iss",
 			opts: []HandlerOption{
-				WithOperationMode(SAPIAS),
+				WithIssuerClaimKeys("ias_iss"),
 			},
 			checkFunc: func(h *Handler) error {
-				if h.operationMode != SAPIAS {
-					return errors.New("expected SAPIAS operation mode")
+				found := false
+				for _, key := range h.issuerClaimKeys {
+					if key == "ias_iss" {
+						found = true
+					}
+				}
+
+				if !found {
+					return errors.New("expected ias_iss into issuer claim keys")
 				}
 				return nil
 			},
@@ -214,18 +229,18 @@ func TestParseAndValidate(t *testing.T) {
 	// create the test cases
 	tests := []struct {
 		name            string
-		operationMode   JWTOperationMode
+		issuerClaimKeys []string
 		token           *jwt.Token
 		providerOptions []ProviderOption
 		wantError       bool
 	}{
 		{
-			name:          "zero values",
-			operationMode: DefaultMode,
-			wantError:     true,
+			name:            "zero values",
+			issuerClaimKeys: DefaultIssuerClaims,
+			wantError:       true,
 		}, {
-			name:          "invalid token: wrong IAS issuer",
-			operationMode: SAPIAS,
+			name:            "invalid token: wrong IAS issuer",
+			issuerClaimKeys: []string{"ias_iss"},
 			token: jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
 				"sub":     "me",
 				"mail":    "me@my.world",
@@ -235,8 +250,8 @@ func TestParseAndValidate(t *testing.T) {
 			}),
 			wantError: true,
 		}, {
-			name:          "invalid token: wrong issuer",
-			operationMode: DefaultMode,
+			name:            "invalid token: wrong issuer",
+			issuerClaimKeys: DefaultIssuerClaims,
 			token: jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
 				"sub":  "me",
 				"mail": "me@my.world",
@@ -246,8 +261,8 @@ func TestParseAndValidate(t *testing.T) {
 			}),
 			wantError: true,
 		}, {
-			name:          "invalid token: no audience",
-			operationMode: DefaultMode,
+			name:            "invalid token: no audience",
+			issuerClaimKeys: DefaultIssuerClaims,
 			token: jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
 				"sub":  "me",
 				"mail": "me@my.world",
@@ -256,8 +271,8 @@ func TestParseAndValidate(t *testing.T) {
 			}),
 			wantError: true,
 		}, {
-			name:          "invalid token: wrong audience",
-			operationMode: DefaultMode,
+			name:            "invalid token: wrong audience",
+			issuerClaimKeys: DefaultIssuerClaims,
 			token: jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
 				"sub":  "me",
 				"mail": "me@my.world",
@@ -267,8 +282,8 @@ func TestParseAndValidate(t *testing.T) {
 			}),
 			wantError: true,
 		}, {
-			name:          "invalid token: not before",
-			operationMode: DefaultMode,
+			name:            "invalid token: not before",
+			issuerClaimKeys: DefaultIssuerClaims,
 			token: jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
 				"sub":  "me",
 				"mail": "me@my.world",
@@ -279,8 +294,8 @@ func TestParseAndValidate(t *testing.T) {
 			}),
 			wantError: true,
 		}, {
-			name:          "invalid token: expired",
-			operationMode: DefaultMode,
+			name:            "invalid token: expired",
+			issuerClaimKeys: DefaultIssuerClaims,
 			token: jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
 				"sub":  "me",
 				"mail": "me@my.world",
@@ -290,8 +305,8 @@ func TestParseAndValidate(t *testing.T) {
 			}),
 			wantError: true,
 		}, {
-			name:          "invalid token: no expiry",
-			operationMode: DefaultMode,
+			name:            "invalid token: no expiry",
+			issuerClaimKeys: DefaultIssuerClaims,
 			token: jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
 				"sub":  "me",
 				"mail": "me@my.world",
@@ -300,8 +315,8 @@ func TestParseAndValidate(t *testing.T) {
 			}),
 			wantError: true,
 		}, {
-			name:          "valid token",
-			operationMode: DefaultMode,
+			name:            "valid token",
+			issuerClaimKeys: DefaultIssuerClaims,
 			token: jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
 				"sub":  "me",
 				"mail": "me@my.world",
@@ -311,8 +326,8 @@ func TestParseAndValidate(t *testing.T) {
 			}),
 			wantError: false,
 		}, {
-			name:          "valid IAS token with ias_iss",
-			operationMode: SAPIAS,
+			name:            "valid IAS token with ias_iss",
+			issuerClaimKeys: []string{"ias_iss"},
 			token: jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
 				"sub":     "me",
 				"mail":    "me@my.world",
@@ -322,8 +337,8 @@ func TestParseAndValidate(t *testing.T) {
 			}),
 			wantError: false,
 		}, {
-			name:          "valid IAS token with iss",
-			operationMode: SAPIAS,
+			name:            "valid IAS token with iss",
+			issuerClaimKeys: DefaultIssuerClaims,
 			token: jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
 				"sub":  "me",
 				"mail": "me@my.world",
@@ -333,8 +348,8 @@ func TestParseAndValidate(t *testing.T) {
 			}),
 			wantError: false,
 		}, {
-			name:          "revoked token",
-			operationMode: DefaultMode,
+			name:            "revoked token",
+			issuerClaimKeys: DefaultIssuerClaims,
 			token: jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
 				"sub":  "me",
 				"mail": "me@my.world",
@@ -347,8 +362,8 @@ func TestParseAndValidate(t *testing.T) {
 			},
 			wantError: true,
 		}, {
-			name:          "Active token",
-			operationMode: DefaultMode,
+			name:            "Active token",
+			issuerClaimKeys: DefaultIssuerClaims,
 			token: jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
 				"sub":  "me",
 				"mail": "me@my.world",
@@ -380,7 +395,7 @@ func TestParseAndValidate(t *testing.T) {
 				t.Fatalf("could not create provider: %s", err)
 			}
 			hdl, err := NewHandler(
-				WithOperationMode(tc.operationMode),
+				WithIssuerClaimKeys(tc.issuerClaimKeys...),
 				WithProvider(p),
 			)
 			if err != nil {
