@@ -120,16 +120,10 @@ func (handler *Handler) ParseAndValidate(ctx context.Context, rawToken string, u
 
 	// check the issuer to find the right provider
 	issuer := extractFromClaims(claims, handler.issuerClaimKeys...)
-	//if handler.issuerClaimKeys == SAPIAS {
-	//	issuer, _ = claims["ias_iss"].(string)
-	//}
 	if issuer == "" { // in case its empty
-		return errors.Join(ErrInvalidToken, errors.New("missing iss in token claims"))
+		return errors.Join(ErrInvalidToken, fmt.Errorf("missing keys %v in token claims", handler.issuerClaimKeys))
 	}
-	//if issuer == "" {
-	//	issuer, _ = claims["iss"].(string)
-	//
-	//}
+
 	issuerURL, err := url.Parse(issuer)
 	if err != nil {
 		return errors.Join(ErrInvalidToken, err)
