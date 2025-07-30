@@ -22,7 +22,7 @@ type Config struct {
 	JWT JWT `yaml:"jwt"`
 
 	// Client data key set server
-	CDKSServer ClientDataKeySetServer `yaml:"cdksServer"`
+	CDKSServer CDKSServer `yaml:"cdksServer"`
 }
 
 // Cedar configuration
@@ -61,11 +61,10 @@ type K8sProviders struct {
 	Namespace  string `yaml:"namespace" default:"default"`
 }
 
-// ClientDataKeySetServer defines the information passed as header to consuming backend services.
-// It is based on github.com/openkcm/common-sdk/pkg/auth.
-// The Client Data Key Set (CDKSServer) is a set of keys containing the public keys used to verify any Client data Token (CDT)
+// CDKSServer (Client Data Key Set Server) is a set of keys containing the public keys used to verify any Client Data Token (CDT)
 // issued by the ExtAuthZ
-type ClientDataKeySetServer struct {
+// It is based on github.com/openkcm/common-sdk/pkg/auth.
+type CDKSServer struct {
 	// Address is the address, which provides the public key used to
 	// validate the client data signature.
 	Address string `json:"address" default:":5555"`

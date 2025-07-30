@@ -106,12 +106,6 @@ func (srv *Server) Check(ctx context.Context, req *envoy_auth.CheckRequest) (*en
 		certHeaderFound = false
 	}
 
-	if srv.featureGates.IsFeatureEnabled(flags.EnableAlwaysAllow) {
-		slogctx.Error(ctx, "Check() processing has been set on always allow through feature gates")
-
-		result.is = ALWAYS_ALLOW
-	}
-
 	if !certHeaderFound && !authHeaderFound {
 		result.info = "Missing client certificate or authorization header"
 		slogctx.Error(ctx, "Check() "+result.info)

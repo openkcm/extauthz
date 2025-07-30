@@ -5,8 +5,6 @@ const (
 	DisableJWTTokenComputation = "DisableJWTTokenComputation"
 	// DisableClientCertificateComputation disabling the existing client certificates handler, allowing the call to move forward
 	DisableClientCertificateComputation = "DisableClientCertificateComputation"
-	// EnableAlwaysAllow disable the JWT and the client certificates handler, allowing the call to move forward
-	EnableAlwaysAllow = "EnableAlwaysAllow"
 	// EnrichHeaderWithClientRegion if set on true is including the client region. information in the headers
 	EnrichHeaderWithClientRegion = "EnrichHeaderWithClientRegion"
 	// EnrichHeaderWithClientType if set on true is including the client type. information in the headers
