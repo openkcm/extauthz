@@ -93,7 +93,7 @@ func (s *handlerTestSuite) SetupSuite() {
 	cl := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: certpool}}}
 	s.provider, err = NewProvider(providerURL, []string{"aud1"}, WithClient(cl), WithCustomJWKSURI(jwksURI))
 	s.Require().NoError(err)
-	s.hdl, err = NewHandler(WithOperationMode(DefaultMode), WithProvider(s.provider))
+	s.hdl, err = NewHandler(WithIssuerClaimKeys(DefaultIssuerClaims...), WithProvider(s.provider))
 	s.Require().NoError(err)
 
 	s.token = jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{

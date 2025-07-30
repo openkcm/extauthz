@@ -24,14 +24,14 @@ replicaCount: 1
 image:
   # The container registry to pull the image from.
   # For example:
-  #   registry: kms.common.repositories.cloud.sap
-  #   repository: cmk
+  #   registry: ghcr.io/openkcm
+  #   repository: images/checker
   # +docs:property
-  registry: kms.common.repositories.cloud.sap
+  registry: ghcr.io/openkcm
 
   # The container image
   # +docs:property
-  repository: extauthz
+  repository: images/checker
 
   # Override the image tag to deploy by setting this variable.
   # If no value is set, the chart's appVersion is used.
@@ -210,10 +210,14 @@ extraPorts:
 config:
   # Based on github.com/openkcm/common-sdk/pkg/commoncfg
   environment: development
+
+  # Logger configuration
   logger:
     level: debug # one of: debug, info, warn, error
     format: json # one of: json, text
-  status: # status server configuration
+
+  # Status server configuration
+  status:
     enabled: true
     address: :8080
     profiling: true
@@ -224,15 +228,26 @@ config:
     flags:
       health: true
 
-  policyPath: /etc/extauthz-policies
-  mtlsTrustedSubjectsYaml: /etc/extauthz-mtls/trustedSubjects.yaml
-  # jwtOperationMode: default
-  # jwtk8sProvidersAPIGroup: gateway.extensions.envoyproxy.io
-  # jwtk8sProvidersAPIVersion: v1alpha1
-  # jwtk8sProvidersName: jwtproviders
-  # jwtk8sProvidersNamespace: default
+  cedar:
+    policyFilePath: /etc/extauthz-policies
+
+  # Client Certificate handling
+  mtls:
+    trustedSubjectsYaml: /etc/extauthz-mtls/trustedSubjects.yaml
+
+  # JWT Token handling
+  jwt:
+    issuerClaimKeys:
+      - iss
+    k8sProviders:
+      apiGroup: gateway.extensions.envoyproxy.io
+      apiVersion: v1alpha1
+      name: jwtproviders
+      namespace: default
 
   # Client Data handling
   clientData:
+    publicKeyAddress: ":5555"
+    signingKeyRefreshIntervalS: 21600
     withRegion: true
     withType: true

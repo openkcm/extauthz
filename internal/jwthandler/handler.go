@@ -20,17 +20,13 @@ import (
 	"k8s.io/client-go/rest"
 )
 
-type JWTOperationMode uint
-
-const (
-	// operation modes to tweak the behavior of the handler to the related provider
-	DefaultMode JWTOperationMode = iota
-	SAPIAS
+var (
+	DefaultIssuerClaims = []string{"iss"}
 )
 
 // Handler tracks the set of identity providers to support multi tenancy.
 type Handler struct {
-	operationMode                JWTOperationMode
+	issuerClaimKeys              []string
 	k8sJWTProvidersEnabled       bool
 	k8sJWTProvidersCRDAPIGroup   string
 	k8sJWTProvidersCRDAPIVersion string
@@ -46,10 +42,10 @@ type Handler struct {
 // HandlerOption is used to configure a handler.
 type HandlerOption func(*Handler) error
 
-// WithOperationMode configures the behavior of a certain provider.
-func WithOperationMode(operationMode JWTOperationMode) HandlerOption {
+// WithIssuerClaimKeys configures the behavior of a certain provider.
+func WithIssuerClaimKeys(issuerClaimKeys ...string) HandlerOption {
 	return func(handler *Handler) error {
-		handler.operationMode = operationMode
+		handler.issuerClaimKeys = issuerClaimKeys
 		return nil
 	}
 }
@@ -93,8 +89,8 @@ func WithProviderCacheExpiration(expiration, cleanup time.Duration) HandlerOptio
 // NewHandler creates a new handler and applies the given options.
 func NewHandler(opts ...HandlerOption) (*Handler, error) {
 	handler := &Handler{
-		operationMode: DefaultMode,
-		cache:         cache.New(30*time.Second, 10*time.Minute),
+		issuerClaimKeys: DefaultIssuerClaims,
+		cache:           cache.New(30*time.Second, 10*time.Minute),
 	}
 	for _, opt := range opts {
 		if err := opt(handler); err != nil {
@@ -123,16 +119,11 @@ func (handler *Handler) ParseAndValidate(ctx context.Context, rawToken string, u
 	}
 
 	// check the issuer to find the right provider
-	var issuer string
-	if handler.operationMode == SAPIAS {
-		issuer, _ = claims["ias_iss"].(string)
+	issuer := extractFromClaims(claims, handler.issuerClaimKeys...)
+	if issuer == "" { // in case its empty
+		return errors.Join(ErrInvalidToken, fmt.Errorf("missing keys %v in token claims", handler.issuerClaimKeys))
 	}
-	if issuer == "" {
-		issuer, _ = claims["iss"].(string)
-		if issuer == "" { // in case its empty
-			return errors.Join(ErrInvalidToken, errors.New("missing iss in token claims"))
-		}
-	}
+
 	issuerURL, err := url.Parse(issuer)
 	if err != nil {
 		return errors.Join(ErrInvalidToken, err)
@@ -348,4 +339,15 @@ func (handler *Handler) k8sJWTProviderFor(k8sRestClient rest.Interface, issuer s
 	}
 
 	return nil, errors.Join(ErrNoProvider, fmt.Errorf("no provider found for issuer %s", issuer))
+}
+
+func extractFromClaims(claims map[string]any, keys ...string) string {
+	for _, key := range keys {
+		if val, exists := claims[key]; exists {
+			if str, ok := val.(string); ok {
+				return str
+			}
+		}
+	}
+	return ""
 }

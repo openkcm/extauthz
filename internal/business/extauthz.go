@@ -15,7 +15,7 @@ import (
 
 func createExtAuthZServer(ctx context.Context, cfg *config.Config) (*extauthz.Server, error) {
 	// Load all Cedar policy files from the policy path
-	pe, err := policy.NewEngine(policy.WithPath(cfg.PolicyPath))
+	pe, err := policy.NewEngine(policy.WithPath(cfg.Cedar.PolicyPath))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create the policy engine: %w", err)
 	}
@@ -24,19 +24,15 @@ func createExtAuthZServer(ctx context.Context, cfg *config.Config) (*extauthz.Se
 	if err != nil {
 		return nil, fmt.Errorf("failed to load trusted subjects: %w", err)
 	}
-	// parse the JWT operation mode
-	var jwtOperationMode jwthandler.JWTOperationMode
-	switch cfg.JWT.OperationMode {
-	case config.JWTOperationModeSapias:
-		jwtOperationMode = jwthandler.SAPIAS
-	case config.JWTOperationModeDefault, "":
-		jwtOperationMode = jwthandler.DefaultMode
-	default:
-		return nil, fmt.Errorf("invalid JWT operation mode: %s", cfg.JWT.OperationMode)
+
+	if len(cfg.JWT.IssuerClaimKeys) == 0 {
+		slog.Warn("JWT configuration doesn't have the issuer claims keys; Use the default values: iss.")
+		cfg.JWT.IssuerClaimKeys = jwthandler.DefaultIssuerClaims
 	}
+
 	// Create the JWT handler
 	hdl, err := jwthandler.NewHandler(
-		jwthandler.WithOperationMode(jwtOperationMode),
+		jwthandler.WithIssuerClaimKeys(cfg.JWT.IssuerClaimKeys...),
 		jwthandler.WithK8sJWTProviders(true,
 			cfg.JWT.K8sProviders.APIGroup,
 			cfg.JWT.K8sProviders.APIVersion,
