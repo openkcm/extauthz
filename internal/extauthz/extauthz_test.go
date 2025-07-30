@@ -70,10 +70,11 @@ func TestMain(m *testing.M) {
 	// create an RSA key pair
 	rsaKeyID = uuid.New().String()
 
-	rsaPrivateKey, err := rsa.GenerateKey(rand.Reader, 4096)
+	rsaPrivateKeyLocal, err := rsa.GenerateKey(rand.Reader, 4096)
 	if err != nil {
 		log.Fatalf("could not generate RSA key: %s", err)
 	}
+	rsaPrivateKey = rsaPrivateKeyLocal
 
 	rsaPrivateKeyDER, err := x509.MarshalPKCS8PrivateKey(rsaPrivateKey)
 	if err != nil {
