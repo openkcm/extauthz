@@ -82,6 +82,7 @@ func TestLoadTrustedSubjects(t *testing.T) {
 				if err == nil {
 					t.Error("expected error, but got nil")
 				}
+
 				if got != nil {
 					t.Errorf("expected nil map, but got: %+v", got)
 				}

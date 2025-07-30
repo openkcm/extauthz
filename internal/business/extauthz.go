@@ -3,8 +3,8 @@ package business
 import (
 	"context"
 	"fmt"
-	"log/slog"
-	"time"
+
+	slogctx "github.com/veqryn/slog-context"
 
 	"github.com/openkcm/extauthz/internal/config"
 	"github.com/openkcm/extauthz/internal/extauthz"
@@ -15,6 +15,8 @@ import (
 
 func createExtAuthZServer(ctx context.Context, cfg *config.Config) (*extauthz.Server, error) {
 	// Load all Cedar policy files from the policy path
+	slogctx.Info(ctx, "Handling cedar policies", "cedar", cfg.Cedar)
+
 	pe, err := policy.NewEngine(policy.WithPath(cfg.Cedar.PolicyPath))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create the policy engine: %w", err)
@@ -26,14 +28,18 @@ func createExtAuthZServer(ctx context.Context, cfg *config.Config) (*extauthz.Se
 	}
 
 	if len(cfg.JWT.IssuerClaimKeys) == 0 {
-		slog.Warn("JWT configuration doesn't have the issuer claims keys; Use the default values: iss.")
+		slogctx.Warn(ctx, "JWT configuration doesn't have the issuer claims keys; Use the default values: [iss].")
+
 		cfg.JWT.IssuerClaimKeys = jwthandler.DefaultIssuerClaims
 	}
 
 	// Create the JWT handler
+	slogctx.Debug(ctx, "Using k8s JWT providers", "k8s", cfg.JWT.K8sProviders)
+
 	hdl, err := jwthandler.NewHandler(
 		jwthandler.WithIssuerClaimKeys(cfg.JWT.IssuerClaimKeys...),
-		jwthandler.WithK8sJWTProviders(true,
+		jwthandler.WithK8sJWTProviders(
+			cfg.JWT.K8sProviders.Enabled,
 			cfg.JWT.K8sProviders.APIGroup,
 			cfg.JWT.K8sProviders.APIVersion,
 			cfg.JWT.K8sProviders.Name,
@@ -45,16 +51,19 @@ func createExtAuthZServer(ctx context.Context, cfg *config.Config) (*extauthz.Se
 	}
 	// Create signing key and serve the public key
 	opts := []signing.Option{}
-	if cfg.ClientData.SigningKeyRefreshIntervalS > 0 {
-		opts = append(opts, signing.WithRefreshInterval(time.Second*time.Duration(cfg.ClientData.SigningKeyRefreshIntervalS)))
+	if cfg.CDKSServer.SigningKeyRefreshInterval > 0 {
+		opts = append(opts, signing.WithRefreshInterval(cfg.CDKSServer.SigningKeyRefreshInterval))
 	}
+
 	signingKey, err := signing.NewKey(ctx, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create signing key: %w", err)
 	}
+
 	go func() {
-		if err := signingKey.ServePublicKey(ctx, cfg.ClientData.PublicKeyAddress); err != nil {
-			slog.Error("failed to serve public key", "error", err)
+		err := signingKey.ServePublicKey(ctx, cfg.CDKSServer.Address)
+		if err != nil {
+			slogctx.Error(ctx, "failed to serve public key", "error", err)
 		}
 	}()
 
@@ -63,11 +72,11 @@ func createExtAuthZServer(ctx context.Context, cfg *config.Config) (*extauthz.Se
 		extauthz.WithPolicyEngine(pe),
 		extauthz.WithJWTHandler(hdl),
 		extauthz.WithTrustedSubjects(subjects),
-		extauthz.WithEnrichHeaderWithRegion(cfg.ClientData.WithRegion),
-		extauthz.WithEnrichHeaderWithType(cfg.ClientData.WithType),
+		extauthz.WithFeatureGates(&cfg.FeatureGates),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create the ExtAuthZ server: %w", err)
 	}
+
 	return srv, nil
 }

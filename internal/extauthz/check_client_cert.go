@@ -6,12 +6,13 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"log/slog"
 	"net/url"
 	"strings"
 	"time"
 
 	"github.com/go-andiamo/splitter"
+
+	slogctx "github.com/veqryn/slog-context"
 )
 
 // mapHeader takes a string "FOO=bar;BAZ=qux" and returns a map[string]string{"FOO": "bar", "BAZ": "qux"}
@@ -21,6 +22,7 @@ func mapHeader(header string) (map[string]string, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	fields, err := spl.Split(header)
 	if err != nil {
 		return nil, err
@@ -34,6 +36,7 @@ func mapHeader(header string) (map[string]string, error) {
 			return nil, fmt.Errorf("invalid field: %s", field)
 		}
 	}
+
 	return m, nil
 }
 
@@ -43,22 +46,26 @@ func parseCert(urlEncodedPem string) (*x509.Certificate, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	block, _ := pem.Decode([]byte(pemData))
 	if block == nil {
 		return nil, errors.New("failed to decode PEM block containing certificate: block is nil")
 	}
+
 	if block.Type != "CERTIFICATE" {
 		return nil, fmt.Errorf("failed to decode PEM block containing certificate: block type is %s", block.Type)
 	}
+
 	crt, err := x509.ParseCertificate(block.Bytes)
 	if err != nil {
 		return nil, err
 	}
+
 	return crt, nil
 }
 
 // checkClientCert checks the request using the subject from the client certificate.
-func (srv *Server) checkClientCert(_ context.Context, certHeader, method, host, path string) checkResult {
+func (srv *Server) checkClientCert(ctx context.Context, certHeader, method, host, path string) checkResult {
 	// create map of fields
 	fields, err := mapHeader(certHeader)
 	if err != nil {
@@ -86,6 +93,7 @@ func (srv *Server) checkClientCert(_ context.Context, certHeader, method, host, 
 		return checkResult{is: UNAUTHENTICATED,
 			info: "Missing certificate in XFCC header"}
 	}
+
 	crt, err := parseCert(urlEncodedPem)
 	if err != nil {
 		return checkResult{is: UNAUTHENTICATED,
@@ -97,18 +105,20 @@ func (srv *Server) checkClientCert(_ context.Context, certHeader, method, host, 
 		return checkResult{is: DENIED,
 			info: "Certificate not yet valid"}
 	}
+
 	if crt.NotAfter.Before(time.Now()) {
 		return checkResult{is: DENIED,
 			info: "Certificate expired"}
 	}
 
 	// check the policies
-	slog.Debug("Checking policies for x509",
+	slogctx.Debug(ctx, "Checking policies for x509",
 		"subject", subject,
 		"issuer", crt.Issuer.String(),
 		"method", method,
 		"host", host,
 		"path", path)
+
 	allowed, reason, err := srv.policyEngine.Check(subject, method, host+path,
 		map[string]string{
 			"type":   "x509",
@@ -118,6 +128,7 @@ func (srv *Server) checkClientCert(_ context.Context, certHeader, method, host, 
 		return checkResult{is: UNAUTHENTICATED,
 			info: fmt.Sprintf("Error from policy engine: %v", err)}
 	}
+
 	if !allowed {
 		return checkResult{is: DENIED,
 			info: fmt.Sprintf("Reason from policy engine: %v", reason)}

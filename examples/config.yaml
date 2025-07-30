@@ -5,6 +5,13 @@ application:
   name: extauthz
   environment: development
 
+featureGates:
+  EnrichHeaderWithClientType: false
+  EnrichHeaderWithClientRegion: false
+  DisableClientCertificateComputation: false
+  DisableJWTTokenComputation: false
+  EnableAlwaysAllow: false
+
 logger:
   level: debug # one of: debug, info, warn, error
   format: text # one of: json, text
@@ -21,6 +28,11 @@ grpcServer: # ext_authz gRPC server configuration
     health: true
     reflection: true
 
+# Client Data Key Set handling
+cdksServer:
+  address: :5555
+  signingKeyRefreshInterval: 6h
+
 # Path to Cedar policy files
 cedar:
   policyPath: ./
@@ -35,14 +47,7 @@ jwt:
     - ias_iss
     - iss
   k8sProviders:
-    apiGroup: "gateway.extensions.envoyproxy.io"
-    apiVersion: "v1alpha1"
-    name: "jwtproviders"
-    namespace: "default"
-
-# Client Data handling
-clientData:
-  publicKeyAddress: :5555
-  signingKeyRefreshIntervalS: 21600 # 6 hours
-  withRegion: false
-  withType: false
+    apiGroup: gateway.extensions.envoyproxy.io
+    apiVersion: v1alpha1
+    name: jwtproviders
+    namespace: default

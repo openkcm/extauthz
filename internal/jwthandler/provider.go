@@ -5,13 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"net/url"
 	"time"
 
 	"github.com/go-jose/go-jose/v4"
 	"github.com/patrickmn/go-cache"
+
+	slogctx "github.com/veqryn/slog-context"
 )
 
 // Provider represents a specific JWT provider.
@@ -51,7 +52,9 @@ func WithClient(c *http.Client) ProviderOption {
 		if c == nil {
 			return errors.New("client must not be nil")
 		}
+
 		provider.client = c
+
 		return nil
 	}
 }
@@ -62,7 +65,9 @@ func WithCustomJWKSURI(jwksURI *url.URL) ProviderOption {
 		if jwksURI == nil {
 			return errors.New("jwksURI must not be nil")
 		}
+
 		provider.jwksURI = jwksURI
+
 		return nil
 	}
 }
@@ -88,10 +93,12 @@ func NewProvider(issuerURL *url.URL, audiences []string, opts ...ProviderOption)
 	}
 
 	for _, opt := range opts {
-		if err := opt(provider); err != nil {
+		err := opt(provider)
+		if err != nil {
 			return nil, err
 		}
 	}
+
 	return provider, nil
 }
 
@@ -104,32 +111,40 @@ func (provider *Provider) SigningKeyFor(ctx context.Context, keyID string) (*jos
 				return key, nil
 			}
 		}
-		slog.Info("Signing key cache miss", "keyID", keyID)
+
+		slogctx.Info(ctx, "Signing key cache miss", "keyID", keyID)
 	}
 
 	// otherwise fetch the key using the JWKS URI and cache it if found
 	if provider.jwksURI == nil {
-		if err := provider.getWellKnownOpenIDConfiguraton(ctx); err != nil {
+		err := provider.getWellKnownOpenIDConfiguraton(ctx)
+		if err != nil {
 			return nil, fmt.Errorf("failed to get well known OpenID configuration: %w", err)
 		}
 	}
+
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, provider.jwksURI.String(), nil)
 	if err != nil {
 		return nil, fmt.Errorf("could not build request to get JWKS: %w", err)
 	}
+
 	response, err := provider.client.Do(request)
 	if err != nil {
 		return nil, err
 	}
+
 	defer func() {
-		if err := response.Body.Close(); err != nil {
-			slog.Error("could not close response body", "error", err)
+		err := response.Body.Close()
+		if err != nil {
+			slogctx.Error(ctx, "could not close response body", "error", err)
 		}
 	}()
 
 	// decode the jwks
 	var jwks jose.JSONWebKeySet
-	if err := json.NewDecoder(response.Body).Decode(&jwks); err != nil {
+
+	err = json.NewDecoder(response.Body).Decode(&jwks)
+	if err != nil {
 		return nil, fmt.Errorf("could not decode jwks: %w", err)
 	}
 
@@ -143,6 +158,7 @@ func (provider *Provider) SigningKeyFor(ctx context.Context, keyID string) (*jos
 				// https://pkg.go.dev/github.com/patrickmn/go-cache#Cache.Set
 				provider.signkeys.Set(keyID, &k, cache.DefaultExpiration)
 			}
+
 			return &k, nil
 		}
 	}
@@ -160,22 +176,27 @@ type wellKnownOpenIDConfiguration struct {
 func (provider *Provider) getWellKnownOpenIDConfiguraton(ctx context.Context) error {
 	wkoc := wellKnownOpenIDConfiguration{}
 	wkocURI := provider.issuerURL.JoinPath(".well-known/openid-configuration")
+
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, wkocURI.String(), nil)
 	if err != nil {
 		return fmt.Errorf("could not build request to get well known OpenID configuration: %w", err)
 	}
+
 	response, err := provider.client.Do(request)
 	if err != nil {
 		return fmt.Errorf("could not get well known OpenID configuration: %w", err)
 	}
+
 	defer func() {
-		if err := response.Body.Close(); err != nil {
-			slog.Error("could not close response body", "error", err)
+		err := response.Body.Close()
+		if err != nil {
+			slogctx.Error(ctx, "could not close response body", "error", err)
 		}
 	}()
 
 	// decode the well known OpenID configuration
-	if err := json.NewDecoder(response.Body).Decode(&wkoc); err != nil {
+	err = json.NewDecoder(response.Body).Decode(&wkoc)
+	if err != nil {
 		return fmt.Errorf("could not decode well known OpenID configuration: %w", err)
 	}
 
@@ -231,7 +252,9 @@ func (provider *Provider) introspect(ctx context.Context, rawToken string) (intr
 	defer resp.Body.Close()
 
 	var intr introspection
-	if err := json.NewDecoder(resp.Body).Decode(&intr); err != nil {
+
+	err = json.NewDecoder(resp.Body).Decode(&intr)
+	if err != nil {
 		return introspection{}, fmt.Errorf("decoding introspection response: %w", err)
 	}
 

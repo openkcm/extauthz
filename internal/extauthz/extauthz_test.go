@@ -17,14 +17,11 @@ import (
 )
 
 var (
-	rsaKeyID         string
-	rsaPrivateKey    *rsa.PrivateKey
-	rsaPrivateKeyDER []byte
-	rsaPrivateKeyPEM string
+	rsaKeyID      string
+	rsaPrivateKey *rsa.PrivateKey
 
 	rsaPublicKey              *rsa.PublicKey
 	rsaPublicKeyDER           []byte
-	rsaPublicKeyPEM           string
 	rsaPublicKeyPEMURLEncoded string
 
 	x509CertPEMURLEncoded string
@@ -45,10 +42,12 @@ func createX509CertDER(notBefore, notAfter time.Time) ([]byte, error) {
 		NotBefore:      notBefore,
 		NotAfter:       notAfter,
 	}
+
 	certDER, err := x509.CreateCertificate(rand.Reader, &certX509, &certX509, rsaPublicKey, rsaPrivateKey)
 	if err != nil {
 		return nil, err
 	}
+
 	return certDER, nil
 }
 
@@ -68,27 +67,31 @@ func createURLEncodedPEMCert(notBefore, notAfter time.Time) (string, error) {
 }
 
 func TestMain(m *testing.M) {
-	var err error
-
 	// create an RSA key pair
 	rsaKeyID = uuid.New().String()
-	if rsaPrivateKey, err = rsa.GenerateKey(rand.Reader, 4096); err != nil {
+
+	rsaPrivateKey, err := rsa.GenerateKey(rand.Reader, 4096)
+	if err != nil {
 		log.Fatalf("could not generate RSA key: %s", err)
 	}
-	rsaPrivateKeyDER, err = x509.MarshalPKCS8PrivateKey(rsaPrivateKey)
+
+	rsaPrivateKeyDER, err := x509.MarshalPKCS8PrivateKey(rsaPrivateKey)
 	if err != nil {
 		log.Fatalf("Error marshalling RSA private key: %s", err)
 	}
-	rsaPrivateKeyPEM = string(pem.EncodeToMemory(&pem.Block{
+
+	_ = string(pem.EncodeToMemory(&pem.Block{
 		Type:  "PRIVATE KEY",
 		Bytes: rsaPrivateKeyDER,
 	}))
 	rsaPublicKey = &rsaPrivateKey.PublicKey
+
 	rsaPublicKeyDER, err = x509.MarshalPKIXPublicKey(rsaPublicKey)
 	if err != nil {
 		log.Fatalf("Error marshalling RSA private key: %s", err)
 	}
-	rsaPublicKeyPEM = string(pem.EncodeToMemory(&pem.Block{
+
+	_ = string(pem.EncodeToMemory(&pem.Block{
 		Type:  "PUBLIC KEY",
 		Bytes: rsaPublicKeyDER,
 	}))

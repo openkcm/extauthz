@@ -107,6 +107,7 @@ func TestNewHandler(t *testing.T) {
 				if err == nil {
 					t.Error("expected error, but got nil")
 				}
+
 				if hdl != nil {
 					t.Errorf("expected nil handler, but got: %v", hdl)
 				}
@@ -122,6 +123,7 @@ func TestNewHandler(t *testing.T) {
 func TestParseAndValidate(t *testing.T) {
 	// create a JWKS test server
 	var jwksResponse []byte
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/jwks", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -130,29 +132,34 @@ func TestParseAndValidate(t *testing.T) {
 	})
 
 	mux.HandleFunc("/oauth2/introspect/fail", func(w http.ResponseWriter, r *http.Request) {
-		if err := json.NewEncoder(w).Encode(introspection{Active: false}); err != nil {
+		err := json.NewEncoder(w).Encode(introspection{Active: false})
+		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 		}
 	})
 
 	mux.HandleFunc("/oauth2/introspect/success", func(w http.ResponseWriter, r *http.Request) {
-		if err := json.NewEncoder(w).Encode(introspection{Active: true}); err != nil {
+		err := json.NewEncoder(w).Encode(introspection{Active: true})
+		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 		}
 	})
 
 	mux.HandleFunc("/oauth2/introspect", func(w http.ResponseWriter, r *http.Request) {
-		if err := json.NewEncoder(w).Encode(introspection{Active: true}); err != nil {
+		err := json.NewEncoder(w).Encode(introspection{Active: true})
+		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 		}
 	})
 
 	ts := httptest.NewTLSServer(mux)
 	defer ts.Close()
+
 	providerURL, err := url.Parse(ts.URL)
 	if err != nil {
 		t.Fatalf("could not parse issuer URL: %s", err)
 	}
+
 	jwksURI, err := url.Parse(ts.URL + "/jwks")
 	if err != nil {
 		t.Fatalf("could not parse JWKS URI: %s", err)
@@ -163,6 +170,7 @@ func TestParseAndValidate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("could not generate RSA key: %s", err)
 	}
+
 	rsaPublicKey := &rsaPrivateKey.PublicKey
 	rsaKeyID := uuid.New().String()
 
@@ -175,6 +183,7 @@ func TestParseAndValidate(t *testing.T) {
 		NotBefore: time.Now(),
 		NotAfter:  time.Now().Add(5 * time.Minute),
 	}
+
 	x509Cert, err := x509.CreateCertificate(rand.Reader, &cert, &cert, rsaPublicKey, rsaPrivateKey)
 	if err != nil {
 		t.Fatalf("could not create x509 certificate: %s", err)
@@ -185,6 +194,7 @@ func TestParseAndValidate(t *testing.T) {
 	binary.BigEndian.PutUint64(eBytes, uint64(rsaPrivateKey.E))
 	eBytes = bytes.TrimLeft(eBytes, "\x00")
 	sum := sha256.Sum256(x509Cert)
+
 	jwksResponse, err = json.Marshal(map[string]any{
 		"keys": []map[string]any{{
 			"kty":      "RSA",
@@ -365,10 +375,12 @@ func TestParseAndValidate(t *testing.T) {
 				WithClient(cl),
 				WithCustomJWKSURI(jwksURI),
 			}, tc.providerOptions...)
+
 			p, err := NewProvider(providerURL, []string{"aud1"}, opts...)
 			if err != nil {
 				t.Fatalf("could not create provider: %s", err)
 			}
+
 			hdl, err := NewHandler(
 				WithIssuerClaimKeys(tc.issuerClaimKeys...),
 				WithProvider(p),
@@ -376,16 +388,20 @@ func TestParseAndValidate(t *testing.T) {
 			if err != nil {
 				t.Fatalf("could not create handler: %s", err)
 			}
+
 			claims := struct {
 				Subject  string   `json:"sub"`
 				EMail    string   `json:"mail"`
 				Audience []string `json:"aud"`
 			}{}
+
 			var tokenString string
+
 			if tc.token != nil {
 				token := tc.token
 				token.Header["kid"] = rsaKeyID
 				token.Header["jku"] = jwksURI.String()
+
 				tokenString, err = token.SignedString(rsaPrivateKey)
 				if err != nil {
 					t.Fatalf("could not sign token: %s", err)
@@ -412,6 +428,7 @@ func TestParseAndValidate(t *testing.T) {
 func issuerClaimHandler(claimKey string) func(h *Handler) error {
 	return func(h *Handler) error {
 		found := false
+
 		for _, key := range h.issuerClaimKeys {
 			if key == claimKey {
 				found = true
@@ -543,13 +560,16 @@ func TestK8sJWTProviderFor(t *testing.T) {
 			if err != nil {
 				t.Fatalf("could not create handler: %s", err)
 			}
+
 			fakeResponse, err := json.Marshal(tc.response)
 			if err != nil {
 				t.Fatalf("could not marshal fake response: %s", err)
 			}
+
 			if tc.invalidResponse != nil {
 				fakeResponse = tc.invalidResponse
 			}
+
 			fakeK8sRestClient := &fake.RESTClient{
 				Err: tc.error,
 				Resp: &http.Response{
@@ -559,13 +579,14 @@ func TestK8sJWTProviderFor(t *testing.T) {
 			}
 
 			// Act
-			p, err := hdl.k8sJWTProviderFor(fakeK8sRestClient, tc.issuer)
+			p, err := hdl.k8sJWTProviderFor(t.Context(), fakeK8sRestClient, tc.issuer)
 
 			// Assert
 			if tc.wantError {
 				if err == nil {
 					t.Error("expected error, but got nil")
 				}
+
 				if p != nil {
 					t.Errorf("expected nil provider, but got: %v", p)
 				}

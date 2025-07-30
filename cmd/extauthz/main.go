@@ -126,7 +126,9 @@ func runFuncWithSignalHandling(f func(context.Context) error) int {
 	defer cancelOnSignal()
 
 	exitCode := 0
-	if err := f(ctx); err != nil {
+
+	err := f(ctx)
+	if err != nil {
 		slogctx.Error(ctx, "Failed to start the application", "error", err)
 		_, _ = fmt.Fprintln(os.Stderr, err)
 		exitCode = 1

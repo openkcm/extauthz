@@ -51,6 +51,7 @@ func TestParseCert(t *testing.T) {
 				if err == nil {
 					t.Error("expected error, but got nil")
 				}
+
 				if crt != nil {
 					t.Errorf("expected nil certificate, but got: %+v", crt)
 				}
@@ -68,6 +69,7 @@ func TestCheckClientCert(t *testing.T) {
 	if err != nil {
 		log.Fatalf("Error creating x509 certificate: %s", err)
 	}
+
 	x509CertPEMURLEncodedTooYoung, err := createURLEncodedPEMCert(time.Now().Add(5*time.Minute), time.Now().Add(10*time.Minute))
 	if err != nil {
 		log.Fatalf("Error creating x509 certificate: %s", err)
@@ -129,10 +131,12 @@ func TestCheckClientCert(t *testing.T) {
 			if err != nil {
 				t.Fatalf("could not create policy engine: %s", err)
 			}
+
 			srv, err := NewServer(nil, WithPolicyEngine(pe))
 			if err != nil {
 				t.Fatalf("could not create server: %s", err)
 			}
+
 			srv.trustedSubjectToRegion = tc.trustedSubjects
 
 			// Act
@@ -142,12 +146,15 @@ func TestCheckClientCert(t *testing.T) {
 			if result.is != tc.wantCheckResultCode {
 				t.Errorf("expected: %v, got: %v", tc.wantCheckResultCode, result.is)
 			}
+
 			if result.subject != tc.wantSubject {
 				t.Errorf("expected: %v, got: %v", tc.wantSubject, result.subject)
 			}
+
 			if result.email != tc.wantEmail {
 				t.Errorf("expected: %v, got: %v", tc.wantEmail, result.email)
 			}
+
 			if result.region != tc.wantRegion {
 				t.Errorf("expected: %v, got: %v", tc.wantRegion, result.region)
 			}
@@ -201,6 +208,7 @@ func TestMapHeader(t *testing.T) {
 				if err == nil {
 					t.Error("expected error, but got nil")
 				}
+
 				if got != nil {
 					t.Errorf("expected nil map, but got: %+v", got)
 				}

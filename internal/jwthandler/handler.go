@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log/slog"
 	"net/url"
 	"time"
 
@@ -18,6 +17,8 @@ import (
 	"github.com/patrickmn/go-cache"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+
+	slogctx "github.com/veqryn/slog-context"
 )
 
 var (
@@ -56,7 +57,9 @@ func WithProvider(provider *Provider) HandlerOption {
 		if provider == nil {
 			return errors.New("provider must not be nil")
 		}
+
 		handler.RegisterProvider(provider)
+
 		return nil
 	}
 }
@@ -65,13 +68,13 @@ func WithProvider(provider *Provider) HandlerOption {
 // for JWT providers.
 func WithK8sJWTProviders(enabled bool, crdAPIGroup, crdAPIVersion, crdName, crdNamespace string) HandlerOption {
 	return func(handler *Handler) error {
-		slog.Debug("Using k8s JWT providers", "enabled", enabled, "apiGroup", crdAPIGroup, "apiVersion", crdAPIVersion, "name", crdName, "namespace", crdNamespace)
 		handler.k8sJWTProvidersEnabled = enabled
 		handler.k8sJWTProvidersCRDAPIGroup = crdAPIGroup
 		handler.k8sJWTProvidersCRDAPIVersion = crdAPIVersion
 		handler.k8sJWTProvidersCRDName = crdName
 		handler.k8sJWTProvidersCRDNamespace = crdNamespace
 		handler.cache = cache.New(handler.expiration, handler.cleanupInterval)
+
 		return nil
 	}
 }
@@ -82,6 +85,7 @@ func WithProviderCacheExpiration(expiration, cleanup time.Duration) HandlerOptio
 		handler.expiration = expiration
 		handler.cleanupInterval = cleanup
 		handler.cache = cache.New(expiration, cleanup)
+
 		return nil
 	}
 }
@@ -93,10 +97,12 @@ func NewHandler(opts ...HandlerOption) (*Handler, error) {
 		cache:           cache.New(30*time.Second, 10*time.Minute),
 	}
 	for _, opt := range opts {
-		if err := opt(handler); err != nil {
+		err := opt(handler)
+		if err != nil {
 			return nil, err
 		}
 	}
+
 	return handler, nil
 }
 
@@ -114,7 +120,9 @@ func (handler *Handler) ParseAndValidate(ctx context.Context, rawToken string, u
 
 	// parse the claims without verification
 	claims := make(map[string]any)
-	if err := token.UnsafeClaimsWithoutVerification(&claims); err != nil {
+
+	err = token.UnsafeClaimsWithoutVerification(&claims)
+	if err != nil {
 		return errors.Join(ErrInvalidToken, err)
 	}
 
@@ -128,12 +136,13 @@ func (handler *Handler) ParseAndValidate(ctx context.Context, rawToken string, u
 	if err != nil {
 		return errors.Join(ErrInvalidToken, err)
 	}
+
 	if issuerURL.Scheme != "https" {
 		return errors.Join(ErrInvalidToken, fmt.Errorf("invalid issuer scheme %s", issuerURL.Scheme))
 	}
 
 	// let the handler lookup the identity provider for the issuer host
-	provider, err := handler.ProviderFor(issuerURL.Host)
+	provider, err := handler.ProviderFor(ctx, issuerURL.Host)
 	if err != nil {
 		return errors.Join(ErrNoProvider, err)
 	}
@@ -141,12 +150,14 @@ func (handler *Handler) ParseAndValidate(ctx context.Context, rawToken string, u
 	// read the key ID from the token headers
 	// Not sure why there are multiple headers, take the first one with key ID
 	var keyID string
+
 	for _, header := range token.Headers {
 		if header.KeyID != "" {
 			keyID = header.KeyID
 			break
 		}
 	}
+
 	if keyID == "" {
 		return errors.Join(ErrInvalidToken, errors.New("missing kid in token header"))
 	}
@@ -159,7 +170,9 @@ func (handler *Handler) ParseAndValidate(ctx context.Context, rawToken string, u
 
 	// check the signature and read the claims
 	standardClaims := jwt.Claims{}
-	if err := token.Claims(*key, &standardClaims, userclaims); err != nil {
+
+	err = token.Claims(*key, &standardClaims, userclaims)
+	if err != nil {
 		return errors.Join(ErrInvalidToken, err)
 	}
 
@@ -167,17 +180,20 @@ func (handler *Handler) ParseAndValidate(ctx context.Context, rawToken string, u
 	if standardClaims.Expiry == nil {
 		return errors.Join(ErrInvalidToken, errors.New("missing exp in token claims"))
 	}
-	if err = standardClaims.Validate(jwt.Expected{
+
+	err = standardClaims.Validate(jwt.Expected{
 		Time: time.Now(),
-	}); err != nil {
+	})
+	if err != nil {
 		return errors.Join(ErrInvalidToken, err)
 	}
 
 	// verify the audience if any
 	if len(provider.audiences) > 0 {
-		if err = standardClaims.Validate(jwt.Expected{
+		err = standardClaims.Validate(jwt.Expected{
 			AnyAudience: provider.audiences,
-		}); err != nil {
+		})
+		if err != nil {
 			return errors.Join(ErrInvalidToken, err)
 		}
 	}
@@ -197,14 +213,15 @@ func (handler *Handler) ParseAndValidate(ctx context.Context, rawToken string, u
 
 // ProviderFor returns the provider for the given issuer. It either looks up the
 // provider in the internal cache or queries the k8s cluster for the provider.
-func (handler *Handler) ProviderFor(issuer string) (*Provider, error) {
+func (handler *Handler) ProviderFor(ctx context.Context, issuer string) (*Provider, error) {
 	// check the cache first
 	if providerInterface, found := handler.cache.Get(issuer); found {
 		if key, ok := providerInterface.(*Provider); ok {
 			return key, nil
 		}
 	}
-	slog.Info("Provider cache miss", "issuer", issuer)
+
+	slogctx.Info(ctx, "Provider cache miss", "issuer", issuer)
 
 	// if enabled, create a new provider from k8s JWTProvider definition if any
 	if handler.k8sJWTProvidersEnabled {
@@ -212,7 +229,8 @@ func (handler *Handler) ProviderFor(issuer string) (*Provider, error) {
 		if err != nil {
 			return nil, err
 		}
-		p, err := handler.k8sJWTProviderFor(k8sRestClient, issuer)
+
+		p, err := handler.k8sJWTProviderFor(ctx, k8sRestClient, issuer)
 		if err != nil {
 			return nil, err
 		}
@@ -221,6 +239,7 @@ func (handler *Handler) ProviderFor(issuer string) (*Provider, error) {
 		// the configured expiration of the cache.
 		// https://pkg.go.dev/github.com/patrickmn/go-cache#Cache.Set
 		handler.cache.Set(issuer, p, cache.DefaultExpiration)
+
 		return p, nil
 	}
 
@@ -244,6 +263,7 @@ func (handler *Handler) introspect(ctx context.Context, provider *Provider, rawT
 	}
 
 	handler.cache.Set(cacheKey, intr, 0)
+
 	return intr, nil
 }
 
@@ -283,8 +303,7 @@ func (handler *Handler) k8sRestClient() (rest.Interface, error) {
 }
 
 // k8sJWTProviderFor queries the k8s cluster for JWT providers.
-func (handler *Handler) k8sJWTProviderFor(k8sRestClient rest.Interface, issuer string) (*Provider, error) {
-	slog.Debug("Querying k8s for JWT provider", "issuer", issuer)
+func (handler *Handler) k8sJWTProviderFor(ctx context.Context, k8sRestClient rest.Interface, issuer string) (*Provider, error) {
 	// query the jwtproviders
 	result, err := k8sRestClient.Get().
 		AbsPath(fmt.Sprintf("/apis/%s/%s",
@@ -297,19 +316,23 @@ func (handler *Handler) k8sJWTProviderFor(k8sRestClient rest.Interface, issuer s
 	if err != nil {
 		return nil, fmt.Errorf("failed to query jwtproviders: %w", err)
 	}
+
 	rawProviders := JWTProviderResult{}
-	if err = json.Unmarshal(result, &rawProviders); err != nil {
+
+	err = json.Unmarshal(result, &rawProviders)
+	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal jwtproviders: %w", err)
 	}
 
 	// find the right JWTProvider definition, create a new provider from it, cache and return it
-	slog.Debug("Found k8s JWT providers", "count", len(rawProviders.Items))
+	slogctx.Debug(ctx, "Found k8s JWT providers", "count", len(rawProviders.Items))
+
 	for _, provider := range rawProviders.Items {
-		slog.Debug("Checking k8s JWT provider", "name", provider.Spec.Name, "issuer", provider.Spec.Issuer)
+		slogctx.Debug(ctx, "Checking k8s JWT provider", "name", provider.Spec.Name, "issuer", provider.Spec.Issuer)
 		// parse the issuer URL
 		issuerURL, err := url.Parse(provider.Spec.Issuer)
 		if err != nil {
-			slog.Error("failed to parse issuer URL", "error", err)
+			slogctx.Error(ctx, "failed to parse issuer URL", "error", err)
 			continue
 		}
 
@@ -324,9 +347,10 @@ func (handler *Handler) k8sJWTProviderFor(k8sRestClient rest.Interface, issuer s
 		if provider.Spec.RemoteJwks.URI != "" {
 			jwksURI, err := url.Parse(provider.Spec.RemoteJwks.URI)
 			if err != nil {
-				slog.Error("failed to parse JWKS URI", "JWKSURI", provider.Spec.RemoteJwks.URI, "error", err)
+				slogctx.Error(ctx, "failed to parse JWKS URI", "JWKSURI", provider.Spec.RemoteJwks.URI, "error", err)
 				continue
 			}
+
 			opts = append(opts, WithCustomJWKSURI(jwksURI))
 		}
 
@@ -335,6 +359,7 @@ func (handler *Handler) k8sJWTProviderFor(k8sRestClient rest.Interface, issuer s
 		if err != nil {
 			return nil, fmt.Errorf("failed to create provider: %w", err)
 		}
+
 		return p, nil
 	}
 
@@ -349,5 +374,6 @@ func extractFromClaims(claims map[string]any, keys ...string) string {
 			}
 		}
 	}
+
 	return ""
 }
