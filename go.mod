@@ -8,7 +8,7 @@ require (
 	github.com/go-andiamo/splitter v1.2.5
 	github.com/go-jose/go-jose/v4 v4.1.1
 	github.com/gogo/googleapis v1.4.1
-	github.com/golang-jwt/jwt/v5 v5.2.3
+	github.com/golang-jwt/jwt/v5 v5.3.0
 	github.com/google/uuid v1.6.0
 	github.com/openkcm/common-sdk v1.1.1
 	github.com/patrickmn/go-cache v2.1.0+incompatible
