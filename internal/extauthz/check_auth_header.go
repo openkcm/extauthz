@@ -4,9 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"strings"
+
+	slogctx "github.com/veqryn/slog-context"
 
 	"github.com/openkcm/extauthz/internal/jwthandler"
 )
@@ -29,8 +30,11 @@ func (srv *Server) checkAuthHeader(ctx context.Context, authHeader, method, host
 	}{}
 
 	allowIntrospectCache := method == http.MethodGet // Allow using cache for token introspection for GET requests
-	if err := srv.jwtHandler.ParseAndValidate(ctx, tokenString, &claims, allowIntrospectCache); err != nil {
-		slog.Debug("JWT validation failed", "error", err)
+
+	err := srv.jwtHandler.ParseAndValidate(ctx, tokenString, &claims, allowIntrospectCache)
+	if err != nil {
+		slogctx.Debug(ctx, "JWT validation failed", "error", err)
+
 		switch {
 		case errors.Is(err, jwthandler.ErrInvalidToken):
 			return checkResult{is: UNAUTHENTICATED,
@@ -39,17 +43,19 @@ func (srv *Server) checkAuthHeader(ctx context.Context, authHeader, method, host
 			return checkResult{is: DENIED,
 				info: "No provider found"}
 		}
+
 		return checkResult{is: UNAUTHENTICATED,
 			info: fmt.Sprintf("Error from JWT validation: %v", err)}
 	}
 
 	// check the policies
-	slog.Debug("Checking policies for JWT",
+	slogctx.Debug(ctx, "Checking policies for JWT",
 		"subject", claims.Subject,
 		"issuer", claims.Issuer,
 		"method", method,
 		"host", host,
 		"path", path)
+
 	allowed, reason, err := srv.policyEngine.Check(claims.Subject, method, host+path,
 		map[string]string{
 			"type":   "jwt",
@@ -59,6 +65,7 @@ func (srv *Server) checkAuthHeader(ctx context.Context, authHeader, method, host
 		return checkResult{is: UNAUTHENTICATED,
 			info: fmt.Sprintf("Error from policy engine: %v", err)}
 	}
+
 	if !allowed {
 		return checkResult{is: DENIED,
 			info: fmt.Sprintf("Reason from policy engine: %v", reason)}

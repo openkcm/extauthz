@@ -5,9 +5,11 @@ import (
 	"testing"
 
 	"github.com/gogo/googleapis/google/rpc"
+	"github.com/openkcm/common-sdk/pkg/commoncfg"
 
 	envoy_auth "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
 
+	"github.com/openkcm/extauthz/internal/flags"
 	"github.com/openkcm/extauthz/internal/policy"
 	"github.com/openkcm/extauthz/internal/signing"
 )
@@ -37,9 +39,15 @@ func TestCheck(t *testing.T) {
 		t.Fatalf("failed to create signing key: %s", err)
 	}
 
+	defaultFeatureGates := &commoncfg.FeatureGates{
+		flags.EnrichHeaderWithClientRegion: true,
+		flags.EnrichHeaderWithClientType:   true,
+	}
+
 	// create the test cases
 	tests := []struct {
 		name            string
+		featureGates    *commoncfg.FeatureGates
 		trustedSubjects map[string]string
 		request         *envoy_auth.CheckRequest
 		wantError       bool
@@ -47,11 +55,13 @@ func TestCheck(t *testing.T) {
 		want            *envoy_auth.CheckResponse
 	}{
 		{
-			name:      "zero values",
-			wantError: false,
-			wantCode:  rpc.UNAUTHENTICATED,
+			name:         "zero values",
+			featureGates: defaultFeatureGates,
+			wantError:    false,
+			wantCode:     rpc.UNAUTHENTICATED,
 		}, {
-			name: "missing client certificate and authorization header",
+			name:         "missing client certificate and authorization header",
+			featureGates: defaultFeatureGates,
 			request: &envoy_auth.CheckRequest{
 				Attributes: &envoy_auth.AttributeContext{
 					Request: &envoy_auth.AttributeContext_Request{
@@ -60,7 +70,8 @@ func TestCheck(t *testing.T) {
 			wantError: false,
 			wantCode:  rpc.UNAUTHENTICATED,
 		}, {
-			name: "with invalid client certificate",
+			name:         "with invalid client certificate",
+			featureGates: defaultFeatureGates,
 			request: &envoy_auth.CheckRequest{
 				Attributes: &envoy_auth.AttributeContext{
 					Request: &envoy_auth.AttributeContext_Request{
@@ -71,6 +82,7 @@ func TestCheck(t *testing.T) {
 			wantCode:  rpc.UNAUTHENTICATED,
 		}, {
 			name:            "with valid client certificate",
+			featureGates:    defaultFeatureGates,
 			trustedSubjects: map[string]string{"CN=minime": "minime-region"},
 			request: &envoy_auth.CheckRequest{
 				Attributes: &envoy_auth.AttributeContext{
@@ -84,6 +96,7 @@ func TestCheck(t *testing.T) {
 			wantCode:  rpc.OK,
 		}, {
 			name:            "with disallowed client certificate",
+			featureGates:    defaultFeatureGates,
 			trustedSubjects: map[string]string{"CN=minime": "minime-region"},
 			request: &envoy_auth.CheckRequest{
 				Attributes: &envoy_auth.AttributeContext{
@@ -94,7 +107,8 @@ func TestCheck(t *testing.T) {
 			wantError: false,
 			wantCode:  rpc.PERMISSION_DENIED,
 		}, {
-			name: "with authorization header",
+			name:         "with authorization header",
+			featureGates: defaultFeatureGates,
 			request: &envoy_auth.CheckRequest{
 				Attributes: &envoy_auth.AttributeContext{
 					Request: &envoy_auth.AttributeContext_Request{
@@ -114,13 +128,14 @@ func TestCheck(t *testing.T) {
 			if err != nil {
 				t.Fatalf("could not create policy engine: %s", err)
 			}
+
 			srv, err := NewServer(signingKey.Private,
 				WithPolicyEngine(pe),
-				WithEnrichHeaderWithType(true),
-				WithEnrichHeaderWithRegion(true))
+				WithFeatureGates(tc.featureGates))
 			if err != nil {
 				t.Fatalf("could not create server: %s", err)
 			}
+
 			srv.trustedSubjectToRegion = tc.trustedSubjects
 
 			// Act
@@ -131,6 +146,7 @@ func TestCheck(t *testing.T) {
 				if err == nil {
 					t.Error("expected error, but got nil")
 				}
+
 				if got != nil {
 					t.Errorf("expected nil response, but got: %+v", got)
 				}
@@ -190,6 +206,7 @@ func TestSplitCertHeader(t *testing.T) {
 				if err == nil {
 					t.Error("expected error, but got nil")
 				}
+
 				if got != nil {
 					t.Errorf("expected nil array, but got: %+v", got)
 				}

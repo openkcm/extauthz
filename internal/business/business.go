@@ -2,13 +2,14 @@ package business
 
 import (
 	"context"
-	"log/slog"
+
+	slogctx "github.com/veqryn/slog-context"
 
 	"github.com/openkcm/extauthz/internal/config"
 )
 
 func Main(ctx context.Context, cfg *config.Config) error {
-	slog.Info("Starting business logic", "name", cfg.Application.Name)
+	slogctx.Info(ctx, "Starting business logic", "name", cfg.Application.Name)
 
 	// create the extauthz server
 	extauthzSrv, err := createExtAuthZServer(ctx, cfg)

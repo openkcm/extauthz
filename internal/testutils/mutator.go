@@ -8,6 +8,7 @@ func NewMutator[T any](baseProv func() T) func(mutatorFn ...func(*T)) T {
 		for i := range m {
 			m[i](&base)
 		}
+
 		return base
 	}
 }

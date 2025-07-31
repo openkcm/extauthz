@@ -228,6 +228,18 @@ config:
     flags:
       health: true
 
+  # Client Data Key Set handling
+  cdksServer:
+    address: :5555
+    signingKeyRefreshInterval: 6h
+
+  featureGates:
+    EnrichHeaderWithClientType: true
+    EnrichHeaderWithClientRegion: true
+    DisableClientCertificateComputation: false
+    DisableJWTTokenComputation: false
+    EnableAlwaysAllow: false
+
   cedar:
     policyFilePath: /etc/extauthz-policies
 
@@ -245,9 +257,3 @@ config:
       name: jwtproviders
       namespace: default
 
-  # Client Data handling
-  clientData:
-    publicKeyAddress: ":5555"
-    signingKeyRefreshIntervalS: 21600
-    withRegion: true
-    withType: true

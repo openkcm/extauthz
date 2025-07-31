@@ -13,6 +13,7 @@ func TestCheckWithPath(t *testing.T) {
 	tmpdir := t.TempDir()
 	for name, content := range policies {
 		path := filepath.Join(tmpdir, name)
+
 		err := os.WriteFile(path, []byte(content), 0644)
 		if err != nil {
 			t.Fatalf("failed to create file: %s", err)

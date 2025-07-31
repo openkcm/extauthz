@@ -45,10 +45,13 @@ func TestAll(t *testing.T) {
 				if err != nil {
 					t.Errorf("unexpected error: %s", err)
 				} else {
-					if _, _, err := key.Private(); err != nil {
+					_, _, err := key.Private()
+					if err != nil {
 						t.Errorf("unexpected error getting private key: %s", err)
 					}
-					if _, _, err := key.PublicPEM(); err != nil {
+
+					_, _, err = key.PublicPEM()
+					if err != nil {
 						t.Errorf("unexpected error getting public key: %s", err)
 					}
 				}

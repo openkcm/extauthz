@@ -63,8 +63,8 @@ data:
       {{- toYaml . | nindent 6 }}
     {{- end }}
 
-    # Client Data handling
-    {{- with .Values.config.clientData }}
-    clientData:
+    # Client Data Key Set handling
+    {{- with .Values.config.cdksServer }}
+    cdksServer:
       {{- toYaml . | nindent 6 }}
     {{- end }}

@@ -9,12 +9,13 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+
+	slogctx "github.com/veqryn/slog-context"
 )
 
 type signingKey struct {
@@ -34,7 +35,9 @@ func WithRefreshInterval(interval time.Duration) Option {
 		if interval <= 0 {
 			return fmt.Errorf("refresh interval must be greater than zero, got %v", interval)
 		}
+
 		sk.ticker = time.NewTicker(interval)
+
 		return nil
 	}
 }
@@ -45,30 +48,40 @@ func NewKey(ctx context.Context, opts ...Option) (*signingKey, error) {
 		m: &sync.Mutex{},
 	}
 	for _, opt := range opts {
-		if err := opt(sk); err != nil {
+		err := opt(sk)
+		if err != nil {
 			return nil, fmt.Errorf("could not apply option: %w", err)
 		}
 	}
-	if err := sk.genKeyPair(); err != nil {
+
+	err := sk.genKeyPair()
+	if err != nil {
 		return nil, fmt.Errorf("could not generate key pair: %w", err)
 	}
+
+	slogctx.Info(ctx, "Generated new signing key", "keyID", sk.keyID)
+
 	if sk.ticker != nil {
 		go func() {
 			for {
 				select {
 				case <-ctx.Done():
-					slog.Info("Stopping signing key refresh")
+					slogctx.Info(ctx, "Stopping signing key refresh")
 					sk.ticker.Stop()
+
 					return
 				case <-sk.ticker.C:
-					slog.Info("Refreshing signing key")
-					if err := sk.genKeyPair(); err != nil {
-						slog.Error("could not refresh signing key", "error", err)
+					slogctx.Info(ctx, "Refreshing signing key")
+
+					err := sk.genKeyPair()
+					if err != nil {
+						slogctx.Error(ctx, "could not refresh signing key", "error", err)
 					}
 				}
 			}
 		}()
 	}
+
 	return sk, nil
 }
 
@@ -76,9 +89,11 @@ func NewKey(ctx context.Context, opts ...Option) (*signingKey, error) {
 func (sk *signingKey) Private() (string, *rsa.PrivateKey, error) {
 	sk.m.Lock()
 	defer sk.m.Unlock()
+
 	if sk.priv == nil {
 		return "", nil, errors.New("private key not generated")
 	}
+
 	return sk.keyID, sk.priv, nil
 }
 
@@ -86,17 +101,21 @@ func (sk *signingKey) Private() (string, *rsa.PrivateKey, error) {
 func (sk *signingKey) PublicPEM() (string, string, error) {
 	sk.m.Lock()
 	defer sk.m.Unlock()
+
 	if sk.pub == nil {
 		return "", "", errors.New("public key not generated")
 	}
+
 	pubKeyDER, err := x509.MarshalPKIXPublicKey(sk.pub)
 	if err != nil {
 		return "", "", fmt.Errorf("could not marshal RSA public key: %w", err)
 	}
+
 	pubKeyPEM := string(pem.EncodeToMemory(&pem.Block{
 		Type:  "PUBLIC KEY",
 		Bytes: pubKeyDER,
 	}))
+
 	return sk.keyID, pubKeyPEM, nil
 }
 
@@ -114,6 +133,7 @@ func (sk *signingKey) ServePublicKey(ctx context.Context, address string) error 
 	if address == "" {
 		return errors.New("address cannot be empty")
 	}
+
 	srv := &http.Server{
 		Addr: address,
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -148,21 +168,29 @@ func (sk *signingKey) ServePublicKey(ctx context.Context, address string) error 
 
 	// start the server in a goroutine
 	go func() {
-		slog.Info("Starting HTTP server for serving the public key", "address", address)
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			slog.Error("Error serving HTTP endpoint", "error", err)
+		slogctx.Info(ctx, "Starting HTTP server for serving the public key", "address", address)
+
+		err := srv.ListenAndServe()
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			slogctx.Error(ctx, "Error serving HTTP endpoint", "error", err)
 		}
-		slog.Info("Stopped HTTP server for serving the public key")
+
+		slogctx.Info(ctx, "Stopped HTTP server for serving the public key")
 	}()
 
 	// wait for the context to be done
 	<-ctx.Done()
+
 	shutdownCtx, shutdownRelease := context.WithTimeout(ctx, 5*time.Second)
 	defer shutdownRelease()
-	if err := srv.Shutdown(shutdownCtx); err != nil {
+
+	err := srv.Shutdown(shutdownCtx)
+	if err != nil {
 		return fmt.Errorf("failed to gracefully shutdown HTTP server for serving the public key: %w", err)
 	}
-	slog.Info("Completed graceful shutdown of HTTP server for serving the public key")
+
+	slogctx.Info(ctx, "Completed graceful shutdown of HTTP server for serving the public key")
+
 	return nil
 }
 
@@ -172,15 +200,17 @@ func (sk *signingKey) genKeyPair() error {
 	if err != nil {
 		return fmt.Errorf("could not generate RSA key pair: %w", err)
 	}
+
 	publicKey := &privateKey.PublicKey
 	keyID := uuid.New().String()
-	slog.Info("Generated new signing key", "keyID", keyID)
 
 	// Set them
 	sk.m.Lock()
 	defer sk.m.Unlock()
+
 	sk.keyID = keyID
 	sk.priv = privateKey
 	sk.pub = publicKey
+
 	return nil
 }

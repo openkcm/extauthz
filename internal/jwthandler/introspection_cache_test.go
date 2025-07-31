@@ -136,7 +136,8 @@ func (s *jwksHandler) handleJWKS(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *jwksHandler) handleIntrospect(w http.ResponseWriter, r *http.Request) {
-	if err := json.NewEncoder(w).Encode(introspection{Active: s.tokenActive}); err != nil {
+	err := json.NewEncoder(w).Encode(introspection{Active: s.tokenActive})
+	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 	}
 }
@@ -163,6 +164,7 @@ func (s *handlerTestSuite) Test_ParseAndValidate_IntrospectionCache() {
 	s.Require().Error(err)
 
 	time.Sleep(35 * time.Second)
+
 	s.jwks.tokenActive = true
 
 	// Should invalidate cache after 30 seconds.

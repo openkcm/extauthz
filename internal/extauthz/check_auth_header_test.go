@@ -28,6 +28,7 @@ import (
 func TestCheckAuthHeader(t *testing.T) {
 	// create a JWKS test server
 	var jwksResponse []byte
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/jwks", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -38,12 +39,15 @@ func TestCheckAuthHeader(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, `{"active": true}`)
 	})
+
 	ts := httptest.NewTLSServer(mux)
 	defer ts.Close()
+
 	issuerURL, err := url.Parse(ts.URL)
 	if err != nil {
 		t.Fatalf("could not parse issuer URL: %s", err)
 	}
+
 	jwksURI, err := url.Parse(ts.URL + "/jwks")
 	if err != nil {
 		t.Fatalf("could not parse JWKS URI: %s", err)
@@ -59,6 +63,7 @@ func TestCheckAuthHeader(t *testing.T) {
 	})
 	token.Header["kid"] = rsaKeyID
 	token.Header["jku"] = jwksURI.String()
+
 	tokenString, err := token.SignedString(rsaPrivateKey)
 	if err != nil {
 		t.Fatalf("could not sign token: %s", err)
@@ -69,6 +74,7 @@ func TestCheckAuthHeader(t *testing.T) {
 	if err != nil {
 		t.Fatalf("could not generate RSA key: %s", err)
 	}
+
 	tokenInvalid := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
 		"sub":    "me",
 		"mail":   "me@my.world",
@@ -78,6 +84,7 @@ func TestCheckAuthHeader(t *testing.T) {
 	})
 	tokenInvalid.Header["kid"] = rsaKeyID
 	tokenInvalid.Header["jku"] = jwksURI.String()
+
 	tokenStringInvalid, err := tokenInvalid.SignedString(rsaPrivateKeyInvalid)
 	if err != nil {
 		t.Fatalf("could not sign token: %s", err)
@@ -94,6 +101,7 @@ func TestCheckAuthHeader(t *testing.T) {
 	binary.BigEndian.PutUint64(eBytes, uint64(rsaPrivateKey.E))
 	eBytes = bytes.TrimLeft(eBytes, "\x00")
 	sum := sha256.Sum256(certDER)
+
 	jwksResponse, err = json.Marshal(map[string]any{
 		"keys": []map[string]any{{
 			"kty":      "RSA",
@@ -158,6 +166,7 @@ func TestCheckAuthHeader(t *testing.T) {
 			certpool := x509.NewCertPool()
 			certpool.AddCert(ts.Certificate())
 			cl := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: certpool}}}
+
 			p, err := jwthandler.NewProvider(issuerURL, []string{},
 				jwthandler.WithClient(cl),
 				jwthandler.WithCustomJWKSURI(jwksURI),
@@ -165,14 +174,17 @@ func TestCheckAuthHeader(t *testing.T) {
 			if err != nil {
 				t.Fatalf("could not create provider: %s", err)
 			}
+
 			hdl, err := jwthandler.NewHandler(jwthandler.WithProvider(p))
 			if err != nil {
 				t.Fatalf("could not create handler: %s", err)
 			}
+
 			pe, err := policy.NewEngine(policy.WithBytes("my policies", []byte(cedarpolicies)))
 			if err != nil {
 				t.Fatalf("could not create policy engine: %s", err)
 			}
+
 			srv, err := NewServer(nil,
 				WithPolicyEngine(pe),
 				WithJWTHandler(hdl),
@@ -188,12 +200,15 @@ func TestCheckAuthHeader(t *testing.T) {
 			if result.is != tc.wantCheckResultCode {
 				t.Errorf("expected: %v, got: %v", tc.wantCheckResultCode, result.is)
 			}
+
 			if result.subject != tc.wantSubject {
 				t.Errorf("expected: %v, got: %v", tc.wantSubject, result.subject)
 			}
+
 			if result.email != tc.wantEmail {
 				t.Errorf("expected: %v, got: %v", tc.wantEmail, result.email)
 			}
+
 			if !reflect.DeepEqual(result.groups, tc.wantGroups) {
 				t.Errorf("expected: %v, got: %v", tc.wantGroups, result.groups)
 			}

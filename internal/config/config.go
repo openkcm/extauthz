@@ -1,6 +1,8 @@
 package config
 
 import (
+	"time"
+
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
 )
 
@@ -8,19 +10,19 @@ type Config struct {
 	commoncfg.BaseConfig `mapstructure:",squash"`
 
 	// gRPC server configuration
-	GRPCServer GRPCServer
+	GRPCServer GRPCServer `yaml:"grpcServer"`
 
 	// Cedar configuration
-	Cedar Cedar
+	Cedar Cedar `yaml:"cedar"`
 
 	// Client Certificate handling
-	MTLS MTLS
+	MTLS MTLS `yaml:"mtls"`
 
 	// JWT Token handling
-	JWT JWT
+	JWT JWT `yaml:"jwt"`
 
-	// Client data handling
-	ClientData ClientData
+	// Client data key set server
+	CDKSServer CDKSServer `yaml:"cdksServer"`
 }
 
 // Cedar configuration
@@ -32,6 +34,7 @@ type Cedar struct {
 // gRPC server configuration
 type GRPCServer struct {
 	commoncfg.GRPCServer `mapstructure:",squash"`
+
 	// also embed client attributes for the gRPC health check client
 	ClientAttributes commoncfg.GRPCClientAttributes
 }
@@ -44,29 +47,27 @@ type MTLS struct {
 
 type JWT struct {
 	// IssuerClaimKeys configures the JWT issuer keys
-	IssuerClaimKeys []string `yaml:"issuerClaimKeys"`
+	IssuerClaimKeys []string `yaml:"issuerClaimKeys" default:"['iss']"`
 
 	// Define providers as k8s custom resources
 	K8sProviders K8sProviders `yaml:"k8sProviders"`
 }
 
 type K8sProviders struct {
-	APIGroup   string // e.g. "gateway.extensions.envoyproxy.io"
-	APIVersion string // e.g. "v1alpha1"
-	Name       string // e.g. "jwtproviders"
-	Namespace  string // e.g. "default"
+	Enabled    bool   `yaml:"enabled" default:"true"`
+	APIGroup   string `yaml:"apiGroup" default:"gateway.extensions.envoyproxy.io"`
+	APIVersion string `yaml:"apoVersion" default:"v1alpha1"`
+	Name       string `yaml:"name" default:"jwtproviders"`
+	Namespace  string `yaml:"namespace" default:"default"`
 }
 
-// ClientData defines the information passed as header to consuming backend services.
+// CDKSServer (Client Data Key Set Server) is a set of keys containing the public keys used to verify any Client Data Token (CDT)
+// issued by the ExtAuthZ
 // It is based on github.com/openkcm/common-sdk/pkg/auth.
-type ClientData struct {
-	// PublicKeyAddress is the address, which provides the public key used to
+type CDKSServer struct {
+	// Address is the address, which provides the public key used to
 	// validate the client data signature.
-	PublicKeyAddress string
-	// SigningKeyRefreshIntervalS is the interval in seconds to refresh the signing key.
-	SigningKeyRefreshIntervalS int64
-	// WithRegion will include the client certificate region
-	WithRegion bool
-	// WithType will include the type of user
-	WithType bool
+	Address string `json:"address" default:":5555"`
+	// SigningKeyRefreshInterval is the interval in seconds to refresh the signing key.
+	SigningKeyRefreshInterval time.Duration `yaml:"signingKeyRefreshInterval" default:"6h"`
 }

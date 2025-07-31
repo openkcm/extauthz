@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/openkcm/common-sdk/pkg/commoncfg"
+
 	"github.com/openkcm/extauthz/internal/jwthandler"
 	"github.com/openkcm/extauthz/internal/policy"
 )
@@ -18,8 +20,7 @@ type Server struct {
 	jwtHandler             *jwthandler.Handler
 	trustedSubjectToRegion map[string]string
 	signingKeyFunc         SigningKeyFunc
-	enrichHeaderWithRegion bool
-	enrichHeaderWithType   bool
+	featureGates           *commoncfg.FeatureGates
 }
 
 // ServerOption is used to configure a server.
@@ -30,21 +31,9 @@ func WithTrustedSubjects(m map[string]string) ServerOption {
 		if m == nil {
 			return errors.New("trusted subjects map must not be nil")
 		}
+
 		server.trustedSubjectToRegion = m
-		return nil
-	}
-}
 
-func WithEnrichHeaderWithRegion(b bool) ServerOption {
-	return func(server *Server) error {
-		server.enrichHeaderWithRegion = b
-		return nil
-	}
-}
-
-func WithEnrichHeaderWithType(b bool) ServerOption {
-	return func(server *Server) error {
-		server.enrichHeaderWithType = b
 		return nil
 	}
 }
@@ -54,7 +43,9 @@ func WithJWTHandler(hdl *jwthandler.Handler) ServerOption {
 		if hdl == nil {
 			return errors.New("jwt handler must not be nil")
 		}
+
 		server.jwtHandler = hdl
+
 		return nil
 	}
 }
@@ -64,7 +55,16 @@ func WithPolicyEngine(pe policyEngine) ServerOption {
 		if pe == nil {
 			return errors.New("policy engine must not be nil")
 		}
+
 		server.policyEngine = pe
+
+		return nil
+	}
+}
+
+func WithFeatureGates(fg *commoncfg.FeatureGates) ServerOption {
+	return func(server *Server) error {
+		server.featureGates = fg
 		return nil
 	}
 }
@@ -78,19 +78,23 @@ func NewServer(signingKeyFunc SigningKeyFunc, opts ...ServerOption) (*Server, er
 	if err != nil {
 		return nil, fmt.Errorf("failed to create policy engine: %w", err)
 	}
+
 	hdl, err := jwthandler.NewHandler()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create JWT handler: %w", err)
 	}
+
 	server := &Server{
 		policyEngine:   policyEngine,
 		jwtHandler:     hdl,
 		signingKeyFunc: signingKeyFunc,
 	}
 	for _, opt := range opts {
-		if err := opt(server); err != nil {
+		err := opt(server)
+		if err != nil {
 			return nil, err
 		}
 	}
+
 	return server, nil
 }

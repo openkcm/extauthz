@@ -33,6 +33,7 @@ func TestNewProvider(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to parse URL: %s", err)
 	}
+
 	customJWKSURI, err := url.Parse("https://example.com/jwks")
 	if err != nil {
 		t.Fatalf("failed to parse URL: %s", err)
@@ -109,6 +110,7 @@ func TestNewProvider(t *testing.T) {
 				if err == nil {
 					t.Error("expected error, but got nil")
 				}
+
 				if p != nil {
 					t.Errorf("expected nil provider, but got: %v", p)
 				}
@@ -146,19 +148,24 @@ func TestSigningKeyFor(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
+
 		value, _ := responses.Load("wkoc")
 
 		fmt.Fprintln(w, value)
 	})
 	mux.HandleFunc("/jwks", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
+
 		value, _ := responses.Load("jwks")
 
 		fmt.Fprintln(w, value)
 	})
+
 	ts := httptest.NewTLSServer(mux)
 	defer ts.Close()
+
 	responses.Store("wkoc", `{"jwks_uri": "`+ts.URL+`/jwks"}`)
+
 	providerURL, err := url.Parse(ts.URL)
 	if err != nil {
 		t.Fatalf("could not parse issuer URL: %s", err)
@@ -169,6 +176,7 @@ func TestSigningKeyFor(t *testing.T) {
 	if err != nil {
 		t.Fatalf("could not generate RSA key: %s", err)
 	}
+
 	rsaPublicKey := &rsaPrivateKey.PublicKey
 	rsaKeyID := uuid.New().String()
 
@@ -181,6 +189,7 @@ func TestSigningKeyFor(t *testing.T) {
 		NotBefore: time.Now(),
 		NotAfter:  time.Now().Add(5 * time.Minute),
 	}
+
 	x509Cert, err := x509.CreateCertificate(rand.Reader, &cert, &cert, rsaPublicKey, rsaPrivateKey)
 	if err != nil {
 		t.Fatalf("could not create x509 certificate: %s", err)
@@ -240,6 +249,7 @@ func TestSigningKeyFor(t *testing.T) {
 	certpool := x509.NewCertPool()
 	certpool.AddCert(ts.Certificate())
 	cl := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: certpool}}}
+
 	p, err := NewProvider(providerURL, []string{"aud1"},
 		WithClient(cl),
 		WithoutCache(),
@@ -258,6 +268,7 @@ func TestSigningKeyFor(t *testing.T) {
 			if err != nil {
 				t.Fatalf("could not marshal JWKS response: %s", err)
 			}
+
 			responses.Store("jwks", string(jwksResponse))
 
 			// Act
@@ -268,6 +279,7 @@ func TestSigningKeyFor(t *testing.T) {
 				if err == nil {
 					t.Error("expected error, but got nil")
 				}
+
 				if key != nil {
 					t.Errorf("expected nil key, but got: %v", key)
 				}
@@ -289,6 +301,7 @@ type localRoundTripper struct {
 func (l localRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	w := httptest.NewRecorder()
 	l.handler.ServeHTTP(w, req)
+
 	return w.Result(), nil
 }
 
@@ -297,6 +310,7 @@ func TestProvider_introspect(t *testing.T) {
 	require.NoError(t, err)
 	priv, err := rsa.GenerateKey(rand.Reader, 4096)
 	require.NoError(t, err)
+
 	token := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
 		"sub":  "me",
 		"mail": "me@my.world",
@@ -346,7 +360,8 @@ func TestProvider_introspect(t *testing.T) {
 			tt.opts = append(tt.opts, WithClient(&http.Client{
 				Transport: localRoundTripper{
 					http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-						if err := json.NewEncoder(w).Encode(introspection{Active: tt.active}); err != nil {
+						err := json.NewEncoder(w).Encode(introspection{Active: tt.active})
+						if err != nil {
 							w.WriteHeader(http.StatusInternalServerError)
 						}
 					}),
@@ -356,6 +371,7 @@ func TestProvider_introspect(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to parse URL: %s", err)
 			}
+
 			provider, err := NewProvider(tt.issuerURL, tt.audiences, tt.opts...)
 			require.NoError(t, err)
 
@@ -363,6 +379,7 @@ func TestProvider_introspect(t *testing.T) {
 			if !tt.wantErr(t, err, fmt.Sprintf("introspect(ctx, %v)", tt.rawToken)) {
 				return
 			}
+
 			assert.Equalf(t, tt.want, got, "introspect(ctx, %v)", tt.rawToken)
 		})
 	}
