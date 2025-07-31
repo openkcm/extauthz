@@ -92,6 +92,9 @@ func (srv *Server) Check(ctx context.Context, req *envoy_auth.CheckRequest) (*en
 
 	result := checkResult{is: UNKNOWN}
 
+	// Verify if DisableJWTTokenComputation flag was explicitly set in the configuration with value `true`, then the
+	// JWT tokens handling should be disabled
+	// TODO: Remove this hacking code in September
 	if srv.featureGates.IsFeatureEnabled(flags.DisableJWTTokenComputation) {
 		slogctx.Error(ctx, "Check() processing of jwt token has been disabled through feature gates")
 
@@ -99,6 +102,9 @@ func (srv *Server) Check(ctx context.Context, req *envoy_auth.CheckRequest) (*en
 		authHeaderFound = false
 	}
 
+	// Verify if DisableClientCertificateComputation flag was explicitly set in the configuration with value `true`, then the
+	// Client Certificates handling should be disabled
+	// TODO: Remove this hacking code in September
 	if srv.featureGates.IsFeatureEnabled(flags.DisableClientCertificateComputation) {
 		slogctx.Error(ctx, "Check() processing of client certificate has been disabled through feature gates")
 
@@ -109,6 +115,8 @@ func (srv *Server) Check(ctx context.Context, req *envoy_auth.CheckRequest) (*en
 	if !certHeaderFound && !authHeaderFound {
 		result.info = "Missing client certificate or authorization header"
 		slogctx.Error(ctx, "Check() "+result.info)
+		// TODO: Enable this line once the above code was removed in September
+		//return respondUnauthenticated(result.info), nil
 	}
 
 	// prepare the result and run the checks
