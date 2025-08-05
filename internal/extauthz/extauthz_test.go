@@ -36,7 +36,7 @@ func createX509CertDER(notBefore, notAfter time.Time) ([]byte, error) {
 	certX509 := x509.Certificate{
 		SerialNumber: big.NewInt(1),
 		Subject: pkix.Name{
-			Organization: []string{"KMS, Inc"},
+			CommonName: "minime",
 		},
 		EmailAddresses: []string{"me@minime.com"},
 		NotBefore:      notBefore,
@@ -74,6 +74,7 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		log.Fatalf("could not generate RSA key: %s", err)
 	}
+
 	rsaPrivateKey = rsaPrivateKeyLocal
 
 	rsaPrivateKeyDER, err := x509.MarshalPKCS8PrivateKey(rsaPrivateKey)
