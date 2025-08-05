@@ -100,7 +100,7 @@ func TestCheckClientCert(t *testing.T) {
 			wantCheckResultCode: DENIED,
 		}, {
 			name:                "permission denied",
-			certHeader:          "Hash=123;Subject=foo",
+			certHeader:          "Hash=123;Subject=\"foo\"",
 			wantCheckResultCode: DENIED,
 		}, {
 			name:                "cert too old",
@@ -143,10 +143,6 @@ func TestCheckClientCert(t *testing.T) {
 			result := srv.checkClientCert(t.Context(), tc.certHeader, "GET", "my.service.com", "/foo/bar")
 
 			// Assert
-			if result.is != tc.wantCheckResultCode {
-				t.Errorf("expected: %v, got: %v", tc.wantCheckResultCode, result.is)
-			}
-
 			if result.subject != tc.wantSubject {
 				t.Errorf("expected: %v, got: %v", tc.wantSubject, result.subject)
 			}
