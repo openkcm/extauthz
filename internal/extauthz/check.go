@@ -215,8 +215,8 @@ func (srv *Server) Check(ctx context.Context, req *envoy_auth.CheckRequest) (*en
 // splitCertHeader splits the XFCC header on , in case there are multiple certificates.
 // https://www.envoyproxy.io/docs/envoy/latest/configuration/http/http_conn_man/headers#x-forwarded-client-cert
 func splitCertHeader(certHeader string) ([]string, error) {
-	// split on , preserving quoted values
-	spl, err := splitter.NewSplitter(',', splitter.DoubleQuotes)
+	// split on ; preserving quoted values
+	spl, err := splitter.NewSplitter(';', splitter.DoubleQuotes)
 	if err != nil {
 		return nil, err
 	}

@@ -178,16 +178,16 @@ func TestSplitCertHeader(t *testing.T) {
 			want:      []string{``},
 		}, {
 			name:  "one cert",
-			input: `A=b;C="d";E=f`,
-			want:  []string{`A=b;C="d";E=f`},
+			input: `A=b,C="d",E=f`,
+			want:  []string{`A=b,C="d",E=f`},
 		}, {
 			name:  "two certs",
-			input: `A=b;C="d";E=f,1=2;3="4";5=6`,
-			want:  []string{`A=b;C="d";E=f`, `1=2;3="4";5=6`},
+			input: `A=b,C="d",E=f;1=2,3="4",5=6`,
+			want:  []string{`A=b,C="d",E=f`, `1=2,3="4",5=6`},
 		}, {
 			name:  "quoted spaces",
-			input: `A=b;C="d,";E=f,1=2;3="4,";5=6`,
-			want:  []string{`A=b;C="d,";E=f`, `1=2;3="4,";5=6`},
+			input: `A=b,C="d;",E=f;1=2,3="4,",5=6`,
+			want:  []string{`A=b,C="d;",E=f`, `1=2,3="4,",5=6`},
 		}, {
 			name:      "invalid quoted spaces",
 			input:     `A=b;C="d,;E=f,1=2;3="4,";5=6`,
