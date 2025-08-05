@@ -241,7 +241,7 @@ config:
     EnableAlwaysAllow: false
 
   cedar:
-    policyFilePath: /etc/extauthz-policies
+    policyPath: /etc/extauthz-policies
 
   # Client Certificate handling
   mtls:
