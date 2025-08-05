@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
 
@@ -14,6 +15,20 @@ import (
 
 	slogctx "github.com/veqryn/slog-context"
 )
+
+var (
+	ReExSubject        = regexp.MustCompile(`Subject="([^"]+)"`)
+	ErrSubjectNotFound = errors.New("subject not found")
+)
+
+func extractSubject(header string) (string, error) {
+	matches := ReExSubject.FindStringSubmatch(header)
+	if len(matches) < 2 {
+		return "", ErrSubjectNotFound
+	}
+
+	return matches[1], nil
+}
 
 // mapHeader takes a string "FOO=bar;BAZ=qux" and returns a map[string]string{"FOO": "bar", "BAZ": "qux"}
 func mapHeader(header string) (map[string]string, error) {
@@ -73,20 +88,6 @@ func (srv *Server) checkClientCert(ctx context.Context, certHeader, method, host
 			info: "Invalid certificate header"}
 	}
 
-	// extract the subject from the cert header
-	subject, ok := fields["Subject"]
-	if !ok {
-		return checkResult{is: UNAUTHENTICATED,
-			info: "Missing subject in client certificate"}
-	}
-
-	// check if the subject is trusted and extract the region
-	region, ok := srv.trustedSubjectToRegion[subject]
-	if !ok {
-		return checkResult{is: DENIED,
-			info: "Subject not trusted"}
-	}
-
 	// decode and parse the x509 certificate and
 	urlEncodedPem, ok := fields["Cert"]
 	if !ok {
@@ -98,6 +99,26 @@ func (srv *Server) checkClientCert(ctx context.Context, certHeader, method, host
 	if err != nil {
 		return checkResult{is: UNAUTHENTICATED,
 			info: "Failed to parse x509 certificate"}
+	}
+
+	crtSubject := crt.Subject.String()
+
+	// extract the subject from the cert header
+	subject, err := extractSubject(certHeader)
+	if err != nil {
+		subject = crtSubject
+	}
+
+	if subject != crtSubject {
+		return checkResult{is: DENIED,
+			info: "Header subject not matching with certificate subject"}
+	}
+
+	// check if the subject is trusted and extract the region
+	region, ok := srv.trustedSubjectToRegion[subject]
+	if !ok {
+		return checkResult{is: DENIED,
+			info: "Subject not trusted"}
 	}
 
 	// check time bounds
