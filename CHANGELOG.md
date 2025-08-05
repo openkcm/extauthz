@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.2](https://github.com/openkcm/extauthz/compare/v0.3.1...v0.3.2) (2025-08-05)
+
+
+### Bug Fixes
+
+* make the correction for the policyPath field under the cedar configuration ([#59](https://github.com/openkcm/extauthz/issues/59)) ([ab49862](https://github.com/openkcm/extauthz/commit/ab498620212151f9ed372d76df6fe6bef41f4de5))
+* readiness probe ([#60](https://github.com/openkcm/extauthz/issues/60)) ([b37586c](https://github.com/openkcm/extauthz/commit/b37586c80dce3a58fde7910d8d910316da06620e))
+
 ## [0.3.1](https://github.com/openkcm/extauthz/compare/v0.3.0...v0.3.1) (2025-08-05)
 
 
