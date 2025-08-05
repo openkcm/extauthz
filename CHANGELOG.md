@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/openkcm/extauthz/compare/v0.3.0...v0.3.1) (2025-08-05)
+
+
+### Bug Fixes
+
+* subject parsing ([#57](https://github.com/openkcm/extauthz/issues/57)) ([b918e77](https://github.com/openkcm/extauthz/commit/b918e77baa42744c7abe675cb03d0c29916abe05))
+
 ## [0.3.0](https://github.com/openkcm/extauthz/compare/v0.2.3...v0.3.0) (2025-07-31)
 
 
