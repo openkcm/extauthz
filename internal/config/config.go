@@ -36,7 +36,7 @@ type GRPCServer struct {
 	commoncfg.GRPCServer `mapstructure:",squash"`
 
 	// also embed client attributes for the gRPC health check client
-	ClientAttributes commoncfg.GRPCClientAttributes
+	Client commoncfg.GRPCClient
 }
 
 type MTLS struct {

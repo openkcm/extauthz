@@ -85,11 +85,10 @@ func run(ctx context.Context) error {
 			}),
 		)
 
-		grpcCfg := commoncfg.GRPCClient{
-			Address:    cfg.GRPCServer.Address,
-			Attributes: cfg.GRPCServer.ClientAttributes,
-		}
-		healthOptions = append(healthOptions, health.WithGRPCServerChecker(grpcCfg))
+		cfg.GRPCServer.Client.Address = cfg.GRPCServer.Address
+		healthOptions = append(healthOptions,
+			health.WithGRPCServerChecker(cfg.GRPCServer.Client),
+		)
 
 		readiness := status.WithReadiness(
 			health.NewHandler(
