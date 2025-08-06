@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.3](https://github.com/openkcm/extauthz/compare/v0.3.2...v0.3.3) (2025-08-06)
+
+
+### Bug Fixes
+
+* adjust to format the certificate subject in same way as envoy does to be able to verify agist envoy given subject ([#62](https://github.com/openkcm/extauthz/issues/62)) ([548cebd](https://github.com/openkcm/extauthz/commit/548cebd08c433c550f16c468040afcd0b1e812fe))
+
 ## [0.3.2](https://github.com/openkcm/extauthz/compare/v0.3.1...v0.3.2) (2025-08-05)
 
 
