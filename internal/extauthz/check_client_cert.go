@@ -3,6 +3,7 @@ package extauthz
 import (
 	"context"
 	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/pem"
 	"errors"
 	"fmt"
@@ -28,6 +29,38 @@ func extractSubject(header string) (string, error) {
 	}
 
 	return matches[1], nil
+}
+
+// formatSubjectLikeEnvoyXFCC returns the subject in the same format used by Envoy's XFCC header
+func formatSubjectLikeEnvoyXFCC(subject pkix.Name) string {
+	parts := make([]string, 0)
+
+	// 1. CN
+	if subject.CommonName != "" {
+		parts = append(parts, "CN="+subject.CommonName)
+	}
+
+	// 2. L
+	for _, l := range subject.Locality {
+		parts = append(parts, "L="+l)
+	}
+
+	// 3. OU (in reverse order — like in Envoy’s output)
+	for i := len(subject.OrganizationalUnit) - 1; i >= 0; i-- {
+		parts = append(parts, "OU="+subject.OrganizationalUnit[i])
+	}
+
+	// 4. O
+	for _, o := range subject.Organization {
+		parts = append(parts, "O="+o)
+	}
+
+	// 5. C
+	for _, c := range subject.Country {
+		parts = append(parts, "C="+c)
+	}
+
+	return strings.Join(parts, ",")
 }
 
 // mapHeader takes a string "FOO=bar;BAZ=qux" and returns a map[string]string{"FOO": "bar", "BAZ": "qux"}
@@ -101,7 +134,8 @@ func (srv *Server) checkClientCert(ctx context.Context, certHeader, method, host
 			info: "Failed to parse x509 certificate"}
 	}
 
-	crtSubject := crt.Subject.String()
+	// format the certificate subject as per envoy structure
+	crtSubject := formatSubjectLikeEnvoyXFCC(crt.Subject)
 
 	// extract the subject from the cert header
 	subject, err := extractSubject(certHeader)
@@ -110,6 +144,10 @@ func (srv *Server) checkClientCert(ctx context.Context, certHeader, method, host
 	}
 
 	if subject != crtSubject {
+		slogctx.Debug(ctx, "Certificate and header Subject do not match",
+			"certSubject", crtSubject,
+			"subject", subject)
+
 		return checkResult{is: DENIED,
 			info: "Header subject not matching with certificate subject"}
 	}
