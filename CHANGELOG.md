@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.4](https://github.com/openkcm/extauthz/compare/v0.3.3...v0.3.4) (2025-08-06)
+
+
+### Bug Fixes
+
+* subject and the issuer same way to stringify it according to rfc2253 ([#64](https://github.com/openkcm/extauthz/issues/64)) ([987e90f](https://github.com/openkcm/extauthz/commit/987e90f5079e710a5a0b2b7a26b56cc008c25ab9))
+
 ## [0.3.3](https://github.com/openkcm/extauthz/compare/v0.3.2...v0.3.3) (2025-08-06)
 
 
