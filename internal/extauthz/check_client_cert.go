@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/asn1"
 	"encoding/pem"
 	"errors"
 	"fmt"
@@ -31,36 +32,107 @@ func extractSubject(header string) (string, error) {
 	return matches[1], nil
 }
 
-// formatSubjectLikeEnvoyXFCC returns the subject in the same format used by Envoy's XFCC header
-func formatSubjectLikeEnvoyXFCC(subject pkix.Name) string {
-	parts := make([]string, 0)
+// oidShortNames maps ASN.1 OID strings to their RFC 2253 short names.
+// This is used to represent DN attribute types in a human-readable form.
+var oidShortNames = map[string]string{
+	"2.5.4.3":                    "CN",     // commonName
+	"2.5.4.7":                    "L",      // localityName
+	"2.5.4.8":                    "ST",     // stateOrProvinceName
+	"2.5.4.10":                   "O",      // organizationName
+	"2.5.4.11":                   "OU",     // organizationalUnitName
+	"2.5.4.6":                    "C",      // countryName
+	"2.5.4.9":                    "STREET", // streetAddress
+	"0.9.2342.19200300.100.1.25": "DC",     // domainComponent
+	"0.9.2342.19200300.100.1.1":  "UID",    // userID
+}
 
-	// 1. CN
-	if subject.CommonName != "" {
-		parts = append(parts, "CN="+subject.CommonName)
+// escapeRFC2253 escapes special characters in a DN attribute value
+// according to RFC 2253 rules. This includes characters like commas,
+// plus signs, quotes, backslashes, and more. Leading/trailing spaces
+// and leading '#' are also escaped.
+//
+// val: the string value to escape
+// Returns the escaped string safe for inclusion in an RFC 2253 DN
+func escapeRFC2253(val string) string {
+	var b strings.Builder
+
+	for i, r := range val {
+		if r == ',' || r == '+' || r == '"' || r == '\\' || r == '<' || r == '>' || r == ';' || r == '=' {
+			b.WriteRune('\\')
+		}
+		// Escape leading or trailing spaces or leading '#'
+		if (i == 0 && (r == ' ' || r == '#')) || (i == len(val)-1 && r == ' ') {
+			b.WriteRune('\\')
+		}
+
+		b.WriteRune(r)
 	}
 
-	// 2. L
-	for _, l := range subject.Locality {
-		parts = append(parts, "L="+l)
-	}
+	return b.String()
+}
 
-	// 3. OU (in reverse order — like in Envoy’s output)
-	for i := len(subject.OrganizationalUnit) - 1; i >= 0; i-- {
-		parts = append(parts, "OU="+subject.OrganizationalUnit[i])
-	}
+// formatRDNSequence takes a pkix.RDNSequence (ASN.1 parsed DN)
+// and formats it into a string following RFC 2253 rules, matching Envoy's format.
+//
+// - RDNs are printed in reverse order (most specific first).
+// - Multiple attributes in a single RDN are joined with '+'.
+// - Attribute types use short names when known (e.g. CN, OU).
+// - Attribute values are escaped properly.
+//
+// rdns: the RDNSequence to format
+// Returns the formatted DN string.
+func formatRDNSequence(rdns pkix.RDNSequence) string {
+	var parts []string
+	// Reverse the RDN order
+	for i := len(rdns) - 1; i >= 0; i-- {
+		var attrs []string
 
-	// 4. O
-	for _, o := range subject.Organization {
-		parts = append(parts, "O="+o)
-	}
+		for _, atv := range rdns[i] {
+			name := oidShortNames[atv.Type.String()]
+			if name == "" {
+				name = atv.Type.String()
+			}
 
-	// 5. C
-	for _, c := range subject.Country {
-		parts = append(parts, "C="+c)
+			val := fmt.Sprintf("%v", atv.Value)
+			attrs = append(attrs, fmt.Sprintf("%s=%s", name, escapeRFC2253(val)))
+		}
+
+		parts = append(parts, strings.Join(attrs, "+"))
 	}
 
 	return strings.Join(parts, ",")
+}
+
+// formatSubject extracts the ASN.1 raw subject field from a certificate,
+// parses it into an RDNSequence, and returns the RFC 2253 formatted string.
+//
+// cert: the X.509 certificate to extract subject from
+// Returns the formatted subject string or an empty string on parse failure.
+func formatSubject(cert *x509.Certificate) string {
+	var rdnSeq pkix.RDNSequence
+
+	_, err := asn1.Unmarshal(cert.RawSubject, &rdnSeq)
+	if err != nil {
+		return ""
+	}
+
+	return formatRDNSequence(rdnSeq)
+}
+
+// formatIssuer extracts the ASN.1 raw issuer field from a certificate,
+// parses it into an RDNSequence, and returns the RFC 2253 formatted string.
+//
+// cert: the X.509 certificate to extract issuer from
+// Returns the formatted issuer string or an empty string on parse failure.
+func formatIssuer(cert *x509.Certificate) string {
+	var rdnSeq pkix.RDNSequence
+
+	_, err := asn1.Unmarshal(cert.RawIssuer, &rdnSeq)
+	if err != nil {
+		return ""
+	}
+
+	return formatRDNSequence(rdnSeq)
 }
 
 // mapHeader takes a string "FOO=bar;BAZ=qux" and returns a map[string]string{"FOO": "bar", "BAZ": "qux"}
@@ -135,7 +207,7 @@ func (srv *Server) checkClientCert(ctx context.Context, certHeader, method, host
 	}
 
 	// format the certificate subject as per envoy structure
-	crtSubject := formatSubjectLikeEnvoyXFCC(crt.Subject)
+	crtSubject := formatSubject(crt)
 
 	// extract the subject from the cert header
 	subject, err := extractSubject(certHeader)
@@ -170,10 +242,11 @@ func (srv *Server) checkClientCert(ctx context.Context, certHeader, method, host
 			info: "Certificate expired"}
 	}
 
+	crtIssuer := formatIssuer(crt)
 	// check the policies
 	slogctx.Debug(ctx, "Checking policies for x509",
 		"subject", subject,
-		"issuer", crt.Issuer.String(),
+		"issuer", crtIssuer,
 		"method", method,
 		"host", host,
 		"path", path)
@@ -181,7 +254,7 @@ func (srv *Server) checkClientCert(ctx context.Context, certHeader, method, host
 	allowed, reason, err := srv.policyEngine.Check(subject, method, host+path,
 		map[string]string{
 			"type":   "x509",
-			"issuer": crt.Issuer.String(),
+			"issuer": crtIssuer,
 		})
 	if err != nil {
 		return checkResult{is: UNAUTHENTICATED,
