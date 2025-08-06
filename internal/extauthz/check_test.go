@@ -14,7 +14,8 @@ import (
 	"github.com/openkcm/extauthz/internal/signing"
 )
 
-var cedarpolicies = `
+const (
+	cedarpolicies = `
 permit (
 	principal == Subject::"me",
 	action == Action::"GET",
@@ -30,7 +31,21 @@ permit (
 ) when {
 	context.route == "my.service.com/foo/bar"
 };
+
+// Registry Service
+permit (
+    principal,
+    action in [Action::"GET", Action::"PUT", Action::"POST"],
+    resource is Route
+) when {
+    principal in [
+        Subject::"CN=minime"
+    ] 
+    && context.type == "x509" 
+    && context.route like "*/kms.api.cmk.registry.*.v1.Service/*"
+};
 `
+)
 
 func TestCheck(t *testing.T) {
 	// Arrange
@@ -95,6 +110,20 @@ func TestCheck(t *testing.T) {
 			wantError: false,
 			wantCode:  rpc.OK,
 		}, {
+			name:            "with valid client certificate - different subject",
+			featureGates:    defaultFeatureGates,
+			trustedSubjects: map[string]string{"CN=minime": "minime-region"},
+			request: &envoy_auth.CheckRequest{
+				Attributes: &envoy_auth.AttributeContext{
+					Request: &envoy_auth.AttributeContext_Request{
+						Http: &envoy_auth.AttributeContext_HttpRequest{
+							Method:  "GET",
+							Host:    "my.service.com",
+							Path:    "/foo/bar",
+							Headers: map[string]string{HeaderForwardedClientCert: "Hash=123;Subject=\"CN=daummy\";Cert=" + x509CertPEMURLEncoded}}}}},
+			wantError: false,
+			wantCode:  rpc.PERMISSION_DENIED,
+		}, {
 			name:            "with disallowed client certificate",
 			featureGates:    defaultFeatureGates,
 			trustedSubjects: map[string]string{"CN=minime": "minime-region"},
@@ -117,6 +146,34 @@ func TestCheck(t *testing.T) {
 							Headers: map[string]string{"authorization": "Bearer token"}}}}},
 			wantError: false,
 			wantCode:  rpc.UNAUTHENTICATED,
+		}, {
+			name:            "registry service - system",
+			featureGates:    defaultFeatureGates,
+			trustedSubjects: map[string]string{"CN=minime": "minime-region"},
+			request: &envoy_auth.CheckRequest{
+				Attributes: &envoy_auth.AttributeContext{
+					Request: &envoy_auth.AttributeContext_Request{
+						Http: &envoy_auth.AttributeContext_HttpRequest{
+							Method:  "POST",
+							Host:    "my.service.com",
+							Path:    "/kms.api.cmk.registry.system.v1.Service/RegisterSystem",
+							Headers: map[string]string{HeaderForwardedClientCert: "Hash=123;Subject=\"CN=minime\";Cert=" + x509CertPEMURLEncoded}}}}},
+			wantError: false,
+			wantCode:  rpc.OK,
+		}, {
+			name:            "registry service - tenant",
+			featureGates:    defaultFeatureGates,
+			trustedSubjects: map[string]string{"CN=minime": "minime-region"},
+			request: &envoy_auth.CheckRequest{
+				Attributes: &envoy_auth.AttributeContext{
+					Request: &envoy_auth.AttributeContext_Request{
+						Http: &envoy_auth.AttributeContext_HttpRequest{
+							Method:  "POST",
+							Host:    "my.service.com",
+							Path:    "/kms.api.cmk.registry.tenant.v1.Service/RegisterTenant",
+							Headers: map[string]string{HeaderForwardedClientCert: "Hash=123;Subject=\"CN=minime\";Cert=" + x509CertPEMURLEncoded}}}}},
+			wantError: false,
+			wantCode:  rpc.OK,
 		},
 	}
 
