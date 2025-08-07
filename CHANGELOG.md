@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.5](https://github.com/openkcm/extauthz/compare/v0.3.4...v0.3.5) (2025-08-07)
+
+
+### Bug Fixes
+
+* use the lowercase feature gates keys as values, as this is imposed by viper destabilising from the yaml config ([#68](https://github.com/openkcm/extauthz/issues/68)) ([fc3dce9](https://github.com/openkcm/extauthz/commit/fc3dce91576442fa529839131ceae1e36042fd35))
+
 ## [0.3.4](https://github.com/openkcm/extauthz/compare/v0.3.3...v0.3.4) (2025-08-06)
 
 
