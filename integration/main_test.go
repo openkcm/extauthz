@@ -67,51 +67,32 @@ func init() {
 }
 
 func writeFiles(config, trustedSubjects, policies, rsaPrivateKeyPEM string) (func(), error) {
-	// prepare the cleanup function to later remove files created during the test
-	files := []string{}
+	// define the files to be created and their content
+	files := map[string]string{
+		"./config.yaml":          config,
+		"./trustedSubjects.yaml": trustedSubjects,
+		"./policies.cedar":       policies,
+		"./keyID.txt":            "key1",
+		"./key1.priv":            rsaPrivateKeyPEM,
+	}
+
+	// prepare the cleanup function to later remove them
+	cleanupFiles := []string{}
 	cleanupFunc := func() {
-		for _, file := range files {
+		for _, file := range cleanupFiles {
 			os.Remove(file)
 		}
+		cleanupFiles = cleanupFiles[:0]
 	}
 
-	// write config.yaml
-	configFile := "./config.yaml"
-	if err := os.WriteFile(configFile, []byte(config), 0640); err != nil {
-		cleanupFunc() // clean up any files written before the error
-		return cleanupFunc, fmt.Errorf("could not write file: %v, got: %s", configFile, err)
+	// write the files and remember them for later cleanup
+	for file, content := range files {
+		if err := os.WriteFile(file, []byte(content), 0640); err != nil {
+			cleanupFunc() // clean up any files written before the error
+			return nil, fmt.Errorf("could not write file: %v, got: %s", file, err)
+		}
+		cleanupFiles = append(cleanupFiles, file)
 	}
-	files = append(files, configFile)
-
-	// write trustedSubjects.yaml
-	trustedSubjectsYaml := "./trustedSubjects.yaml"
-	if err := os.WriteFile(trustedSubjectsYaml, []byte(trustedSubjects), 0640); err != nil {
-		cleanupFunc() // clean up any files written before the error
-		return cleanupFunc, fmt.Errorf("could not write file: %v, got: %s", trustedSubjectsYaml, err)
-	}
-	files = append(files, trustedSubjectsYaml)
-
-	// write polocies.cedar
-	policiesFile := "./policies.cedar"
-	if err := os.WriteFile(policiesFile, []byte(policies), 0640); err != nil {
-		cleanupFunc() // clean up any files written before the error
-		return cleanupFunc, fmt.Errorf("could not write file: %v, got: %s", policiesFile, err)
-	}
-	files = append(files, policiesFile)
-
-	// write keyID.txt and key_1.priv
-	privateKeyIDFile := "./keyID.txt"
-	if err := os.WriteFile(privateKeyIDFile, []byte("key_1"), 0640); err != nil {
-		cleanupFunc() // clean up any files written before the error
-		return cleanupFunc, fmt.Errorf("could not write file: %v, got: %s", privateKeyIDFile, err)
-	}
-	files = append(files, privateKeyIDFile)
-	privateKeyFile := "./key_1.priv"
-	if err := os.WriteFile(privateKeyFile, []byte(rsaPrivateKeyPEM), 0640); err != nil {
-		cleanupFunc() // clean up any files written before the error
-		return cleanupFunc, fmt.Errorf("could not write file: %v, got: %s", privateKeyFile, err)
-	}
-	files = append(files, privateKeyFile)
 
 	return cleanupFunc, nil
 }
