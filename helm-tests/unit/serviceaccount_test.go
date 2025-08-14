@@ -28,7 +28,7 @@ func TestServiceAccount(t *testing.T) {
 			wantError: false,
 			testFunc: func(t *testing.T, resource *corev1.ServiceAccount) {
 				require.Equal(t, appName, resource.Name)
-				require.Equal(t, "default", resource.Namespace)
+				require.Equal(t, "envoy-gateway-system", resource.Namespace)
 				require.Equal(t, true, *resource.AutomountServiceAccountToken)
 			},
 		}, {

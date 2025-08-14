@@ -1,6 +1,6 @@
 package main_test
 
 const (
-	path    = "../../charts"
+	path    = "../../charts/extauthz"
 	appName = "extauthz"
 )

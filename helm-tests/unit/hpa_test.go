@@ -26,13 +26,13 @@ func TestHorizontalPodAutoscaler(t *testing.T) {
 			name: "default values",
 			opts: &helm.Options{
 				SetValues: map[string]string{
-					"autoscaling.enabled": "true",
+					"hpa.enabled": "true",
 				},
 			},
 			wantError: false,
 			testFunc: func(t *testing.T, resource *corev1.HorizontalPodAutoscaler) {
 				require.Equal(t, appName, resource.Name)
-				require.Equal(t, "default", resource.Namespace)
+				require.Equal(t, "envoy-gateway-system", resource.Namespace)
 				require.Equal(t, 1, int(*resource.Spec.MinReplicas))
 				require.Equal(t, 100, int(resource.Spec.MaxReplicas))
 				require.Equal(t, "cpu", string(resource.Spec.Metrics[0].Resource.Name))
@@ -44,11 +44,11 @@ func TestHorizontalPodAutoscaler(t *testing.T) {
 			name: "custom values",
 			opts: &helm.Options{
 				SetValues: map[string]string{
-					"autoscaling.enabled":                           "true",
-					"autoscaling.minReplicas":                       "2",
-					"autoscaling.maxReplicas":                       "5",
-					"autoscaling.targetCPUUtilizationPercentage":    "70",
-					"autoscaling.targetMemoryUtilizationPercentage": "70",
+					"hpa.enabled":                           "true",
+					"hpa.minReplicas":                       "2",
+					"hpa.maxReplicas":                       "5",
+					"hpa.targetCPUUtilizationPercentage":    "70",
+					"hpa.targetMemoryUtilizationPercentage": "70",
 				},
 				KubectlOptions: k8s.NewKubectlOptions("", "", "foo"),
 			},

@@ -26,21 +26,21 @@ func TestPodDisruptionBudget(t *testing.T) {
 			name: "default values",
 			opts: &helm.Options{
 				SetValues: map[string]string{
-					"podDisruptionBudget.enabled": "true",
+					"pod.disruptionBudget.enabled": "true",
 				},
 			},
 			wantError: false,
 			testFunc: func(t *testing.T, resource *corev1.PodDisruptionBudget) {
 				require.Equal(t, appName, resource.Name)
-				require.Equal(t, "default", resource.Namespace)
+				require.Equal(t, "envoy-gateway-system", resource.Namespace)
 				require.Equal(t, "1", resource.Spec.MinAvailable.String())
 			},
 		}, {
 			name: "custom minAvailable",
 			opts: &helm.Options{
 				SetValues: map[string]string{
-					"podDisruptionBudget.enabled":      "true",
-					"podDisruptionBudget.minAvailable": "42",
+					"pod.disruptionBudget.enabled":      "true",
+					"pod.disruptionBudget.minAvailable": "42",
 				},
 				KubectlOptions: k8s.NewKubectlOptions("", "", "foo"),
 			},
@@ -54,8 +54,8 @@ func TestPodDisruptionBudget(t *testing.T) {
 			name: "custom maxUnavailable",
 			opts: &helm.Options{
 				SetValues: map[string]string{
-					"podDisruptionBudget.enabled":        "true",
-					"podDisruptionBudget.maxUnavailable": "42",
+					"pod.disruptionBudget.enabled":        "true",
+					"pod.disruptionBudget.maxUnavailable": "42",
 				},
 				KubectlOptions: k8s.NewKubectlOptions("", "", "foo"),
 			},
@@ -69,9 +69,9 @@ func TestPodDisruptionBudget(t *testing.T) {
 			name: "conflicting minAvailable + maxUnavailable",
 			opts: &helm.Options{
 				SetValues: map[string]string{
-					"podDisruptionBudget.enabled":        "true",
-					"podDisruptionBudget.minAvailable":   "41",
-					"podDisruptionBudget.maxUnavailable": "43",
+					"pod.disruptionBudget.enabled":        "true",
+					"pod.disruptionBudget.minAvailable":   "41",
+					"pod.disruptionBudget.maxUnavailable": "43",
 				},
 			},
 			wantError: true,
