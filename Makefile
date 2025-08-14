@@ -13,7 +13,7 @@ clean:
 .PHONY: docker-build
 docker-build:
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o $(SERVICE_NAME) ./cmd/$(SERVICE_NAME)
-	docker build --no-cache . -t localhost/$(SERVICE_NAME):latest
+	docker build --no-cache -t localhost/$(SERVICE_NAME):latest -f Dockerfile.dev .
 
 .PHONY: helm-install
 helm-install:

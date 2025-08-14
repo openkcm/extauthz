@@ -1,6 +1,12 @@
 package main_test
 
 import (
+	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/base64"
+	"encoding/pem"
 	"fmt"
 	"strings"
 	"testing"
@@ -9,8 +15,17 @@ import (
 	"github.com/gruntwork-io/terratest/modules/helm"
 	"github.com/gruntwork-io/terratest/modules/k8s"
 	"github.com/gruntwork-io/terratest/modules/random"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+var secretTemplate = `apiVersion: v1
+kind: Secret
+metadata:
+  name: extauthz-signing-key1
+type: Opaque
+data:
+  mykeyid1.priv: %s`
 
 func TestHelmInstall(t *testing.T) {
 	// Create required k8s resources
@@ -28,12 +43,32 @@ func TestHelmInstall(t *testing.T) {
 	k8s.KubectlApply(t, kubeOpts, userPolicies)
 	defer k8s.KubectlDelete(t, kubeOpts, userPolicies)
 
+	keyIDFile := "../../examples/keyIDFileConfigmap.yaml"
+	k8s.KubectlApply(t, kubeOpts, keyIDFile)
+	defer k8s.KubectlDelete(t, kubeOpts, keyIDFile)
+
+	// Generate a private key for the signing key secret
+	privateKey, err := rsa.GenerateKey(rand.Reader, 4096)
+	if err != nil {
+		t.Fatalf("failed to generate private key: %v", err)
+	}
+	privateKeyPEM := pem.EncodeToMemory(
+		&pem.Block{
+			Type:  "RSA PRIVATE KEY",
+			Bytes: x509.MarshalPKCS1PrivateKey(privateKey),
+		},
+	)
+	secret := fmt.Sprintf(secretTemplate, base64.StdEncoding.EncodeToString(privateKeyPEM))
+	k8s.KubectlApplyFromString(t, kubeOpts, secret)
+	defer k8s.KubectlDeleteFromString(t, kubeOpts, secret)
+
 	// Create the helm options
 	helmOpts := &helm.Options{
 		SetValues: map[string]string{
-			"namespace":      "default",
-			"image.registry": "localhost",
-			"image.tag":      "latest",
+			"namespace":        "default",
+			"image.registry":   "localhost",
+			"image.repository": app,
+			"image.tag":        "latest",
 		},
 	}
 	releaseName := fmt.Sprintf("%s-%s", app, strings.ToLower(random.UniqueId()))
@@ -43,22 +78,57 @@ func TestHelmInstall(t *testing.T) {
 	defer helm.Delete(t, helmOpts, releaseName, true)
 
 	// Assert
-	pods := k8s.ListPods(t, kubeOpts, v1.ListOptions{LabelSelector: "app.kubernetes.io/name=extauthz"})
-	t.Logf("Found %d Pod(s)", len(pods))
-outerLoop:
+	ctx, cancel1 := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel1()
+
+	// Wait for pod creation
+	pods := waitForPodCreation(ctx, t, kubeOpts, "app.kubernetes.io/name="+app)
+
+	// Wait for pod availability
 	for _, pod := range pods {
-		t.Logf("Pod Name: %s", pod.Name)
-		for i := range 30 {
-			t.Logf("Attempt %d: Checking pod %s to be available...", i+1, pod.Name)
-			p := k8s.GetPod(t, kubeOpts, pod.Name)
-			//nolint:errcheck
-			k8s.GetPodLogsE(t, kubeOpts, p, app)
-			if k8s.IsPodAvailable(p) {
-				t.Logf("Pod %s is available", pod.Name)
-				continue outerLoop
+		t.Logf("Checking pod: %s", pod.Name)
+		waitForPodAvailability(ctx, t, kubeOpts, pod.Name)
+	}
+
+	// Recheck pod availability after a short delay
+	t.Log("Rechecking pod availability after a short delay")
+	time.Sleep(5 * time.Second)
+	for _, pod := range pods {
+		t.Logf("Checking pod: %s", pod.Name)
+		//nolint:errcheck
+		k8s.GetPodLogsE(t, kubeOpts, &pod, app)
+		waitForPodAvailability(ctx, t, kubeOpts, pod.Name)
+	}
+}
+
+func waitForPodCreation(ctx context.Context, t *testing.T, kubeOpts *k8s.KubectlOptions, labelSelector string) []corev1.Pod {
+	for {
+		select {
+		case <-ctx.Done():
+			t.Fatal("Timed out waiting for pod creation")
+		default:
+			pods := k8s.ListPods(t, kubeOpts, metav1.ListOptions{LabelSelector: labelSelector})
+			if len(pods) > 0 {
+				return pods
 			}
-			time.Sleep(2 * time.Second)
+			time.Sleep(100 * time.Millisecond)
 		}
-		t.Errorf("Pod %s is not available", pod.Name)
+	}
+}
+
+func waitForPodAvailability(ctx context.Context, t *testing.T, kubeOpts *k8s.KubectlOptions, podName string) {
+	for {
+		select {
+		case <-ctx.Done():
+			t.Fatal("Timed out waiting for pod availability")
+		default:
+			pod := k8s.GetPod(t, kubeOpts, podName)
+			if k8s.IsPodAvailable(pod) {
+				t.Logf("Pod %s is available", podName)
+				return
+			}
+			t.Logf("Pod %s is not available", podName)
+			time.Sleep(250 * time.Millisecond)
+		}
 	}
 }

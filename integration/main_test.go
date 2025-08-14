@@ -7,6 +7,7 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
+	"fmt"
 	"log"
 	"os"
 	"os/exec"
@@ -63,6 +64,56 @@ func init() {
 		panic(err)
 	}
 	buildVersion = strings.TrimSpace(string(dat))
+}
+
+func writeFiles(config, trustedSubjects, policies, rsaPrivateKeyPEM string) (func(), error) {
+	// prepare the cleanup function to later remove files created during the test
+	files := []string{}
+	cleanupFunc := func() {
+		for _, file := range files {
+			os.Remove(file)
+		}
+	}
+
+	// write config.yaml
+	configFile := "./config.yaml"
+	if err := os.WriteFile(configFile, []byte(config), 0640); err != nil {
+		cleanupFunc() // clean up any files written before the error
+		return cleanupFunc, fmt.Errorf("could not write file: %v, got: %s", configFile, err)
+	}
+	files = append(files, configFile)
+
+	// write trustedSubjects.yaml
+	trustedSubjectsYaml := "./trustedSubjects.yaml"
+	if err := os.WriteFile(trustedSubjectsYaml, []byte(trustedSubjects), 0640); err != nil {
+		cleanupFunc() // clean up any files written before the error
+		return cleanupFunc, fmt.Errorf("could not write file: %v, got: %s", trustedSubjectsYaml, err)
+	}
+	files = append(files, trustedSubjectsYaml)
+
+	// write polocies.cedar
+	policiesFile := "./policies.cedar"
+	if err := os.WriteFile(policiesFile, []byte(policies), 0640); err != nil {
+		cleanupFunc() // clean up any files written before the error
+		return cleanupFunc, fmt.Errorf("could not write file: %v, got: %s", policiesFile, err)
+	}
+	files = append(files, policiesFile)
+
+	// write keyID.txt and key_1.priv
+	privateKeyIDFile := "./keyID.txt"
+	if err := os.WriteFile(privateKeyIDFile, []byte("key_1"), 0640); err != nil {
+		cleanupFunc() // clean up any files written before the error
+		return cleanupFunc, fmt.Errorf("could not write file: %v, got: %s", privateKeyIDFile, err)
+	}
+	files = append(files, privateKeyIDFile)
+	privateKeyFile := "./key_1.priv"
+	if err := os.WriteFile(privateKeyFile, []byte(rsaPrivateKeyPEM), 0640); err != nil {
+		cleanupFunc() // clean up any files written before the error
+		return cleanupFunc, fmt.Errorf("could not write file: %v, got: %s", privateKeyFile, err)
+	}
+	files = append(files, privateKeyFile)
+
+	return cleanupFunc, nil
 }
 
 func buildCommandsAndRunTests(m *testing.M, cmds ...string) int {

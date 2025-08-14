@@ -186,6 +186,13 @@ extraVolumes:
             name: extauthz-systems-policies
         - configMap:
             name: extauthz-users-policies
+  - name: extauthz-signing-keys-volume
+    projected:
+      sources:
+        - configMap:
+            name: extauthz-signing-keyid
+        - secret:
+            name: extauthz-signing-key1
 
 # Additional volumeMounts on the output Deployment definition.
 extraVolumeMounts:
@@ -194,6 +201,9 @@ extraVolumeMounts:
     readOnly: true
   - name: extauthz-policies-volume
     mountPath: /etc/extauthz-policies
+    readOnly: true
+  - name: extauthz-signing-keys-volume
+    mountPath: /etc/extauthz-signing
     readOnly: true
 
 # Additional ports on the output Deployment definition.
@@ -228,11 +238,6 @@ config:
     flags:
       health: true
 
-  # Client Data Key Set handling
-  cdksServer:
-    address: :5555
-    signingKeyRefreshInterval: 6h
-
   featureGates:
     enrich-header-with-client-type: true
     enrich-header-with-client-region: true
@@ -256,3 +261,5 @@ config:
       name: jwtproviders
       namespace: default
 
+  # Signing client data
+  signingKeyIDFile: /etc/extauthz-signing/keyID.txt

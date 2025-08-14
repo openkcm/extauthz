@@ -1,29 +1,64 @@
 package signing_test
 
 import (
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/pem"
+	"os"
+	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/openkcm/extauthz/internal/signing"
 )
 
-func TestAll(t *testing.T) {
+func TestFromFile(t *testing.T) {
+	// Arrange
+	keyID := "testkey"
+	tmpdir := t.TempDir()
+	// Generate a private key and write it to a file
+	privateKey, err := rsa.GenerateKey(rand.Reader, 4096)
+	if err != nil {
+		t.Fatalf("failed to generate private key: %v", err)
+	}
+	privateKeyPEM := pem.EncodeToMemory(
+		&pem.Block{
+			Type:  "RSA PRIVATE KEY",
+			Bytes: x509.MarshalPKCS1PrivateKey(privateKey),
+		},
+	)
+	keyFilePath := filepath.Join(tmpdir, keyID+".priv")
+	if err := os.WriteFile(keyFilePath, privateKeyPEM, 0644); err != nil {
+		t.Fatalf("failed to write key file: %v", err)
+	}
+
+	// Create a file referencing the valid key ID
+	keyIDFilePathValid := filepath.Join(tmpdir, "valid_keyID.txt")
+	if err := os.WriteFile(keyIDFilePathValid, []byte(keyID), 0644); err != nil {
+		t.Fatalf("failed to write valid key ID file: %v", err)
+	}
+	// Create another file referencing an invalid key ID
+	keyIDFilePathInvalid := filepath.Join(tmpdir, "invalid_keyID.txt")
+	if err := os.WriteFile(keyIDFilePathInvalid, []byte("foo"), 0644); err != nil {
+		t.Fatalf("failed to write invalid key ID file: %v", err)
+	}
+
 	// create the test cases
 	tests := []struct {
 		name      string
-		interval  time.Duration
+		keyIDFile string
 		wantError bool
 	}{
 		{
 			name:      "zero values",
 			wantError: true,
 		}, {
-			name:      "zero interval",
-			interval:  0,
+			name:      "invalid key ID file",
+			keyIDFile: keyIDFilePathInvalid,
 			wantError: true,
 		}, {
-			name:      "short interval",
-			interval:  time.Millisecond,
+			name:      "valid key ID file",
+			keyIDFile: keyIDFilePathValid,
 			wantError: false,
 		},
 	}
@@ -34,28 +69,40 @@ func TestAll(t *testing.T) {
 			// Arrange
 
 			// Act
-			key, err := signing.NewKey(t.Context(), signing.WithRefreshInterval(tc.interval))
+			key, err := signing.FromFile(tc.keyIDFile)
 
 			// Assert
 			if tc.wantError {
 				if err == nil {
 					t.Error("expected error, but got nil")
 				}
+				if key != nil {
+					t.Errorf("expected nil key, but got: %v", key)
+				}
 			} else {
 				if err != nil {
 					t.Errorf("unexpected error: %s", err)
-				} else {
-					_, _, err := key.Private()
-					if err != nil {
-						t.Errorf("unexpected error getting private key: %s", err)
-					}
-
-					_, _, err = key.PublicPEM()
-					if err != nil {
-						t.Errorf("unexpected error getting public key: %s", err)
-					}
 				}
 			}
 		})
+	}
+}
+
+func TestGenerateKey(t *testing.T) {
+	key, err := signing.GenerateKey()
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	if key.ID == "" {
+		t.Fatal("expected non-empty key ID")
+	}
+
+	if key.Private == nil {
+		t.Fatal("expected non-nil private key")
+	}
+
+	if len(key.Private.D.Bytes()) == 0 {
+		t.Fatal("expected non-empty private key D value")
 	}
 }

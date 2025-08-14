@@ -1,8 +1,6 @@
 package config
 
 import (
-	"time"
-
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
 )
 
@@ -21,8 +19,11 @@ type Config struct {
 	// JWT Token handling
 	JWT JWT `yaml:"jwt"`
 
-	// Client data key set server
-	CDKSServer CDKSServer `yaml:"cdksServer"`
+	// SigningKeyIDFile is the file containing the key ID for the signing key.
+	// The key itself is expected in the same directory as <keyID>.priv.
+	// The loading is based on the internal/signing package.
+	// The signing itself is based on github.com/openkcm/common-sdk/pkg/auth.
+	SigningKeyIDFile string `yaml:"signingKeyIDFile"`
 }
 
 // Cedar configuration
@@ -59,15 +60,4 @@ type K8sProviders struct {
 	APIVersion string `yaml:"apoVersion" default:"v1alpha1"`
 	Name       string `yaml:"name" default:"jwtproviders"`
 	Namespace  string `yaml:"namespace" default:"default"`
-}
-
-// CDKSServer (Client Data Key Set Server) is a set of keys containing the public keys used to verify any Client Data Token (CDT)
-// issued by the ExtAuthZ
-// It is based on github.com/openkcm/common-sdk/pkg/auth.
-type CDKSServer struct {
-	// Address is the address, which provides the public key used to
-	// validate the client data signature.
-	Address string `json:"address" default:":5555"`
-	// SigningKeyRefreshInterval is the interval in seconds to refresh the signing key.
-	SigningKeyRefreshInterval time.Duration `yaml:"signingKeyRefreshInterval" default:"6h"`
 }
