@@ -14,6 +14,13 @@ import (
 )
 
 func createExtAuthZServer(ctx context.Context, cfg *config.Config) (*extauthz.Server, error) {
+	// Load the private key for signing the client data
+	signingKey, err := signing.FromFile(cfg.SigningKeyIDFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load signing key: %w", err)
+	}
+	slogctx.Info(ctx, "Using signing key", "id", signingKey.ID)
+
 	// Load all Cedar policy files from the policy path
 	slogctx.Info(ctx, "Handling cedar policies", "cedar", cfg.Cedar)
 
@@ -49,26 +56,9 @@ func createExtAuthZServer(ctx context.Context, cfg *config.Config) (*extauthz.Se
 	if err != nil {
 		return nil, fmt.Errorf("failed to create the JWT handler: %w", err)
 	}
-	// Create signing key and serve the public key
-	opts := []signing.Option{}
-	if cfg.CDKSServer.SigningKeyRefreshInterval > 0 {
-		opts = append(opts, signing.WithRefreshInterval(cfg.CDKSServer.SigningKeyRefreshInterval))
-	}
-
-	signingKey, err := signing.NewKey(ctx, opts...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create signing key: %w", err)
-	}
-
-	go func() {
-		err := signingKey.ServePublicKey(ctx, cfg.CDKSServer.Address)
-		if err != nil {
-			slogctx.Error(ctx, "failed to serve public key", "error", err)
-		}
-	}()
 
 	// Create the ExtAuthZ server
-	srv, err := extauthz.NewServer(signingKey.Private,
+	srv, err := extauthz.NewServer(signingKey,
 		extauthz.WithPolicyEngine(pe),
 		extauthz.WithJWTHandler(hdl),
 		extauthz.WithTrustedSubjects(subjects),

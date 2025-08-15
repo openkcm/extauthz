@@ -27,11 +27,6 @@ grpcServer: # ext_authz gRPC server configuration
     health: true
     reflection: true
 
-# Client Data Key Set handling
-cdksServer:
-  address: :5555
-  signingKeyRefreshInterval: 6h
-
 # Path to Cedar policy files
 cedar:
   policyPath: ./
@@ -50,3 +45,6 @@ jwt:
     apiVersion: v1alpha1
     name: jwtproviders
     namespace: default
+
+# Signing client data
+signingKeyIDFile: ./keyID.txt

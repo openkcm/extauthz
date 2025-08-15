@@ -49,9 +49,9 @@ permit (
 
 func TestCheck(t *testing.T) {
 	// Arrange
-	signingKey, err := signing.NewKey(t.Context())
+	signingKey, err := signing.GenerateKey()
 	if err != nil {
-		t.Fatalf("failed to create signing key: %s", err)
+		t.Fatalf("could not generate signing key: %s", err)
 	}
 
 	defaultFeatureGates := &commoncfg.FeatureGates{
@@ -186,7 +186,7 @@ func TestCheck(t *testing.T) {
 				t.Fatalf("could not create policy engine: %s", err)
 			}
 
-			srv, err := NewServer(signingKey.Private,
+			srv, err := NewServer(signingKey,
 				WithPolicyEngine(pe),
 				WithFeatureGates(tc.featureGates))
 			if err != nil {
