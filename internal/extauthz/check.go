@@ -180,16 +180,11 @@ func (srv *Server) Check(ctx context.Context, req *envoy_auth.CheckRequest) (*en
 		if len(result.groups) > 0 {
 			clientData.Groups = result.groups
 		}
-		// get the public key
-		keyID, publicKey, err := srv.signingKeyFunc()
-		if err != nil {
-			slogctx.Error(ctx, "Failed to get public key", "error", err)
-			return respondInternalServerError(), nil
-		}
-		// encode and sign the client data
-		clientData.KeyID = keyID
 
-		b64data, b64sig, err := clientData.Encode(publicKey)
+		// encode and sign the client data
+		clientData.KeyID = srv.signingKey.ID
+
+		b64data, b64sig, err := clientData.Encode(srv.signingKey.Private)
 		if err != nil {
 			slogctx.Error(ctx, "Failed to encode client data", "error", err)
 			return respondInternalServerError(), nil

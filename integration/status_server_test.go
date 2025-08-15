@@ -6,7 +6,6 @@ import (
 	"bytes"
 	"io"
 	"net/http"
-	"os"
 	"os/exec"
 	"syscall"
 	"testing"
@@ -16,37 +15,12 @@ import (
 func TestStatusServer(t *testing.T) {
 	var err error
 
-	// write config.yaml
-	configFile := "./config.yaml"
-	err = os.WriteFile(configFile, []byte(validConfig), 0640)
+	// write files needed for the test
+	cleanup, err := writeFiles(validConfig, trustedSubjects, policies, rsaPrivateKeyPEM)
 	if err != nil {
-		t.Fatalf("could not write file: %v, got: %s", configFile, err)
+		t.Fatalf("could not write files: %s", err)
 	}
-	defer os.Remove(configFile)
-
-	// write trustedSubjects.yaml
-	trustedSubjectsYaml := "./trustedSubjects.yaml"
-	err = os.WriteFile(trustedSubjectsYaml, []byte(trustedSubjects), 0640)
-	if err != nil {
-		t.Fatalf("could not write file: %v, got: %s", trustedSubjectsYaml, err)
-	}
-	defer os.Remove(trustedSubjectsYaml)
-
-	// write privateKey.pem
-	privateKeyFile := "./privateKey.pem"
-	err = os.WriteFile(privateKeyFile, []byte(rsaPrivateKeyPEM), 0640)
-	if err != nil {
-		t.Fatalf("could not write file: %v, got: %s", privateKeyFile, err)
-	}
-	defer os.Remove(privateKeyFile)
-
-	// write polocies.cedar
-	policiesFile := "./policies.cedar"
-	err = os.WriteFile(policiesFile, []byte(policies), 0640)
-	if err != nil {
-		t.Fatalf("could not write file: %v, got: %s", policiesFile, err)
-	}
-	defer os.Remove(policiesFile)
+	defer cleanup()
 
 	// start the service in the background
 	cmd := exec.Command("./"+binary, "--graceful-shutdown=0")

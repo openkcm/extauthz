@@ -7,6 +7,7 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
+	"fmt"
 	"log"
 	"os"
 	"os/exec"
@@ -63,6 +64,37 @@ func init() {
 		panic(err)
 	}
 	buildVersion = strings.TrimSpace(string(dat))
+}
+
+func writeFiles(config, trustedSubjects, policies, rsaPrivateKeyPEM string) (func(), error) {
+	// define the files to be created and their content
+	files := map[string]string{
+		"./config.yaml":          config,
+		"./trustedSubjects.yaml": trustedSubjects,
+		"./policies.cedar":       policies,
+		"./keyID.txt":            "key1",
+		"./key1.priv":            rsaPrivateKeyPEM,
+	}
+
+	// prepare the cleanup function to later remove them
+	cleanupFiles := []string{}
+	cleanupFunc := func() {
+		for _, file := range cleanupFiles {
+			os.Remove(file)
+		}
+		cleanupFiles = cleanupFiles[:0]
+	}
+
+	// write the files and remember them for later cleanup
+	for file, content := range files {
+		if err := os.WriteFile(file, []byte(content), 0640); err != nil {
+			cleanupFunc() // clean up any files written before the error
+			return nil, fmt.Errorf("could not write file: %v, got: %s", file, err)
+		}
+		cleanupFiles = append(cleanupFiles, file)
+	}
+
+	return cleanupFunc, nil
 }
 
 func buildCommandsAndRunTests(m *testing.M, cmds ...string) int {

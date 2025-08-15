@@ -1,7 +1,6 @@
 package extauthz
 
 import (
-	"crypto/rsa"
 	"errors"
 	"fmt"
 
@@ -9,6 +8,7 @@ import (
 
 	"github.com/openkcm/extauthz/internal/jwthandler"
 	"github.com/openkcm/extauthz/internal/policy"
+	"github.com/openkcm/extauthz/internal/signing"
 )
 
 type policyEngine interface {
@@ -19,7 +19,7 @@ type Server struct {
 	policyEngine           policyEngine
 	jwtHandler             *jwthandler.Handler
 	trustedSubjectToRegion map[string]string
-	signingKeyFunc         SigningKeyFunc
+	signingKey             *signing.Key
 	featureGates           *commoncfg.FeatureGates
 }
 
@@ -69,11 +69,8 @@ func WithFeatureGates(fg *commoncfg.FeatureGates) ServerOption {
 	}
 }
 
-// SigningKeyFunc is a function that returns a private key and its ID.
-type SigningKeyFunc func() (string, *rsa.PrivateKey, error)
-
 // NewServer creates a new server and applies the given options.
-func NewServer(signingKeyFunc SigningKeyFunc, opts ...ServerOption) (*Server, error) {
+func NewServer(signingKey *signing.Key, opts ...ServerOption) (*Server, error) {
 	policyEngine, err := policy.NewEngine(policy.WithBytes("empty", []byte("")))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create policy engine: %w", err)
@@ -85,9 +82,9 @@ func NewServer(signingKeyFunc SigningKeyFunc, opts ...ServerOption) (*Server, er
 	}
 
 	server := &Server{
-		policyEngine:   policyEngine,
-		jwtHandler:     hdl,
-		signingKeyFunc: signingKeyFunc,
+		policyEngine: policyEngine,
+		jwtHandler:   hdl,
+		signingKey:   signingKey,
 	}
 	for _, opt := range opts {
 		err := opt(server)

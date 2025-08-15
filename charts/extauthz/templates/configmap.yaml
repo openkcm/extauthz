@@ -63,8 +63,5 @@ data:
       {{- toYaml . | nindent 6 }}
     {{- end }}
 
-    # Client Data Key Set handling
-    {{- with .Values.config.cdksServer }}
-    cdksServer:
-      {{- toYaml . | nindent 6 }}
-    {{- end }}
+    # Signing client data
+    signingKeyIDFile: {{ .Values.config.signingKeyIDFile }}
