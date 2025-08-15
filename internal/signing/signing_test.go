@@ -21,25 +21,33 @@ func TestFromFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to generate private key: %v", err)
 	}
+
 	privateKeyPEM := pem.EncodeToMemory(
 		&pem.Block{
 			Type:  "RSA PRIVATE KEY",
 			Bytes: x509.MarshalPKCS1PrivateKey(privateKey),
 		},
 	)
-	keyFilePath := filepath.Join(tmpdir, keyID+".priv")
-	if err := os.WriteFile(keyFilePath, privateKeyPEM, 0644); err != nil {
+
+	keyFilePath := filepath.Join(tmpdir, keyID+".pem")
+
+	err = os.WriteFile(keyFilePath, privateKeyPEM, 0644)
+	if err != nil {
 		t.Fatalf("failed to write key file: %v", err)
 	}
 
 	// Create a file referencing the valid key ID
 	keyIDFilePathValid := filepath.Join(tmpdir, "valid_keyID.txt")
-	if err := os.WriteFile(keyIDFilePathValid, []byte(keyID), 0644); err != nil {
+
+	err = os.WriteFile(keyIDFilePathValid, []byte(keyID), 0644)
+	if err != nil {
 		t.Fatalf("failed to write valid key ID file: %v", err)
 	}
 	// Create another file referencing an invalid key ID
 	keyIDFilePathInvalid := filepath.Join(tmpdir, "invalid_keyID.txt")
-	if err := os.WriteFile(keyIDFilePathInvalid, []byte("foo"), 0644); err != nil {
+
+	err = os.WriteFile(keyIDFilePathInvalid, []byte("foo"), 0644)
+	if err != nil {
 		t.Fatalf("failed to write invalid key ID file: %v", err)
 	}
 
@@ -76,6 +84,7 @@ func TestFromFile(t *testing.T) {
 				if err == nil {
 					t.Error("expected error, but got nil")
 				}
+
 				if key != nil {
 					t.Errorf("expected nil key, but got: %v", key)
 				}

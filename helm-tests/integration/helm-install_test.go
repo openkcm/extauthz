@@ -22,10 +22,11 @@ import (
 var secretTemplate = `apiVersion: v1
 kind: Secret
 metadata:
-  name: extauthz-signing-key1
+  name: extauthz-signing-keys-secret
 type: Opaque
 data:
-  mykeyid1.priv: %s`
+  keyId: %s
+  %s.pem: %s`
 
 func TestHelmInstall(t *testing.T) {
 	// Create required k8s resources
@@ -58,7 +59,12 @@ func TestHelmInstall(t *testing.T) {
 			Bytes: x509.MarshalPKCS1PrivateKey(privateKey),
 		},
 	)
-	secret := fmt.Sprintf(secretTemplate, base64.StdEncoding.EncodeToString(privateKeyPEM))
+
+	keyID := "mykeyid1"
+	privateKeyPEMBase64Encoded := base64.StdEncoding.EncodeToString(privateKeyPEM)
+	keyIDbase64Encoded := base64.StdEncoding.EncodeToString([]byte(keyID))
+
+	secret := fmt.Sprintf(secretTemplate, keyIDbase64Encoded, keyID, privateKeyPEMBase64Encoded)
 	k8s.KubectlApplyFromString(t, kubeOpts, secret)
 	defer k8s.KubectlDeleteFromString(t, kubeOpts, secret)
 

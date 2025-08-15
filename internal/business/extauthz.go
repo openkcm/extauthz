@@ -15,10 +15,11 @@ import (
 
 func createExtAuthZServer(ctx context.Context, cfg *config.Config) (*extauthz.Server, error) {
 	// Load the private key for signing the client data
-	signingKey, err := signing.FromFile(cfg.SigningKeyIDFile)
+	signingKey, err := signing.FromFile(cfg.ClientData.SigningKeyIDFilePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load signing key: %w", err)
 	}
+
 	slogctx.Info(ctx, "Using signing key", "id", signingKey.ID)
 
 	// Load all Cedar policy files from the policy path

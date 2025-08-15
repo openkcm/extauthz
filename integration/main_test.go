@@ -73,7 +73,7 @@ func writeFiles(config, trustedSubjects, policies, rsaPrivateKeyPEM string) (fun
 		"./trustedSubjects.yaml": trustedSubjects,
 		"./policies.cedar":       policies,
 		"./keyID.txt":            "key1",
-		"./key1.priv":            rsaPrivateKeyPEM,
+		"./key1.pem":             rsaPrivateKeyPEM,
 	}
 
 	// prepare the cleanup function to later remove them

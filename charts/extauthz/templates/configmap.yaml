@@ -63,5 +63,7 @@ data:
       {{- toYaml . | nindent 6 }}
     {{- end }}
 
-    # Signing client data
-    signingKeyIDFile: {{ .Values.config.signingKeyIDFile }}
+    {{- with .Values.config.clientData }}
+    clientData:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}

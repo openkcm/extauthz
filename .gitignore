@@ -25,6 +25,7 @@
 
 # Go vendor directory
 /vendor
+helm-tests/vendor
 
 # Go workspace file
 go.work
