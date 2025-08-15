@@ -5,10 +5,10 @@ import (
 	"fmt"
 
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
+	"github.com/openkcm/extauthz/internal/clientdata"
 
 	"github.com/openkcm/extauthz/internal/jwthandler"
 	"github.com/openkcm/extauthz/internal/policy"
-	"github.com/openkcm/extauthz/internal/signing"
 )
 
 type policyEngine interface {
@@ -18,8 +18,8 @@ type policyEngine interface {
 type Server struct {
 	policyEngine           policyEngine
 	jwtHandler             *jwthandler.Handler
+	clientDataFactory      *clientdata.Factory
 	trustedSubjectToRegion map[string]string
-	signingKey             *signing.Key
 	featureGates           *commoncfg.FeatureGates
 }
 
@@ -50,6 +50,18 @@ func WithJWTHandler(hdl *jwthandler.Handler) ServerOption {
 	}
 }
 
+func WithClientDataFactory(cdp *clientdata.Factory) ServerOption {
+	return func(server *Server) error {
+		if cdp == nil {
+			return errors.New("client data factory must not be nil")
+		}
+
+		server.clientDataFactory = cdp
+
+		return nil
+	}
+}
+
 func WithPolicyEngine(pe policyEngine) ServerOption {
 	return func(server *Server) error {
 		if pe == nil {
@@ -70,7 +82,7 @@ func WithFeatureGates(fg *commoncfg.FeatureGates) ServerOption {
 }
 
 // NewServer creates a new server and applies the given options.
-func NewServer(signingKey *signing.Key, opts ...ServerOption) (*Server, error) {
+func NewServer(opts ...ServerOption) (*Server, error) {
 	policyEngine, err := policy.NewEngine(policy.WithBytes("empty", []byte("")))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create policy engine: %w", err)
@@ -84,8 +96,8 @@ func NewServer(signingKey *signing.Key, opts ...ServerOption) (*Server, error) {
 	server := &Server{
 		policyEngine: policyEngine,
 		jwtHandler:   hdl,
-		signingKey:   signingKey,
 	}
+
 	for _, opt := range opts {
 		err := opt(server)
 		if err != nil {

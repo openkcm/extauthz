@@ -20,6 +20,8 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/openkcm/common-sdk/pkg/commoncfg"
+	"github.com/openkcm/extauthz/internal/clientdata"
 
 	"github.com/openkcm/extauthz/internal/jwthandler"
 	"github.com/openkcm/extauthz/internal/policy"
@@ -185,7 +187,11 @@ func TestCheckAuthHeader(t *testing.T) {
 				t.Fatalf("could not create policy engine: %s", err)
 			}
 
-			srv, err := NewServer(nil,
+			clientdataFactory := clientdata.NewFactoryWithSigningKey(&commoncfg.FeatureGates{
+				clientdata.DisableClientDataComputation: true,
+			}, nil)
+			srv, err := NewServer(
+				WithClientDataFactory(clientdataFactory),
 				WithPolicyEngine(pe),
 				WithJWTHandler(hdl),
 			)

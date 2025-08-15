@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/openkcm/extauthz/internal/signing"
+	"github.com/openkcm/extauthz/internal/clientdata/signing"
 )
 
 func TestFromFile(t *testing.T) {

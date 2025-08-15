@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/openkcm/common-sdk/pkg/commoncfg"
+	"github.com/openkcm/extauthz/internal/clientdata"
 	"github.com/openkcm/extauthz/internal/policy"
 )
 
@@ -132,7 +134,10 @@ func TestCheckClientCert(t *testing.T) {
 				t.Fatalf("could not create policy engine: %s", err)
 			}
 
-			srv, err := NewServer(nil, WithPolicyEngine(pe))
+			clientdataFactory := clientdata.NewFactoryWithSigningKey(&commoncfg.FeatureGates{
+				clientdata.DisableClientDataComputation: true,
+			}, nil)
+			srv, err := NewServer(WithClientDataFactory(clientdataFactory), WithPolicyEngine(pe))
 			if err != nil {
 				t.Fatalf("could not create server: %s", err)
 			}

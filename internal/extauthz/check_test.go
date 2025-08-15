@@ -6,12 +6,12 @@ import (
 
 	"github.com/gogo/googleapis/google/rpc"
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
+	"github.com/openkcm/extauthz/internal/clientdata"
+	"github.com/openkcm/extauthz/internal/clientdata/signing"
 
 	envoy_auth "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
 
-	"github.com/openkcm/extauthz/internal/flags"
 	"github.com/openkcm/extauthz/internal/policy"
-	"github.com/openkcm/extauthz/internal/signing"
 )
 
 const (
@@ -55,8 +55,8 @@ func TestCheck(t *testing.T) {
 	}
 
 	defaultFeatureGates := &commoncfg.FeatureGates{
-		flags.EnrichHeaderWithClientRegion: true,
-		flags.EnrichHeaderWithClientType:   true,
+		clientdata.EnrichHeaderWithClientRegion: true,
+		clientdata.EnrichHeaderWithClientType:   true,
 	}
 
 	// create the test cases
@@ -186,7 +186,12 @@ func TestCheck(t *testing.T) {
 				t.Fatalf("could not create policy engine: %s", err)
 			}
 
-			srv, err := NewServer(signingKey,
+			featureFlags := &commoncfg.FeatureGates{
+				clientdata.EnrichHeaderWithClientRegion: true,
+				clientdata.EnrichHeaderWithClientType:   true,
+			}
+			srv, err := NewServer(
+				WithClientDataFactory(clientdata.NewFactoryWithSigningKey(featureFlags, signingKey)),
 				WithPolicyEngine(pe),
 				WithFeatureGates(tc.featureGates))
 			if err != nil {
