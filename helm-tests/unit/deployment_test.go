@@ -29,7 +29,7 @@ func TestDeployment(t *testing.T) {
 			wantError: false,
 			testFunc: func(t *testing.T, resource *corev1.Deployment) {
 				require.Equal(t, appName, resource.Name)
-				require.Equal(t, "envoy-gateway-system", resource.Namespace)
+				require.Equal(t, "default", resource.Namespace)
 				require.Equal(t, "registry-access", resource.Spec.Template.Spec.ImagePullSecrets[0].Name)
 				require.Equal(t, appName, resource.Spec.Template.Spec.ServiceAccountName)
 			},
@@ -46,7 +46,7 @@ func TestDeployment(t *testing.T) {
 			wantError: false,
 			testFunc: func(t *testing.T, resource *corev1.Deployment) {
 				require.Equal(t, appName, resource.Name)
-				require.Equal(t, "envoy-gateway-system", resource.Namespace)
+				require.Equal(t, "default", resource.Namespace)
 				require.Equal(t, 3, int(*resource.Spec.Replicas))
 				require.Equal(t, "my-registry-access", resource.Spec.Template.Spec.ImagePullSecrets[0].Name)
 				require.Equal(t, "my-extauthz", resource.Spec.Template.Spec.ServiceAccountName)

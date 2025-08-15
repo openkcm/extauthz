@@ -28,7 +28,7 @@ func TestService(t *testing.T) {
 			wantError: false,
 			testFunc: func(t *testing.T, resource *corev1.Service) {
 				require.Equal(t, appName, resource.Name)
-				require.Equal(t, "envoy-gateway-system", resource.Namespace)
+				require.Equal(t, "default", resource.Namespace)
 				require.Equal(t, "ClusterIP", string(resource.Spec.Type))
 				require.Equal(t, 9092, int(resource.Spec.Ports[0].Port))
 				require.Equal(t, 9092, int(resource.Spec.Ports[0].TargetPort.IntVal))

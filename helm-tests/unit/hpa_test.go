@@ -32,7 +32,7 @@ func TestHorizontalPodAutoscaler(t *testing.T) {
 			wantError: false,
 			testFunc: func(t *testing.T, resource *corev1.HorizontalPodAutoscaler) {
 				require.Equal(t, appName, resource.Name)
-				require.Equal(t, "envoy-gateway-system", resource.Namespace)
+				require.Equal(t, "default", resource.Namespace)
 				require.Equal(t, 1, int(*resource.Spec.MinReplicas))
 				require.Equal(t, 100, int(resource.Spec.MaxReplicas))
 				require.Equal(t, "cpu", string(resource.Spec.Metrics[0].Resource.Name))

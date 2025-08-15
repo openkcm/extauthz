@@ -193,10 +193,8 @@ extraVolumes:
   - name: extauthz-signing-keys-volume
     projected:
       sources:
-        - configMap:
-            name: extauthz-signing-keyid
         - secret:
-            name: extauthz-signing-key1
+            name: extauthz-signing-keys-secret
 
 # Additional volumeMounts on the output Deployment definition.
 extraVolumeMounts:
@@ -265,5 +263,6 @@ config:
       name: jwtproviders
       namespace: default
 
-  # Signing client data
-  signingKeyIDFile: /etc/extauthz-signing/keyID.txt
+  clientData:
+    # Signing client data
+    signingKeyIDFilePath: /etc/extauthz-signing/keyId

@@ -32,7 +32,7 @@ func TestPodDisruptionBudget(t *testing.T) {
 			wantError: false,
 			testFunc: func(t *testing.T, resource *corev1.PodDisruptionBudget) {
 				require.Equal(t, appName, resource.Name)
-				require.Equal(t, "envoy-gateway-system", resource.Namespace)
+				require.Equal(t, "default", resource.Namespace)
 				require.Equal(t, "1", resource.Spec.MinAvailable.String())
 			},
 		}, {
