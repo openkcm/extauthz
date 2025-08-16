@@ -16,7 +16,7 @@ func WithClientType(val ClientType) Option {
 	return func(b *clientDataBuilder) error {
 		enrichHeaderWithType := b.factory.featureGates.IsFeatureEnabled(EnrichHeaderWithClientType)
 		if enrichHeaderWithType {
-			b.Type = string(val)
+			b.ClientData.Type = string(val)
 		}
 
 		return nil
@@ -24,13 +24,13 @@ func WithClientType(val ClientType) Option {
 }
 func WithSubject(val string) Option {
 	return func(b *clientDataBuilder) error {
-		b.Subject = val
+		b.ClientData.Subject = val
 		return nil
 	}
 }
 func WithEmail(val string) Option {
 	return func(b *clientDataBuilder) error {
-		b.Email = val
+		b.ClientData.Email = val
 		return nil
 	}
 }
@@ -38,7 +38,7 @@ func WithRegion(val string) Option {
 	return func(b *clientDataBuilder) error {
 		enrichHeaderWithRegion := b.factory.featureGates.IsFeatureEnabled(EnrichHeaderWithClientRegion)
 		if enrichHeaderWithRegion && val != "" {
-			b.Region = val
+			b.ClientData.Region = val
 		}
 
 		return nil
@@ -46,13 +46,13 @@ func WithRegion(val string) Option {
 }
 func WithGroups(vals []string) Option {
 	return func(b *clientDataBuilder) error {
-		b.Groups = vals
+		b.ClientData.Groups = vals
 		return nil
 	}
 }
 func WithSignatureAlgorithm(val auth.SignatureAlgorithm) Option {
 	return func(b *clientDataBuilder) error {
-		b.SignatureAlgorithm = val
+		b.ClientData.SignatureAlgorithm = val
 		return nil
 	}
 }
