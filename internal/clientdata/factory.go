@@ -6,6 +6,7 @@ import (
 
 	"github.com/openkcm/common-sdk/pkg/auth"
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
+
 	"github.com/openkcm/extauthz/internal/clientdata/signing"
 	"github.com/openkcm/extauthz/internal/config"
 )
@@ -106,5 +107,6 @@ func (c *Factory) CreateAndEncode(opts ...Option) (string, string, error) {
 	if err != nil {
 		return "", "", err
 	}
+
 	return cd.Encode(c.signingKey.Private)
 }

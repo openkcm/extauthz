@@ -14,9 +14,10 @@ import (
 	"time"
 
 	"github.com/go-andiamo/splitter"
-	"github.com/openkcm/extauthz/internal/policies/cedarpolicy"
 
 	slogctx "github.com/veqryn/slog-context"
+
+	"github.com/openkcm/extauthz/internal/policies/cedarpolicy"
 )
 
 var (
@@ -257,6 +258,7 @@ func (srv *Server) checkClientCert(ctx context.Context, certHeader, method, host
 		"type":   "x509",
 		"issuer": crtIssuer,
 	}
+
 	allowed, reason, err := srv.policyEngine.Check(
 		cedarpolicy.WithSubject(subject),
 		cedarpolicy.WithAction(method),

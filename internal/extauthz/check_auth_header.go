@@ -7,10 +7,10 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/openkcm/extauthz/internal/policies/cedarpolicy"
 	slogctx "github.com/veqryn/slog-context"
 
 	"github.com/openkcm/extauthz/internal/jwthandler"
+	"github.com/openkcm/extauthz/internal/policies/cedarpolicy"
 )
 
 // checkAuthHeader checks the request using the authorization header, which should contain a JWT token.
@@ -62,6 +62,7 @@ func (srv *Server) checkAuthHeader(ctx context.Context, authHeader, method, host
 		"type":   "jwt",
 		"issuer": claims.Issuer,
 	}
+
 	allowed, reason, err := srv.policyEngine.Check(
 		cedarpolicy.WithSubject(claims.Subject),
 		cedarpolicy.WithAction(method),

@@ -4,13 +4,13 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/openkcm/extauthz/internal/clientdata"
-	"github.com/openkcm/extauthz/internal/policies/cedarpolicy"
 	slogctx "github.com/veqryn/slog-context"
 
+	"github.com/openkcm/extauthz/internal/clientdata"
 	"github.com/openkcm/extauthz/internal/config"
 	"github.com/openkcm/extauthz/internal/extauthz"
 	"github.com/openkcm/extauthz/internal/jwthandler"
+	"github.com/openkcm/extauthz/internal/policies/cedarpolicy"
 )
 
 func createExtAuthZServer(ctx context.Context, cfg *config.Config) (*extauthz.Server, error) {
@@ -19,6 +19,7 @@ func createExtAuthZServer(ctx context.Context, cfg *config.Config) (*extauthz.Se
 	if err != nil {
 		return nil, fmt.Errorf("failed to create clientdata: %w", err)
 	}
+
 	if clientDataFactory.Enabled() {
 		slogctx.Info(ctx, "Using client data with signing key", "id", clientDataFactory.SigningKeyID())
 	} else {

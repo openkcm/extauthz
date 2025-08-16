@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/cedar-policy/cedar-go"
+
 	"github.com/openkcm/extauthz/internal/policies"
 )
 
@@ -14,7 +15,9 @@ func WithSubject(subject string) policies.CheckOption {
 		if !ok {
 			return errors.New("unexpected policy engine")
 		}
+
 		cpe.request.Principal = cedar.NewEntityUID("Subject", cedar.String(subject))
+
 		return nil
 	}
 }
@@ -25,7 +28,9 @@ func WithAction(action string) policies.CheckOption {
 		if !ok {
 			return errors.New("unexpected policy engine")
 		}
+
 		cpe.request.Action = cedar.NewEntityUID("Action", cedar.String(action))
+
 		return nil
 	}
 }
@@ -35,7 +40,9 @@ func WithRoute(route string) policies.CheckOption {
 		if !ok {
 			return errors.New("unexpected policy engine")
 		}
+
 		cpe.request.Resource = cedar.NewEntityUID("Route", cedar.String(route))
+
 		return nil
 	}
 }
@@ -53,6 +60,7 @@ func WithContextData(data map[string]string) policies.CheckOption {
 		}
 
 		cpe.request.Context = cedar.NewRecord(cedarContext)
+
 		return nil
 	}
 }

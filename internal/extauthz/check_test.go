@@ -6,11 +6,12 @@ import (
 
 	"github.com/gogo/googleapis/google/rpc"
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
+
+	envoy_auth "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
+
 	"github.com/openkcm/extauthz/internal/clientdata"
 	"github.com/openkcm/extauthz/internal/clientdata/signing"
 	"github.com/openkcm/extauthz/internal/policies/cedarpolicy"
-
-	envoy_auth "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
 )
 
 const (
@@ -189,6 +190,7 @@ func TestCheck(t *testing.T) {
 				clientdata.EnrichHeaderWithClientRegion: true,
 				clientdata.EnrichHeaderWithClientType:   true,
 			}
+
 			srv, err := NewServer(
 				WithClientDataFactory(clientdata.NewFactoryWithSigningKey(featureFlags, signingKey)),
 				WithPolicyEngine(pe),

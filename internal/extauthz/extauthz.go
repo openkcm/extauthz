@@ -5,11 +5,11 @@ import (
 	"fmt"
 
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
+
 	"github.com/openkcm/extauthz/internal/clientdata"
+	"github.com/openkcm/extauthz/internal/jwthandler"
 	"github.com/openkcm/extauthz/internal/policies"
 	"github.com/openkcm/extauthz/internal/policies/cedarpolicy"
-
-	"github.com/openkcm/extauthz/internal/jwthandler"
 )
 
 type Server struct {

@@ -3,10 +3,11 @@ package extauthz
 import (
 	"context"
 
-	envoy_core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
-	envoy_auth "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
 	"github.com/go-andiamo/splitter"
 	"github.com/openkcm/common-sdk/pkg/auth"
+
+	envoy_core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	envoy_auth "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
 	slogctx "github.com/veqryn/slog-context"
 
 	"github.com/openkcm/extauthz/internal/flags"
@@ -108,14 +109,17 @@ func (srv *Server) Check(ctx context.Context, req *envoy_auth.CheckRequest) (*en
 
 	switch result.is {
 	case ALLOWED:
-		var headers []*envoy_core.HeaderValueOption
-		var headersToRemove []string
+		var (
+			headers         []*envoy_core.HeaderValueOption
+			headersToRemove []string
+		)
 
 		if srv.clientDataFactory == nil || srv.clientDataFactory.IsDisabled() {
 			return respondAllowed(headers, headersToRemove), nil
 		}
 
 		opts := result.toClientDataOption(certHeaderFound)
+
 		b64data, b64sig, err := srv.clientDataFactory.CreateAndEncode(opts...)
 		if err != nil {
 			slogctx.Error(ctx, "Failed to encode client data", "error", err)

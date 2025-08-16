@@ -26,12 +26,14 @@ type checkResult struct {
 
 func (r *checkResult) toClientDataOption(withXFCCHeader bool) []clientdata.Option {
 	clientType := clientdata.User
+
 	switch {
 	case withXFCCHeader && r.email != "":
 		clientType = clientdata.TechnicalUser
 	case withXFCCHeader && r.email == "":
 		clientType = clientdata.System
 	}
+
 	return []clientdata.Option{
 		clientdata.WithSubject(r.subject),
 		clientdata.WithClientType(clientType),

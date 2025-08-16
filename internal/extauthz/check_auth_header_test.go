@@ -21,10 +21,10 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
-	"github.com/openkcm/extauthz/internal/clientdata"
-	"github.com/openkcm/extauthz/internal/policies/cedarpolicy"
 
+	"github.com/openkcm/extauthz/internal/clientdata"
 	"github.com/openkcm/extauthz/internal/jwthandler"
+	"github.com/openkcm/extauthz/internal/policies/cedarpolicy"
 )
 
 func TestCheckAuthHeader(t *testing.T) {
@@ -190,6 +190,7 @@ func TestCheckAuthHeader(t *testing.T) {
 			clientdataFactory := clientdata.NewFactoryWithSigningKey(&commoncfg.FeatureGates{
 				clientdata.DisableClientDataComputation: true,
 			}, nil)
+
 			srv, err := NewServer(
 				WithClientDataFactory(clientdataFactory),
 				WithPolicyEngine(pe),
