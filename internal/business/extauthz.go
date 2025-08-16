@@ -5,12 +5,12 @@ import (
 	"fmt"
 
 	"github.com/openkcm/extauthz/internal/clientdata"
+	"github.com/openkcm/extauthz/internal/policies/cedarpolicy"
 	slogctx "github.com/veqryn/slog-context"
 
 	"github.com/openkcm/extauthz/internal/config"
 	"github.com/openkcm/extauthz/internal/extauthz"
 	"github.com/openkcm/extauthz/internal/jwthandler"
-	"github.com/openkcm/extauthz/internal/policy"
 )
 
 func createExtAuthZServer(ctx context.Context, cfg *config.Config) (*extauthz.Server, error) {
@@ -28,7 +28,7 @@ func createExtAuthZServer(ctx context.Context, cfg *config.Config) (*extauthz.Se
 	// Load all Cedar policy files from the policy path
 	slogctx.Info(ctx, "Handling cedar policies", "cedar", cfg.Cedar)
 
-	pe, err := policy.NewEngine(policy.WithPath(cfg.Cedar.PolicyPath))
+	pe, err := cedarpolicy.NewEngine(cedarpolicy.WithPath(cfg.Cedar.PolicyPath))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create the policy engine: %w", err)
 	}

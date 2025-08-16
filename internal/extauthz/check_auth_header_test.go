@@ -22,9 +22,9 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
 	"github.com/openkcm/extauthz/internal/clientdata"
+	"github.com/openkcm/extauthz/internal/policies/cedarpolicy"
 
 	"github.com/openkcm/extauthz/internal/jwthandler"
-	"github.com/openkcm/extauthz/internal/policy"
 )
 
 func TestCheckAuthHeader(t *testing.T) {
@@ -182,7 +182,7 @@ func TestCheckAuthHeader(t *testing.T) {
 				t.Fatalf("could not create handler: %s", err)
 			}
 
-			pe, err := policy.NewEngine(policy.WithBytes("my policies", []byte(cedarpolicies)))
+			pe, err := cedarpolicy.NewEngine(cedarpolicy.WithBytes("my policies", []byte(cedarpolicies)))
 			if err != nil {
 				t.Fatalf("could not create policy engine: %s", err)
 			}

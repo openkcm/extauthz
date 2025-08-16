@@ -1,11 +1,11 @@
-package policy_test
+package cedarpolicy_test
 
 import (
 	"os"
 	"path/filepath"
 	"testing"
 
-	"github.com/openkcm/extauthz/internal/policy"
+	"github.com/openkcm/extauthz/internal/policies/cedarpolicy"
 )
 
 func TestCheckWithPath(t *testing.T) {
@@ -31,7 +31,8 @@ func TestCheckWithPath(t *testing.T) {
 		wantAllowed bool
 	}{
 		{
-			name: "zero values",
+			name:  "zero values",
+			cntxt: map[string]string{},
 		}, {
 			name:        "permit if me accesses GET on mine",
 			subject:     "me",
@@ -67,13 +68,18 @@ func TestCheckWithPath(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			// Arrange
-			engine, err := policy.NewEngine(policy.WithPath(tmpdir))
+			engine, err := cedarpolicy.NewEngine(cedarpolicy.WithPath(tmpdir))
 			if err != nil {
 				t.Fatalf("failed to create engine: %s", err)
 			}
 
 			// Act
-			allowed, reason, err := engine.Check(tc.subject, tc.action, tc.route, tc.cntxt)
+			allowed, reason, err := engine.Check(
+				cedarpolicy.WithSubject(tc.subject),
+				cedarpolicy.WithAction(tc.action),
+				cedarpolicy.WithRoute(tc.route),
+				cedarpolicy.WithContextData(tc.cntxt),
+			)
 			t.Logf("reason: %s", reason)
 
 			// Assert

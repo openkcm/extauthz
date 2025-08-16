@@ -8,10 +8,9 @@ import (
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
 	"github.com/openkcm/extauthz/internal/clientdata"
 	"github.com/openkcm/extauthz/internal/clientdata/signing"
+	"github.com/openkcm/extauthz/internal/policies/cedarpolicy"
 
 	envoy_auth "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
-
-	"github.com/openkcm/extauthz/internal/policy"
 )
 
 const (
@@ -181,7 +180,7 @@ func TestCheck(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			// Arrange
-			pe, err := policy.NewEngine(policy.WithBytes("my policies", []byte(cedarpolicies)))
+			pe, err := cedarpolicy.NewEngine(cedarpolicy.WithBytes("my policies", []byte(cedarpolicies)))
 			if err != nil {
 				t.Fatalf("could not create policy engine: %s", err)
 			}

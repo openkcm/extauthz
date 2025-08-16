@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/go-andiamo/splitter"
+	"github.com/openkcm/extauthz/internal/policies/cedarpolicy"
 
 	slogctx "github.com/veqryn/slog-context"
 )
@@ -251,11 +252,17 @@ func (srv *Server) checkClientCert(ctx context.Context, certHeader, method, host
 		"host", host,
 		"path", path)
 
-	allowed, reason, err := srv.policyEngine.Check(subject, method, host+path,
-		map[string]string{
-			"type":   "x509",
-			"issuer": crtIssuer,
-		})
+	data := map[string]string{
+		"route":  host + path,
+		"type":   "x509",
+		"issuer": crtIssuer,
+	}
+	allowed, reason, err := srv.policyEngine.Check(
+		cedarpolicy.WithSubject(subject),
+		cedarpolicy.WithAction(method),
+		cedarpolicy.WithRoute(host+path),
+		cedarpolicy.WithContextData(data),
+	)
 	if err != nil {
 		return checkResult{is: UNAUTHENTICATED,
 			info: fmt.Sprintf("Error from policy engine: %v", err)}

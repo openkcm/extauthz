@@ -6,17 +6,14 @@ import (
 
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
 	"github.com/openkcm/extauthz/internal/clientdata"
+	"github.com/openkcm/extauthz/internal/policies"
+	"github.com/openkcm/extauthz/internal/policies/cedarpolicy"
 
 	"github.com/openkcm/extauthz/internal/jwthandler"
-	"github.com/openkcm/extauthz/internal/policy"
 )
 
-type policyEngine interface {
-	Check(subject, action, resource string, cntxt map[string]string) (bool, string, error)
-}
-
 type Server struct {
-	policyEngine           policyEngine
+	policyEngine           policies.Engine
 	jwtHandler             *jwthandler.Handler
 	clientDataFactory      *clientdata.Factory
 	trustedSubjectToRegion map[string]string
@@ -62,7 +59,7 @@ func WithClientDataFactory(cdp *clientdata.Factory) ServerOption {
 	}
 }
 
-func WithPolicyEngine(pe policyEngine) ServerOption {
+func WithPolicyEngine(pe policies.Engine) ServerOption {
 	return func(server *Server) error {
 		if pe == nil {
 			return errors.New("policy engine must not be nil")
@@ -83,7 +80,7 @@ func WithFeatureGates(fg *commoncfg.FeatureGates) ServerOption {
 
 // NewServer creates a new server and applies the given options.
 func NewServer(opts ...ServerOption) (*Server, error) {
-	policyEngine, err := policy.NewEngine(policy.WithBytes("empty", []byte("")))
+	policyEngine, err := cedarpolicy.NewEngine(cedarpolicy.WithBytes("empty", []byte("")))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create policy engine: %w", err)
 	}

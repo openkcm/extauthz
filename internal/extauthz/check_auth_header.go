@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/openkcm/extauthz/internal/policies/cedarpolicy"
 	slogctx "github.com/veqryn/slog-context"
 
 	"github.com/openkcm/extauthz/internal/jwthandler"
@@ -56,11 +57,17 @@ func (srv *Server) checkAuthHeader(ctx context.Context, authHeader, method, host
 		"host", host,
 		"path", path)
 
-	allowed, reason, err := srv.policyEngine.Check(claims.Subject, method, host+path,
-		map[string]string{
-			"type":   "jwt",
-			"issuer": claims.Issuer,
-		})
+	data := map[string]string{
+		"route":  host + path,
+		"type":   "jwt",
+		"issuer": claims.Issuer,
+	}
+	allowed, reason, err := srv.policyEngine.Check(
+		cedarpolicy.WithSubject(claims.Subject),
+		cedarpolicy.WithAction(method),
+		cedarpolicy.WithRoute(host+path),
+		cedarpolicy.WithContextData(data),
+	)
 	if err != nil {
 		return checkResult{is: UNAUTHENTICATED,
 			info: fmt.Sprintf("Error from policy engine: %v", err)}

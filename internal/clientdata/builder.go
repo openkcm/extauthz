@@ -49,3 +49,9 @@ func WithGroups(vals []string) Option {
 		return nil
 	}
 }
+func WithSignatureAlgorithm(val auth.SignatureAlgorithm) Option {
+	return func(b *clientDataBuilder) error {
+		b.ClientData.SignatureAlgorithm = val
+		return nil
+	}
+}
