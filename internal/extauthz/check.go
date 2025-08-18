@@ -18,47 +18,6 @@ const (
 	HeaderAuthorization       = "authorization"
 )
 
-type userType string
-
-const (
-	User          userType = "user"
-	TechnicalUser userType = "technical-user"
-	System        userType = "system"
-)
-
-type checkResultCode uint
-
-const (
-	UNKNOWN checkResultCode = iota
-	ALLOWED
-	DENIED
-	UNAUTHENTICATED
-
-	ALWAYS_ALLOW = 100
-)
-
-type checkResult struct {
-	is      checkResultCode
-	info    string
-	subject string
-	email   string
-	region  string
-	groups  []string
-}
-
-// merge updates the result if the other result is more restrictive
-func (cr *checkResult) merge(other checkResult) {
-	// UNKNOWN < ALLOWED < DENIED < UNAUTHENTICATED
-	if other.is > cr.is {
-		cr.is = other.is
-		cr.info = other.info
-		cr.subject = other.subject
-		cr.email = other.email
-		cr.region = other.region
-		cr.groups = other.groups
-	}
-}
-
 // Ensure Server implements the AuthorizationServer interface
 var _ envoy_auth.AuthorizationServer = &Server{}
 
@@ -150,52 +109,29 @@ func (srv *Server) Check(ctx context.Context, req *envoy_auth.CheckRequest) (*en
 
 	switch result.is {
 	case ALLOWED:
-		clientData := &auth.ClientData{
-			SignatureAlgorithm: auth.SignatureAlgorithmRS256,
-			Subject:            result.subject,
+		var (
+			headers         []*envoy_core.HeaderValueOption
+			headersToRemove []string
+		)
+
+		if srv.clientDataFactory == nil || srv.clientDataFactory.IsDisabled() {
+			return respondAllowed(headers, headersToRemove), nil
 		}
 
-		enrichHeaderWithType := srv.featureGates.IsFeatureEnabled(flags.EnrichHeaderWithClientType)
-		if enrichHeaderWithType {
-			clientType := User
+		opts := result.toClientDataOption(certHeaderFound)
 
-			switch {
-			case certHeaderFound && result.email != "":
-				clientType = TechnicalUser
-			case certHeaderFound && result.email == "":
-				clientType = System
-			}
-
-			clientData.Type = string(clientType)
-			if result.email != "" {
-				clientData.Email = result.email
-			}
-		}
-
-		enrichHeaderWithRegion := srv.featureGates.IsFeatureEnabled(flags.EnrichHeaderWithClientRegion)
-		if enrichHeaderWithRegion && result.region != "" {
-			clientData.Region = result.region
-		}
-
-		if len(result.groups) > 0 {
-			clientData.Groups = result.groups
-		}
-
-		// encode and sign the client data
-		clientData.KeyID = srv.signingKey.ID
-
-		b64data, b64sig, err := clientData.Encode(srv.signingKey.Private)
+		b64data, b64sig, err := srv.clientDataFactory.CreateAndEncode(opts...)
 		if err != nil {
 			slogctx.Error(ctx, "Failed to encode client data", "error", err)
 			return respondInternalServerError(), nil
 		}
 
-		headers := []*envoy_core.HeaderValueOption{
+		headers = []*envoy_core.HeaderValueOption{
 			headerValueOption(auth.HeaderClientData, b64data),
 			headerValueOption(auth.HeaderClientDataSignature, b64sig),
 		}
 		// remove other headers the backend shall not see
-		headersToRemove := []string{HeaderForwardedClientCert}
+		headersToRemove = []string{HeaderForwardedClientCert}
 
 		return respondAllowed(headers, headersToRemove), nil
 	case ALWAYS_ALLOW:

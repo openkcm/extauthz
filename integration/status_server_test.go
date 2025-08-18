@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os/exec"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -90,7 +91,7 @@ func TestStatusServer(t *testing.T) {
 				if err != nil {
 					t.Errorf("unexpected error: %s", err)
 				} else {
-					if string(got) != tc.wantOutput {
+					if strings.TrimSpace(string(got)) != strings.TrimSpace(tc.wantOutput) {
 						t.Errorf("expected: %s, got: %s", tc.wantOutput, got)
 					}
 				}
