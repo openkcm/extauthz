@@ -17,7 +17,7 @@ func createExtAuthZServer(ctx context.Context, cfg *config.Config) (*extauthz.Se
 	// Load the private key for signing the client data
 	clientDataFactory, err := clientdata.NewFactory(&cfg.FeatureGates, &cfg.ClientData)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create clientdata: %w", err)
+		return nil, fmt.Errorf("failed to create client data factory: %w", err)
 	}
 
 	if clientDataFactory.Enabled() {
