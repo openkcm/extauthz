@@ -24,7 +24,7 @@ type checkResult struct {
 	groups  []string
 }
 
-func (r *checkResult) toClientDataOption(withXFCCHeader bool) []clientdata.Option {
+func (r *checkResult) toClientDataOptions(withXFCCHeader bool) []clientdata.Option {
 	clientType := clientdata.User
 
 	switch {

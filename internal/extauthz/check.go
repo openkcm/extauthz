@@ -118,7 +118,7 @@ func (srv *Server) Check(ctx context.Context, req *envoy_auth.CheckRequest) (*en
 			return respondAllowed(headers, headersToRemove), nil
 		}
 
-		opts := result.toClientDataOption(certHeaderFound)
+		opts := result.toClientDataOptions(certHeaderFound)
 
 		b64data, b64sig, err := srv.clientDataFactory.CreateAndEncode(opts...)
 		if err != nil {
