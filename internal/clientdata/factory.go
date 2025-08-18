@@ -21,7 +21,8 @@ const (
 	// EnrichHeaderWithClientRegion if set on true is including the client region. information in the headers
 	EnrichHeaderWithClientRegion = "enrich-header-with-client-region"
 	// EnrichHeaderWithClientType if set on true is including the client type. information in the headers
-	EnrichHeaderWithClientType   = "enrich-header-with-client-type"
+	EnrichHeaderWithClientType = "enrich-header-with-client-type"
+	// DisableClientDataComputation if set on true the client data is not generated on the headers
 	DisableClientDataComputation = "disable-client-data-computation"
 )
 
