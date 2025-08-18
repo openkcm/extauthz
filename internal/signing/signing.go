@@ -6,8 +6,8 @@
 // Example structure:
 //   - ./keyID.txt
 //     Content: "key1"
-//   - ./key1.priv
-//   - ./key2.priv
+//   - ./key1.pem
+//   - ./key2.pem
 package signing
 
 import (
@@ -36,7 +36,7 @@ func FromFile(keyIDFilePath string) (*Key, error) {
 
 	keyFilePath := filepath.Join(
 		filepath.Dir(keyIDFilePath),
-		keyID+".priv",
+		keyID+".pem",
 	)
 
 	privateKey, err := loadPrivateKey(keyFilePath)
@@ -56,6 +56,7 @@ func GenerateKey() (*Key, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return &Key{
 		ID:      uuid.NewString(),
 		Private: privateKey,
@@ -68,6 +69,7 @@ func loadKeyID(file string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("could not read file: %w", err)
 	}
+
 	return string(bytes.TrimSpace(fbytes)), nil
 }
 
@@ -83,5 +85,6 @@ func loadPrivateKey(file string) (*rsa.PrivateKey, error) {
 	if err != nil {
 		return nil, fmt.Errorf("could not parse private key: %w", err)
 	}
+
 	return privateKey, nil
 }

@@ -30,7 +30,6 @@ func TestDeployment(t *testing.T) {
 			testFunc: func(t *testing.T, resource *corev1.Deployment) {
 				require.Equal(t, appName, resource.Name)
 				require.Equal(t, "default", resource.Namespace)
-				require.Equal(t, 1, int(*resource.Spec.Replicas))
 				require.Equal(t, "registry-access", resource.Spec.Template.Spec.ImagePullSecrets[0].Name)
 				require.Equal(t, appName, resource.Spec.Template.Spec.ServiceAccountName)
 			},
@@ -38,7 +37,8 @@ func TestDeployment(t *testing.T) {
 			name: "custom values",
 			opts: &helm.Options{
 				SetValues: map[string]string{
-					"replicaCount":             "3",
+					"hpa.enabled":              "true",
+					"hpa.minReplicas":          "3",
 					"imagePullSecrets[0].name": "my-registry-access",
 					"serviceAccount.name":      "my-extauthz",
 				},

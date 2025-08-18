@@ -19,11 +19,17 @@ type Config struct {
 	// JWT Token handling
 	JWT JWT `yaml:"jwt"`
 
-	// SigningKeyIDFile is the file containing the key ID for the signing key.
-	// The key itself is expected in the same directory as <keyID>.priv.
+	// ClientData configuration
+	ClientData ClientData `yaml:"clientData"`
+}
+
+// ClientData configuration
+type ClientData struct {
+	// SigningKeyIDFilePath is the file containing the key ID for the signing key.
+	// The key itself is expected in the same directory as <keyID>.pem.
 	// The loading is based on the internal/signing package.
 	// The signing itself is based on github.com/openkcm/common-sdk/pkg/auth.
-	SigningKeyIDFile string `yaml:"signingKeyIDFile"`
+	SigningKeyIDFilePath string `yaml:"signingKeyIDFilePath"`
 }
 
 // Cedar configuration

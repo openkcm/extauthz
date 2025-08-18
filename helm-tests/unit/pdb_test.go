@@ -26,7 +26,7 @@ func TestPodDisruptionBudget(t *testing.T) {
 			name: "default values",
 			opts: &helm.Options{
 				SetValues: map[string]string{
-					"podDisruptionBudget.enabled": "true",
+					"pod.disruptionBudget.enabled": "true",
 				},
 			},
 			wantError: false,
@@ -39,8 +39,8 @@ func TestPodDisruptionBudget(t *testing.T) {
 			name: "custom minAvailable",
 			opts: &helm.Options{
 				SetValues: map[string]string{
-					"podDisruptionBudget.enabled":      "true",
-					"podDisruptionBudget.minAvailable": "42",
+					"pod.disruptionBudget.enabled":      "true",
+					"pod.disruptionBudget.minAvailable": "42",
 				},
 				KubectlOptions: k8s.NewKubectlOptions("", "", "foo"),
 			},
@@ -54,8 +54,8 @@ func TestPodDisruptionBudget(t *testing.T) {
 			name: "custom maxUnavailable",
 			opts: &helm.Options{
 				SetValues: map[string]string{
-					"podDisruptionBudget.enabled":        "true",
-					"podDisruptionBudget.maxUnavailable": "42",
+					"pod.disruptionBudget.enabled":        "true",
+					"pod.disruptionBudget.maxUnavailable": "42",
 				},
 				KubectlOptions: k8s.NewKubectlOptions("", "", "foo"),
 			},
@@ -69,9 +69,9 @@ func TestPodDisruptionBudget(t *testing.T) {
 			name: "conflicting minAvailable + maxUnavailable",
 			opts: &helm.Options{
 				SetValues: map[string]string{
-					"podDisruptionBudget.enabled":        "true",
-					"podDisruptionBudget.minAvailable":   "41",
-					"podDisruptionBudget.maxUnavailable": "43",
+					"pod.disruptionBudget.enabled":        "true",
+					"pod.disruptionBudget.minAvailable":   "41",
+					"pod.disruptionBudget.maxUnavailable": "43",
 				},
 			},
 			wantError: true,
