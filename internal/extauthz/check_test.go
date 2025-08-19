@@ -9,9 +9,9 @@ import (
 
 	envoy_auth "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
 
-	"github.com/openkcm/extauthz/internal/flags"
-	"github.com/openkcm/extauthz/internal/policy"
-	"github.com/openkcm/extauthz/internal/signing"
+	"github.com/openkcm/extauthz/internal/clientdata"
+	"github.com/openkcm/extauthz/internal/clientdata/signing"
+	"github.com/openkcm/extauthz/internal/policies/cedarpolicy"
 )
 
 const (
@@ -55,8 +55,8 @@ func TestCheck(t *testing.T) {
 	}
 
 	defaultFeatureGates := &commoncfg.FeatureGates{
-		flags.EnrichHeaderWithClientRegion: true,
-		flags.EnrichHeaderWithClientType:   true,
+		clientdata.EnrichHeaderWithClientRegion: true,
+		clientdata.EnrichHeaderWithClientType:   true,
 	}
 
 	// create the test cases
@@ -181,12 +181,18 @@ func TestCheck(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			// Arrange
-			pe, err := policy.NewEngine(policy.WithBytes("my policies", []byte(cedarpolicies)))
+			pe, err := cedarpolicy.NewEngine(cedarpolicy.WithBytes("my policies", []byte(cedarpolicies)))
 			if err != nil {
 				t.Fatalf("could not create policy engine: %s", err)
 			}
 
-			srv, err := NewServer(signingKey,
+			featureFlags := &commoncfg.FeatureGates{
+				clientdata.EnrichHeaderWithClientRegion: true,
+				clientdata.EnrichHeaderWithClientType:   true,
+			}
+
+			srv, err := NewServer(
+				WithClientDataFactory(clientdata.NewFactoryWithSigningKey(featureFlags, signingKey)),
 				WithPolicyEngine(pe),
 				WithFeatureGates(tc.featureGates))
 			if err != nil {

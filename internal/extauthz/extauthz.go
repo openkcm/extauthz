@@ -6,20 +6,17 @@ import (
 
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
 
+	"github.com/openkcm/extauthz/internal/clientdata"
 	"github.com/openkcm/extauthz/internal/jwthandler"
-	"github.com/openkcm/extauthz/internal/policy"
-	"github.com/openkcm/extauthz/internal/signing"
+	"github.com/openkcm/extauthz/internal/policies"
+	"github.com/openkcm/extauthz/internal/policies/cedarpolicy"
 )
 
-type policyEngine interface {
-	Check(subject, action, resource string, cntxt map[string]string) (bool, string, error)
-}
-
 type Server struct {
-	policyEngine           policyEngine
+	policyEngine           policies.Engine
 	jwtHandler             *jwthandler.Handler
+	clientDataFactory      *clientdata.Factory
 	trustedSubjectToRegion map[string]string
-	signingKey             *signing.Key
 	featureGates           *commoncfg.FeatureGates
 }
 
@@ -50,7 +47,19 @@ func WithJWTHandler(hdl *jwthandler.Handler) ServerOption {
 	}
 }
 
-func WithPolicyEngine(pe policyEngine) ServerOption {
+func WithClientDataFactory(cdp *clientdata.Factory) ServerOption {
+	return func(server *Server) error {
+		if cdp == nil {
+			return errors.New("client data factory must not be nil")
+		}
+
+		server.clientDataFactory = cdp
+
+		return nil
+	}
+}
+
+func WithPolicyEngine(pe policies.Engine) ServerOption {
 	return func(server *Server) error {
 		if pe == nil {
 			return errors.New("policy engine must not be nil")
@@ -70,8 +79,8 @@ func WithFeatureGates(fg *commoncfg.FeatureGates) ServerOption {
 }
 
 // NewServer creates a new server and applies the given options.
-func NewServer(signingKey *signing.Key, opts ...ServerOption) (*Server, error) {
-	policyEngine, err := policy.NewEngine(policy.WithBytes("empty", []byte("")))
+func NewServer(opts ...ServerOption) (*Server, error) {
+	policyEngine, err := cedarpolicy.NewEngine(cedarpolicy.WithBytes("empty", []byte("")))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create policy engine: %w", err)
 	}
@@ -84,8 +93,8 @@ func NewServer(signingKey *signing.Key, opts ...ServerOption) (*Server, error) {
 	server := &Server{
 		policyEngine: policyEngine,
 		jwtHandler:   hdl,
-		signingKey:   signingKey,
 	}
+
 	for _, opt := range opts {
 		err := opt(server)
 		if err != nil {

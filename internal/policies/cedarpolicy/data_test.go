@@ -1,4 +1,4 @@
-package policy_test
+package cedarpolicy_test
 
 const (
 	policy1 = "policy1.cedar"

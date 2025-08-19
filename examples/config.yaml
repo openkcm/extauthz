@@ -10,6 +10,7 @@ featureGates:
   enrich-header-with-client-region: false
   disable-client-certificate-computation: false
   disable-jwt-token-computation: false
+  disable-client-data-computation: false
 
 logger:
   level: debug # one of: debug, info, warn, error
@@ -46,5 +47,6 @@ jwt:
     name: jwtproviders
     namespace: default
 
-# Signing client data
-signingKeyIDFile: ./keyID.txt
+clientData:
+  # Signing client data
+  signingKeyIDFilePath: ./keyId.txt

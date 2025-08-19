@@ -1,11 +1,11 @@
-package policy_test
+package cedarpolicy_test
 
 import (
 	"os"
 	"path/filepath"
 	"testing"
 
-	"github.com/openkcm/extauthz/internal/policy"
+	"github.com/openkcm/extauthz/internal/policies/cedarpolicy"
 )
 
 func TestWithFile(t *testing.T) {
@@ -51,7 +51,7 @@ func TestWithFile(t *testing.T) {
 			}
 
 			// Act
-			_, err = policy.NewEngine(policy.WithFile(tc.path))
+			_, err = cedarpolicy.NewEngine(cedarpolicy.WithFile(tc.path))
 
 			// Assert
 			if tc.wantError {
@@ -91,7 +91,7 @@ func TestWithBytes(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			// Act
-			_, err := policy.NewEngine(policy.WithBytes("p0", []byte(tc.policy)))
+			_, err := cedarpolicy.NewEngine(cedarpolicy.WithBytes("p0", []byte(tc.policy)))
 
 			// Assert
 			if tc.wantError {
