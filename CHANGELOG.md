@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.4.0](https://github.com/openkcm/extauthz/compare/v0.3.5...v0.4.0) (2025-08-19)
+
+
+### Features
+
+* refactor the cliendata and the policies ([#75](https://github.com/openkcm/extauthz/issues/75)) ([41d2c33](https://github.com/openkcm/extauthz/commit/41d2c33e698ca212b307f63a23aeaeb66dcc2377))
+
+
+### Bug Fixes
+
+* signing key management ([#71](https://github.com/openkcm/extauthz/issues/71)) ([9f7935f](https://github.com/openkcm/extauthz/commit/9f7935fd4011d369b427b805f6c91af948377a11))
+
 ## [0.3.5](https://github.com/openkcm/extauthz/compare/v0.3.4...v0.3.5) (2025-08-07)
 
 
