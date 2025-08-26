@@ -105,7 +105,11 @@ func (srv *Server) Check(ctx context.Context, req *envoy_auth.CheckRequest) (*en
 	}
 
 	// process the result
-	slogctx.Debug(ctx, "Check() result", "result", result.is, "info", result.info, "subject", result.subject)
+	ctx = slogctx.WithGroup(ctx, "result")
+	slogctx.Debug(ctx, "Check() result",
+		"is", result.is,
+		"info", result.info,
+		"subject", result.subject)
 
 	switch result.is {
 	case ALLOWED:

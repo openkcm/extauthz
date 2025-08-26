@@ -49,6 +49,14 @@ func (srv *Server) checkAuthHeader(ctx context.Context, authHeader, method, host
 			info: fmt.Sprintf("Error from JWT validation: %v", err)}
 	}
 
+	// prepare the result
+	res := checkResult{
+		is:      UNKNOWN,
+		subject: claims.Subject,
+		email:   claims.EMail,
+		groups:  claims.Groups,
+	}
+
 	// check the policies
 	slogctx.Debug(ctx, "Checking policies for JWT",
 		"subject", claims.Subject,
@@ -70,19 +78,17 @@ func (srv *Server) checkAuthHeader(ctx context.Context, authHeader, method, host
 		cedarpolicy.WithContextData(data),
 	)
 	if err != nil {
-		return checkResult{is: UNAUTHENTICATED,
-			info: fmt.Sprintf("Error from policy engine: %v", err)}
+		res.is = UNAUTHENTICATED
+		res.info = fmt.Sprintf("Error from policy engine: %v", err)
+		return res
 	}
 
 	if !allowed {
-		return checkResult{is: DENIED,
-			info: fmt.Sprintf("Reason from policy engine: %v", reason)}
+		res.is = DENIED
+		res.info = fmt.Sprintf("Reason from policy engine: %v", reason)
+		return res
 	}
 
-	return checkResult{
-		is:      ALLOWED,
-		subject: claims.Subject,
-		email:   claims.EMail,
-		groups:  claims.Groups,
-	}
+	res.is = ALLOWED
+	return res
 }
