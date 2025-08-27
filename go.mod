@@ -13,7 +13,7 @@ require (
 	github.com/openkcm/common-sdk v1.2.2
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/samber/oops v1.19.0
-	github.com/stretchr/testify v1.10.0
+	github.com/stretchr/testify v1.11.0
 	github.com/veqryn/slog-context v0.8.0
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250707201910-8d1bb00bc6a7
 	google.golang.org/grpc v1.75.0
