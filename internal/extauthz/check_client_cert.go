@@ -226,22 +226,32 @@ func (srv *Server) checkClientCert(ctx context.Context, certHeader, method, host
 			info: "Header subject not matching with certificate subject"}
 	}
 
+	// prepare the result
+	res := checkResult{
+		is:      UNKNOWN,
+		subject: subject,
+	}
+
 	// check if the subject is trusted and extract the region
 	region, ok := srv.trustedSubjectToRegion[subject]
 	if !ok {
-		return checkResult{is: DENIED,
-			info: "Subject not trusted"}
+		res.is = DENIED
+		res.info = "Subject not trusted"
+		return res
 	}
+	res.region = region
 
 	// check time bounds
 	if crt.NotBefore.After(time.Now()) {
-		return checkResult{is: DENIED,
-			info: "Certificate not yet valid"}
+		res.is = DENIED
+		res.info = "Certificate not yet valid"
+		return res
 	}
 
 	if crt.NotAfter.Before(time.Now()) {
-		return checkResult{is: DENIED,
-			info: "Certificate expired"}
+		res.is = DENIED
+		res.info = "Certificate expired"
+		return res
 	}
 
 	crtIssuer := formatIssuer(crt)
@@ -266,13 +276,15 @@ func (srv *Server) checkClientCert(ctx context.Context, certHeader, method, host
 		cedarpolicy.WithContextData(data),
 	)
 	if err != nil {
-		return checkResult{is: UNAUTHENTICATED,
-			info: fmt.Sprintf("Error from policy engine: %v", err)}
+		res.is = UNAUTHENTICATED
+		res.info = fmt.Sprintf("Error from policy engine: %v", err)
+		return res
 	}
 
 	if !allowed {
-		return checkResult{is: DENIED,
-			info: fmt.Sprintf("Reason from policy engine: %v", reason)}
+		res.is = DENIED
+		res.info = fmt.Sprintf("Reason from policy engine: %v", reason)
+		return res
 	}
 
 	// extract the email address from the certificate
@@ -280,11 +292,8 @@ func (srv *Server) checkClientCert(ctx context.Context, certHeader, method, host
 	if len(crt.EmailAddresses) > 0 {
 		email = crt.EmailAddresses[0]
 	}
+	res.email = email
 
-	return checkResult{
-		is:      ALLOWED,
-		subject: subject,
-		region:  region,
-		email:   email,
-	}
+	res.is = ALLOWED
+	return res
 }

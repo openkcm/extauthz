@@ -150,15 +150,15 @@ func TestCheckClientCert(t *testing.T) {
 			result := srv.checkClientCert(t.Context(), tc.certHeader, "GET", "my.service.com", "/foo/bar")
 
 			// Assert
-			if result.subject != tc.wantSubject {
+			if tc.wantSubject != "" && result.subject != tc.wantSubject {
 				t.Errorf("expected: %v, got: %v", tc.wantSubject, result.subject)
 			}
 
-			if result.email != tc.wantEmail {
+			if tc.wantEmail != "" && result.email != tc.wantEmail {
 				t.Errorf("expected: %v, got: %v", tc.wantEmail, result.email)
 			}
 
-			if result.region != tc.wantRegion {
+			if tc.wantRegion != "" && result.region != tc.wantRegion {
 				t.Errorf("expected: %v, got: %v", tc.wantRegion, result.region)
 			}
 		})
