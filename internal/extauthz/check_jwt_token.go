@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"strings"
 
 	slogctx "github.com/veqryn/slog-context"
 
@@ -13,15 +12,8 @@ import (
 	"github.com/openkcm/extauthz/internal/policies/cedarpolicy"
 )
 
-// checkAuthHeader checks the request using the authorization header, which should contain a JWT token.
-func (srv *Server) checkAuthHeader(ctx context.Context, authHeader, method, host, path string) checkResult {
-	// extract the token from the authorization header
-	prefix, tokenString, ok := strings.Cut(authHeader, " ")
-	if !ok || prefix != "Bearer" {
-		return checkResult{is: UNAUTHENTICATED,
-			info: "Invalid authorization header"}
-	}
-
+// checkJWTToken checks the request using the JWT bearer token.
+func (srv *Server) checkJWTToken(ctx context.Context, bearerToken, method, host, path string) checkResult {
 	// parse and validate the token and extract the claims
 	claims := struct {
 		Subject string   `json:"sub"`
@@ -32,7 +24,7 @@ func (srv *Server) checkAuthHeader(ctx context.Context, authHeader, method, host
 
 	allowIntrospectCache := method == http.MethodGet // Allow using cache for token introspection for GET requests
 
-	err := srv.jwtHandler.ParseAndValidate(ctx, tokenString, &claims, allowIntrospectCache)
+	err := srv.jwtHandler.ParseAndValidate(ctx, bearerToken, &claims, allowIntrospectCache)
 	if err != nil {
 		slogctx.Debug(ctx, "JWT validation failed", "error", err)
 

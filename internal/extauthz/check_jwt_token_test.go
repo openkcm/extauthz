@@ -122,8 +122,8 @@ func TestCheckAuthHeader(t *testing.T) {
 
 	// create the test cases
 	tests := []struct {
-		name       string
-		authHeader string
+		name        string
+		bearerToken string
 
 		wantCheckResultCode checkResultCode
 		wantSubject         string
@@ -136,24 +136,12 @@ func TestCheckAuthHeader(t *testing.T) {
 			name:                "zero values",
 			wantCheckResultCode: UNAUTHENTICATED,
 		}, {
-			name:                "invalid auth header 1",
-			authHeader:          "Foo123",
-			wantCheckResultCode: UNAUTHENTICATED,
-		}, {
-			name:                "invalid auth header 2",
-			authHeader:          "Foo 123",
-			wantCheckResultCode: UNAUTHENTICATED,
-		}, {
-			name:                "invalid auth header 3",
-			authHeader:          "Bearer 123",
-			wantCheckResultCode: UNAUTHENTICATED,
-		}, {
 			name:                "unauthorized",
-			authHeader:          "Bearer " + tokenStringInvalid,
+			bearerToken:         tokenStringInvalid,
 			wantCheckResultCode: DENIED,
 		}, {
 			name:                "authorized",
-			authHeader:          "Bearer " + tokenString,
+			bearerToken:         tokenString,
 			wantCheckResultCode: ALLOWED,
 			wantSubject:         "me",
 			wantEmail:           "me@my.world",
@@ -203,7 +191,7 @@ func TestCheckAuthHeader(t *testing.T) {
 			}
 
 			// Act
-			result := srv.checkAuthHeader(t.Context(), tc.authHeader, "GET", "my.service.com", "/foo/bar")
+			result := srv.checkJWTToken(t.Context(), tc.bearerToken, "GET", "my.service.com", "/foo/bar")
 
 			// Assert
 			if result.is != tc.wantCheckResultCode {

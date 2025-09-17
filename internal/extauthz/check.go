@@ -2,6 +2,8 @@ package extauthz
 
 import (
 	"context"
+	"net/http"
+	"strings"
 
 	"github.com/go-andiamo/splitter"
 	"github.com/openkcm/common-sdk/pkg/auth"
@@ -9,13 +11,13 @@ import (
 	envoy_core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	envoy_auth "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
 	slogctx "github.com/veqryn/slog-context"
-
-	"github.com/openkcm/extauthz/internal/flags"
 )
 
 const (
 	HeaderForwardedClientCert = "x-forwarded-client-cert"
 	HeaderAuthorization       = "authorization"
+	HeaderCookie              = "cookie"
+	SessionCookieName         = "session"
 )
 
 // Ensure Server implements the AuthorizationServer interface
@@ -35,109 +37,83 @@ func (srv *Server) Check(ctx context.Context, req *envoy_auth.CheckRequest) (*en
 
 	// log the header for debugging
 	httpreq := req.GetAttributes().GetRequest().GetHttp()
+	headers := httpreq.GetHeaders()
+	method := httpreq.GetMethod()
+	host := httpreq.GetHost()
+	path := httpreq.GetPath()
 	slogctx.Debug(ctx, "Check() called",
 		"id", httpreq.GetId(),
 		"protocol", httpreq.GetProtocol(),
-		"method", httpreq.GetMethod(),
+		"method", method,
 		"sheme", httpreq.GetScheme(),
-		"host", httpreq.GetHost(),
-		"path", httpreq.GetPath(),
-		"headers", httpreq.GetHeaders(),
+		"host", host,
+		"path", path,
+		"headers", headers,
 	)
 
-	// extract client certificate and authorization header
-	certHeader, certHeaderFound := req.GetAttributes().GetRequest().GetHttp().GetHeaders()[HeaderForwardedClientCert]
-	authHeader, authHeaderFound := req.GetAttributes().GetRequest().GetHttp().GetHeaders()[HeaderAuthorization]
-
+	// Authenticate in the following order:
+	// 1. Client certificates
+	// 2. Bearer token in the authorization header
+	// 3. Session cookie
+	// All results are merged, the most restrictive result wins.
 	result := checkResult{is: UNKNOWN}
 
-	// Verify if DisableJWTTokenComputation flag was explicitly set in the configuration with value `true`, then the
-	// JWT tokens handling should be disabled
-	// TODO: Remove this hacking code in September
-	if srv.featureGates.IsFeatureEnabled(flags.DisableJWTTokenComputation) {
-		slogctx.Error(ctx, "Check() processing of jwt token has been disabled through feature gates")
-
-		result.is = ALWAYS_ALLOW
-		authHeaderFound = false
-	}
-
-	// Verify if DisableClientCertificateComputation flag was explicitly set in the configuration with value `true`, then the
-	// Client Certificates handling should be disabled
-	// TODO: Remove this hacking code in September
-	if srv.featureGates.IsFeatureEnabled(flags.DisableClientCertificateComputation) {
-		slogctx.Error(ctx, "Check() processing of client certificate has been disabled through feature gates")
-
-		result.is = ALWAYS_ALLOW
-		certHeaderFound = false
-	}
-
-	if !certHeaderFound && !authHeaderFound {
-		result.info = "Missing client certificate or authorization header"
-		slogctx.Error(ctx, "Check() "+result.info)
-		// TODO: Enable this line once the above code was removed in September
-		//return respondUnauthenticated(result.info), nil
-	}
-
-	// prepare the result and run the checks
-	// each check may update the result if it is more restrictive
-	if certHeaderFound {
-		// there can be multiple certificates in the XFCC header
-		certHeaderParts, err := splitCertHeader(certHeader)
-		if err != nil {
-			return respondUnauthenticated("Invalid certificate header"), nil
-		}
-
-		for _, part := range certHeaderParts {
-			slogctx.Debug(ctx, "Check() processing certificate part", "part", part)
-			result.merge(srv.checkClientCert(ctx, part,
-				req.GetAttributes().GetRequest().GetHttp().GetMethod(),
-				req.GetAttributes().GetRequest().GetHttp().GetHost(),
-				req.GetAttributes().GetRequest().GetHttp().GetPath()))
+	// 1. Client certificates (if any)
+	if clientCerts, found := extractClientCertificates(headers); found {
+		slogctx.Debug(ctx, "Checking client certificate")
+		for nr, part := range clientCerts {
+			slogctx.Debug(ctx, "Checking client certificate", "part", nr)
+			result.merge(srv.checkClientCert(ctx, part, method, host, path))
+			result.withXFCCHeader = true
 		}
 	}
 
-	if authHeaderFound {
-		slogctx.Debug(ctx, "Check() processing authorization header")
-		result.merge(srv.checkAuthHeader(ctx, authHeader,
-			req.GetAttributes().GetRequest().GetHttp().GetMethod(),
-			req.GetAttributes().GetRequest().GetHttp().GetHost(),
-			req.GetAttributes().GetRequest().GetHttp().GetPath()))
+	// 2. Bearer token in the authorization header (if any)
+	if bearerToken, found := extractBearerToken(headers); found {
+		slogctx.Debug(ctx, "Checking bearer token from authorization header")
+		result.merge(srv.checkJWTToken(ctx, bearerToken, method, host, path))
 	}
 
-	// process the result
+	// 3. Session cookie (if any)
+	if sessionCookie, found := extractSessionCookie(headers); found {
+		slogctx.Debug(ctx, "Checking session cookie")
+		if session, found := srv.sessionCache.Get(ctx, sessionCookie.Value); found {
+			slogctx.Debug(ctx, "Checking token from session store")
+			result.merge(srv.checkJWTToken(ctx, session.IDToken, method, host, path))
+		}
+	}
+
+	// Log the result for debugging
 	ctx = slogctx.WithGroup(ctx, "result")
 	slogctx.Debug(ctx, "Check() result",
 		"is", result.is,
 		"info", result.info,
 		"subject", result.subject)
 
+	// Prepare the response
 	switch result.is {
 	case ALLOWED:
-		var (
-			headers         []*envoy_core.HeaderValueOption
-			headersToRemove []string
-		)
+		headersToAdd := []*envoy_core.HeaderValueOption{}
+		headersToRemove := []string{HeaderForwardedClientCert}
 
 		if srv.clientDataFactory == nil || srv.clientDataFactory.IsDisabled() {
-			return respondAllowed(headers, headersToRemove), nil
+			return respondAllowed(headersToAdd, headersToRemove), nil
 		}
 
-		opts := result.toClientDataOptions(certHeaderFound)
-
-		b64data, b64sig, err := srv.clientDataFactory.CreateAndEncode(opts...)
+		b64data, b64sig, err := srv.clientDataFactory.CreateAndEncode(
+			result.toClientDataOptions()...,
+		)
 		if err != nil {
 			slogctx.Error(ctx, "Failed to encode client data", "error", err)
 			return respondInternalServerError(), nil
 		}
 
-		headers = []*envoy_core.HeaderValueOption{
+		headersToAdd = []*envoy_core.HeaderValueOption{
 			headerValueOption(auth.HeaderClientData, b64data),
 			headerValueOption(auth.HeaderClientDataSignature, b64sig),
 		}
-		// remove other headers the backend shall not see
-		headersToRemove = []string{HeaderForwardedClientCert}
 
-		return respondAllowed(headers, headersToRemove), nil
+		return respondAllowed(headersToAdd, headersToRemove), nil
 	case ALWAYS_ALLOW:
 		return respondAllowed([]*envoy_core.HeaderValueOption{}, []string{}), nil
 	case UNKNOWN, UNAUTHENTICATED:
@@ -145,6 +121,52 @@ func (srv *Server) Check(ctx context.Context, req *envoy_auth.CheckRequest) (*en
 	}
 
 	return respondPermissionDenied(), nil
+}
+
+func extractClientCertificates(headers map[string]string) ([]string, bool) {
+	certHeader, found := headers[HeaderForwardedClientCert]
+	if !found {
+		return nil, false
+	}
+	// there can be multiple certificates in the XFCC header
+	certHeaderParts, err := splitCertHeader(certHeader)
+	if err != nil {
+		return nil, false
+	}
+
+	return certHeaderParts, true
+}
+
+func extractBearerToken(headers map[string]string) (string, bool) {
+	authHeader, found := headers[HeaderAuthorization]
+	if !found {
+		return "", false
+	}
+
+	prefix, bearerToken, found := strings.Cut(authHeader, " ")
+	if !found || prefix != "Bearer" {
+		return "", false
+	}
+
+	return bearerToken, true
+}
+
+func extractSessionCookie(headers map[string]string) (*http.Cookie, bool) {
+	cookieHeader, found := headers[HeaderCookie]
+	if !found {
+		return nil, false
+	}
+	cookies, err := http.ParseCookie(cookieHeader)
+	if err != nil {
+		return nil, false
+	}
+	for _, cookie := range cookies {
+		if cookie.Name == SessionCookieName {
+			return cookie, true
+		}
+	}
+
+	return nil, false
 }
 
 // splitCertHeader splits the XFCC header on , in case there are multiple certificates.
