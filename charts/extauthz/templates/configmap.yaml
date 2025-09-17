@@ -67,3 +67,8 @@ data:
     clientData:
       {{- toYaml . | nindent 6 }}
     {{- end }}
+
+    {{- with .Values.config.valkeySessionCache }}
+    valkeySessionCache:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}

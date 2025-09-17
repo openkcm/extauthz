@@ -1,9 +1,11 @@
 package extauthz
 
 import (
+	"context"
 	"errors"
 
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
+	"github.com/openkcm/session-manager/pkg/session"
 	"github.com/samber/oops"
 
 	"github.com/openkcm/extauthz/internal/clientdata"
@@ -12,12 +14,27 @@ import (
 	"github.com/openkcm/extauthz/internal/policies/cedarpolicy"
 )
 
+// sessionLoaderInterface defines the interface for loading sessions.
+// We don't use session.Repository directly to avoid depending on
+// unnecessary methods and to make testing easier.
+type sessionLoaderInterface interface {
+	LoadSession(ctx context.Context, sessionID string) (session.Session, error)
+}
+
+// oidcHandlerInterface defines the interface for JWT handling.
+// We don't use oidc.Handler directly to make testing easier.
+type oidcHandlerInterface interface {
+	ParseAndValidate(ctx context.Context, rawToken string, userclaims any, allowIntrospectCache bool) error
+	Introspect(ctx context.Context, issuer, bearerToken, introspectToken string, allowCache bool) (oidc.Introspection, error)
+}
+
 type Server struct {
 	policyEngine           policies.Engine
-	oidcHandler            *oidc.Handler
+	oidcHandler            oidcHandlerInterface
 	clientDataSigner       *clientdata.Signer
 	trustedSubjectToRegion map[string]string
 	featureGates           *commoncfg.FeatureGates
+	sessionCache           sessionLoaderInterface
 }
 
 // ServerOption is used to configure a server.
@@ -35,7 +52,7 @@ func WithTrustedSubjects(m map[string]string) ServerOption {
 	}
 }
 
-func WithOIDCHandler(hdl *oidc.Handler) ServerOption {
+func WithOIDCHandler(hdl oidcHandlerInterface) ServerOption {
 	return func(server *Server) error {
 		if hdl == nil {
 			return errors.New("jwt handler must not be nil")
@@ -74,6 +91,13 @@ func WithPolicyEngine(pe policies.Engine) ServerOption {
 func WithFeatureGates(fg *commoncfg.FeatureGates) ServerOption {
 	return func(server *Server) error {
 		server.featureGates = fg
+		return nil
+	}
+}
+
+func WithSessionCache(sessionCache sessionLoaderInterface) ServerOption {
+	return func(server *Server) error {
+		server.sessionCache = sessionCache
 		return nil
 	}
 }
