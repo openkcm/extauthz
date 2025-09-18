@@ -129,6 +129,7 @@ func TestCheckAuthHeader(t *testing.T) {
 		wantSubject         string
 		wantRegion          string
 		wantEmail           string
+		wantIssuer          string
 		wantGroups          []string
 	}{
 		{
@@ -156,6 +157,7 @@ func TestCheckAuthHeader(t *testing.T) {
 			wantCheckResultCode: ALLOWED,
 			wantSubject:         "me",
 			wantEmail:           "me@my.world",
+			wantIssuer:          issuerURL.String(),
 			wantGroups:          []string{"groupA", "groupB"},
 		},
 	}
@@ -214,6 +216,10 @@ func TestCheckAuthHeader(t *testing.T) {
 
 			if result.email != tc.wantEmail {
 				t.Errorf("expected: %v, got: %v", tc.wantEmail, result.email)
+			}
+
+			if result.issuer != tc.wantIssuer {
+				t.Errorf("expected: %v, got: %v", tc.wantIssuer, result.issuer)
 			}
 
 			if !reflect.DeepEqual(result.groups, tc.wantGroups) {

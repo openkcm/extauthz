@@ -55,6 +55,7 @@ func (srv *Server) checkAuthHeader(ctx context.Context, authHeader, method, host
 		subject: claims.Subject,
 		email:   claims.EMail,
 		groups:  claims.Groups,
+		issuer:  claims.Issuer,
 	}
 
 	// check the policies
