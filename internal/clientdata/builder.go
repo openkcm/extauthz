@@ -44,6 +44,12 @@ func WithRegion(val string) Option {
 		return nil
 	}
 }
+func WithIssuer(val string) Option {
+	return func(b *clientDataBuilder) error {
+		b.Issuer = val
+		return nil
+	}
+}
 func WithGroups(vals []string) Option {
 	return func(b *clientDataBuilder) error {
 		b.Groups = vals

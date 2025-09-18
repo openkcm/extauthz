@@ -21,6 +21,7 @@ type checkResult struct {
 	subject string
 	email   string
 	region  string
+	issuer  string
 	groups  []string
 }
 
@@ -40,6 +41,7 @@ func (r *checkResult) toClientDataOptions(withXFCCHeader bool) []clientdata.Opti
 		clientdata.WithEmail(r.email),
 		clientdata.WithRegion(r.region),
 		clientdata.WithGroups(r.groups),
+		clientdata.WithIssuer(r.issuer),
 	}
 }
 
@@ -53,5 +55,6 @@ func (cr *checkResult) merge(other checkResult) {
 		cr.email = other.email
 		cr.region = other.region
 		cr.groups = other.groups
+		cr.issuer = other.issuer
 	}
 }
