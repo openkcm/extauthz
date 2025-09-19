@@ -13,7 +13,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
@@ -23,7 +22,6 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
-	"k8s.io/client-go/rest/fake"
 )
 
 func TestNewHandler(t *testing.T) {
@@ -74,17 +72,6 @@ func TestNewHandler(t *testing.T) {
 			checkFunc: func(h *Handler) error {
 				if _, found := h.cache.Get(providerUrl.Host); !found {
 					return errors.New("expected providers to be initialized")
-				}
-				return nil
-			},
-		}, {
-			name: "with k8s providers",
-			opts: []HandlerOption{
-				WithK8sJWTProviders(true, "crdAPIGroup", "crdAPIVersion", "crdName", "crdNameSpace"),
-			},
-			checkFunc: func(h *Handler) error {
-				if !h.k8sJWTProvidersEnabled {
-					return errors.New("expected k8s providers to be enabled")
 				}
 				return nil
 			},
@@ -440,161 +427,5 @@ func issuerClaimHandler(claimKey string) func(h *Handler) error {
 		}
 
 		return nil
-	}
-}
-
-func TestK8sJWTProviderFor(t *testing.T) {
-	// create the test cases
-	tests := []struct {
-		name            string
-		issuer          string
-		invalidResponse []byte
-		response        JWTProviderResult
-		error           error
-		wantError       bool
-	}{
-		{
-			name:      "zero values",
-			wantError: true,
-		}, {
-			name:      "mock error",
-			error:     errors.New("mock error"),
-			wantError: true,
-		}, {
-			name:            "invalid response",
-			invalidResponse: []byte("invalid response"),
-			wantError:       true,
-		}, {
-			name:   "no providers",
-			issuer: "foo",
-			response: JWTProviderResult{
-				Items: []JWTProvider{},
-			},
-			wantError: true,
-		}, {
-			name:   "found providers without the issuer",
-			issuer: "example.com",
-			response: JWTProviderResult{
-				Items: []JWTProvider{
-					{
-						Spec: Spec{
-							Issuer:     "https://foo.com/",
-							RemoteJwks: RemoteJWKS{URI: "https://foo.com/jwks"},
-							Audiences:  []string{"aud1", "aud2"},
-						},
-					}, {
-						Spec: Spec{
-							Issuer:     "https://bar.com/",
-							RemoteJwks: RemoteJWKS{URI: "https://bar.com/jwk"},
-							Audiences:  []string{"aud1", "aud2"},
-						},
-					},
-				},
-			},
-			wantError: true,
-		}, {
-			name:   "found providers without the issuer",
-			issuer: "example.com",
-			response: JWTProviderResult{
-				Items: []JWTProvider{
-					{
-						Spec: Spec{
-							Issuer:     "https://foo.com/",
-							RemoteJwks: RemoteJWKS{URI: "https://foo.com/jwks"},
-							Audiences:  []string{"aud1", "aud2"},
-						},
-					}, {
-						Spec: Spec{
-							Issuer:     "%https://bar.com/",
-							RemoteJwks: RemoteJWKS{URI: "%https://bar.com/jwks"},
-							Audiences:  []string{"aud1", "aud2"},
-						},
-					},
-				},
-			},
-			wantError: true,
-		}, {
-			name:   "found providers including the issuer with invalid JWKS URI",
-			issuer: "example.com",
-			response: JWTProviderResult{
-				Items: []JWTProvider{
-					{
-						Spec: Spec{
-							RemoteJwks: RemoteJWKS{URI: "%https://example.com/jwks"},
-							Audiences:  []string{"aud1", "aud2"},
-						},
-					}, {
-						Spec: Spec{
-							RemoteJwks: RemoteJWKS{URI: "%https://bar.com/jwks"},
-							Audiences:  []string{"aud1", "aud2"},
-						},
-					},
-				},
-			},
-			wantError: true,
-		}, {
-			name:   "found providers including the issuer",
-			issuer: "example.com",
-			response: JWTProviderResult{
-				Items: []JWTProvider{
-					{
-						Spec: Spec{
-							Issuer: "https://example.com/",
-						},
-					}, {
-						Spec: Spec{
-							Issuer: "%https://bar.com/",
-						},
-					},
-				},
-			},
-			wantError: false,
-		},
-	}
-
-	// run the tests
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			// Arrange
-			hdl, err := NewHandler(WithK8sJWTProviders(true, "crdAPIGroup", "crdAPIVersion", "crdName", "crdNameSpace"))
-			if err != nil {
-				t.Fatalf("could not create handler: %s", err)
-			}
-
-			fakeResponse, err := json.Marshal(tc.response)
-			if err != nil {
-				t.Fatalf("could not marshal fake response: %s", err)
-			}
-
-			if tc.invalidResponse != nil {
-				fakeResponse = tc.invalidResponse
-			}
-
-			fakeK8sRestClient := &fake.RESTClient{
-				Err: tc.error,
-				Resp: &http.Response{
-					StatusCode: http.StatusOK,
-					Body:       io.NopCloser(bytes.NewReader(fakeResponse)),
-				},
-			}
-
-			// Act
-			p, err := hdl.k8sJWTProviderFor(t.Context(), fakeK8sRestClient, tc.issuer)
-
-			// Assert
-			if tc.wantError {
-				if err == nil {
-					t.Error("expected error, but got nil")
-				}
-
-				if p != nil {
-					t.Errorf("expected nil provider, but got: %v", p)
-				}
-			} else {
-				if err != nil {
-					t.Errorf("unexpected error: %s", err)
-				}
-			}
-		})
 	}
 }

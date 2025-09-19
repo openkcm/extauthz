@@ -243,8 +243,6 @@ config:
   featureGates:
     enrich-header-with-client-type: true
     enrich-header-with-client-region: true
-    disable-client-certificate-computation: false
-    disable-jwt-token-computation: false
 
   cedar:
     policyPath: /etc/extauthz-policies
@@ -257,12 +255,21 @@ config:
   jwt:
     issuerClaimKeys:
       - iss
-    k8sProviders:
-      apiGroup: gateway.extensions.envoyproxy.io
-      apiVersion: v1alpha1
-      name: jwtproviders
-      namespace: default
+    providers:
+      - issuer: https://my.oidc.jwt.provider.com/
+        audiences:
+          - my-audience
+    providerSource:
+      address: localhost:5555
+      secretRef:
+        type: insecure
 
   clientData:
     # Signing client data
     signingKeyIDFilePath: /etc/extauthz-signing/keyId
+
+  sessionCache:
+    valkey:
+      initAddress: ["localhost:6379"]
+      secretRef:
+        type: insecure

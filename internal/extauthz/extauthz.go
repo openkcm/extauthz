@@ -1,6 +1,7 @@
 package extauthz
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
@@ -12,12 +13,22 @@ import (
 	"github.com/openkcm/extauthz/internal/policies/cedarpolicy"
 )
 
+type Session struct {
+	IDToken string
+}
+
+type SessionCache interface {
+	// Get returns the session struct associated with the session ID (if any).
+	Get(ctx context.Context, sessionID string) (*Session, bool)
+}
+
 type Server struct {
 	policyEngine           policies.Engine
 	jwtHandler             *jwthandler.Handler
 	clientDataFactory      *clientdata.Factory
 	trustedSubjectToRegion map[string]string
 	featureGates           *commoncfg.FeatureGates
+	sessionCache           SessionCache
 }
 
 // ServerOption is used to configure a server.
@@ -74,6 +85,13 @@ func WithPolicyEngine(pe policies.Engine) ServerOption {
 func WithFeatureGates(fg *commoncfg.FeatureGates) ServerOption {
 	return func(server *Server) error {
 		server.featureGates = fg
+		return nil
+	}
+}
+
+func WithSessionCache(sessionCache SessionCache) ServerOption {
+	return func(server *Server) error {
+		server.sessionCache = sessionCache
 		return nil
 	}
 }
