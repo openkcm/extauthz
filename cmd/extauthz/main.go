@@ -14,19 +14,23 @@ import (
 	"github.com/openkcm/common-sdk/pkg/logger"
 	"github.com/openkcm/common-sdk/pkg/otlp"
 	"github.com/openkcm/common-sdk/pkg/status"
+	"github.com/openkcm/common-sdk/pkg/utils"
 	"github.com/samber/oops"
 
 	slogctx "github.com/veqryn/slog-context"
 
-	root "github.com/openkcm/extauthz"
 	"github.com/openkcm/extauthz/internal/business"
 	"github.com/openkcm/extauthz/internal/config"
 )
 
-var versionFlag = flag.Bool("version", false, "print version information")
-var gracefulShutdownSec = flag.Int64("graceful-shutdown", 1, "graceful shutdown seconds")
-var gracefulShutdownMessage = flag.String("graceful-shutdown-message", "Graceful shutdown in %d seconds",
-	"graceful shutdown message")
+var (
+	BuildInfo = "{}"
+
+	versionFlag             = flag.Bool("version", false, "print version information")
+	gracefulShutdownSec     = flag.Int64("graceful-shutdown", 1, "graceful shutdown seconds")
+	gracefulShutdownMessage = flag.String("graceful-shutdown-message", "Graceful shutdown in %d seconds",
+		"graceful shutdown message")
+)
 
 // run does the heavy lifting until the service is up and running. It will:
 //   - Load the config and initializes the logger
@@ -48,7 +52,7 @@ func run(ctx context.Context) error {
 			Wrapf(err, "Failed to load the configuration")
 	}
 
-	err = commoncfg.UpdateConfigVersion(&cfg.BaseConfig, root.BuildVersion)
+	err = commoncfg.UpdateConfigVersion(&cfg.BaseConfig, BuildInfo)
 	if err != nil {
 		return oops.In("main").
 			Wrapf(err, "Failed to update the version configuration")
@@ -146,7 +150,7 @@ func main() {
 	flag.Parse()
 
 	if *versionFlag {
-		fmt.Println(root.BuildVersion)
+		fmt.Println(utils.ExtractFromComplexValue(BuildInfo))
 		os.Exit(0)
 	}
 
