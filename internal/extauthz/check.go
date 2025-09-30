@@ -42,7 +42,6 @@ func (srv *Server) Check(ctx context.Context, req *envoy_auth.CheckRequest) (*en
 		"sheme", httpreq.GetScheme(),
 		"host", httpreq.GetHost(),
 		"path", httpreq.GetPath(),
-		"headers", httpreq.GetHeaders(),
 	)
 
 	// extract client certificate and authorization header
