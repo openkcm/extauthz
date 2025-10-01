@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.1](https://github.com/openkcm/extauthz/compare/v0.4.0...v0.4.1) (2025-10-01)
+
+
+### Bug Fixes
+
+* do not log http headers ([#99](https://github.com/openkcm/extauthz/issues/99)) ([b1b80e6](https://github.com/openkcm/extauthz/commit/b1b80e65f60da0d3c389714b37f858747e763cce)), closes [#98](https://github.com/openkcm/extauthz/issues/98)
+* get rid of the build_version.json file to inject build information ([#93](https://github.com/openkcm/extauthz/issues/93)) ([b22c611](https://github.com/openkcm/extauthz/commit/b22c6113f113c73ea6bcf255f270d9ff8012fe6c))
+
 ## [0.4.0](https://github.com/openkcm/extauthz/compare/v0.3.5...v0.4.0) (2025-08-19)
 
 
