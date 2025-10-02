@@ -12,7 +12,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/openkcm/common-sdk v1.4.0
 	github.com/patrickmn/go-cache v2.1.0+incompatible
-	github.com/samber/oops v1.19.0
+	github.com/samber/oops v1.19.3
 	github.com/stretchr/testify v1.11.1
 	github.com/veqryn/slog-context v0.8.0
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250826171959-ef028d996bc1
