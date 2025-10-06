@@ -8,7 +8,7 @@ type checkResultCode uint
 
 const (
 	UNKNOWN checkResultCode = iota
-	CONDITIONAL_ALLOWED
+	ALWAYS_ALLOW
 	ALLOWED
 	DENIED
 	UNAUTHENTICATED

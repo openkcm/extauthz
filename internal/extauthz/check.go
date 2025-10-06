@@ -56,7 +56,7 @@ func (srv *Server) Check(ctx context.Context, req *envoy_auth.CheckRequest) (*en
 	if srv.featureGates.IsFeatureEnabled(flags.DisableJWTTokenComputation) {
 		slogctx.Error(ctx, "Check() processing of jwt token has been disabled through feature gates")
 
-		result.is = CONDITIONAL_ALLOWED
+		result.is = ALWAYS_ALLOW
 		authHeaderFound = false
 	}
 
@@ -66,7 +66,7 @@ func (srv *Server) Check(ctx context.Context, req *envoy_auth.CheckRequest) (*en
 	if srv.featureGates.IsFeatureEnabled(flags.DisableClientCertificateComputation) {
 		slogctx.Error(ctx, "Check() processing of client certificate has been disabled through feature gates")
 
-		result.is = CONDITIONAL_ALLOWED
+		result.is = ALWAYS_ALLOW
 		certHeaderFound = false
 	}
 
@@ -137,7 +137,7 @@ func (srv *Server) Check(ctx context.Context, req *envoy_auth.CheckRequest) (*en
 		headersToRemove = []string{HeaderForwardedClientCert}
 
 		return respondAllowed(headers, headersToRemove), nil
-	case CONDITIONAL_ALLOWED:
+	case ALWAYS_ALLOW:
 		return respondAllowed([]*envoy_core.HeaderValueOption{}, []string{}), nil
 	case UNKNOWN, UNAUTHENTICATED:
 		return respondUnauthenticated(result.info), nil
