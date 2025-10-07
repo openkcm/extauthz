@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.4.2](https://github.com/openkcm/extauthz/compare/v0.4.1...v0.4.2) (2025-10-07)
+
+
+### Bug Fixes
+
+* change the value for ALWAYS_ALLOW as wasn't merged the result ([#104](https://github.com/openkcm/extauthz/issues/104)) ([5224a54](https://github.com/openkcm/extauthz/commit/5224a54635e6fe47c95856794737efaf1340474f))
+* **deps:** Bump github.com/envoyproxy/go-control-plane/envoy ([#96](https://github.com/openkcm/extauthz/issues/96)) ([3c133b1](https://github.com/openkcm/extauthz/commit/3c133b14accb8b54229d4f07df4198b0d798b681))
+* **deps:** Bump github.com/go-jose/go-jose/v4 from 4.1.2 to 4.1.3 ([#103](https://github.com/openkcm/extauthz/issues/103)) ([e4539a4](https://github.com/openkcm/extauthz/commit/e4539a442d71050e32222067d11137f0e0c42770))
+* **deps:** Bump github.com/openkcm/common-sdk from 1.4.0 to 1.4.5 ([#102](https://github.com/openkcm/extauthz/issues/102)) ([88f23aa](https://github.com/openkcm/extauthz/commit/88f23aaad4abffa34536ab25f28717c241ef6a81))
+* **deps:** Bump google.golang.org/grpc from 1.75.1 to 1.76.0 ([#105](https://github.com/openkcm/extauthz/issues/105)) ([b1f9aa2](https://github.com/openkcm/extauthz/commit/b1f9aa28d2fe586de25490a0029cec0ee1939439))
+
 ## [0.4.1](https://github.com/openkcm/extauthz/compare/v0.4.0...v0.4.1) (2025-10-01)
 
 
