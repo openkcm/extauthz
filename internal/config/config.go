@@ -38,7 +38,7 @@ type Cedar struct {
 	PolicyPath string
 }
 
-// gRPC server configuration
+// GRPCServer server configuration
 type GRPCServer struct {
 	commoncfg.GRPCServer `mapstructure:",squash"`
 

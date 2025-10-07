@@ -8,11 +8,10 @@ type checkResultCode uint
 
 const (
 	UNKNOWN checkResultCode = iota
+	ALWAYS_ALLOW
 	ALLOWED
 	DENIED
 	UNAUTHENTICATED
-
-	ALWAYS_ALLOW = 100
 )
 
 type checkResult struct {
