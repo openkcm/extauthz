@@ -103,8 +103,8 @@ github.com/onsi/ginkgo/v2 v2.21.0 h1:7rg/4f3rB88pb5obDgNZrNHrQ4e6WpjonchcpuBRnZM
 github.com/onsi/ginkgo/v2 v2.21.0/go.mod h1:7Du3c42kxCUegi0IImZ1wUQzMBVecgIHjR1C+NkhLQo=
 github.com/onsi/gomega v1.35.1 h1:Cwbd75ZBPxFSuZ6T+rN/WCb/gOc6YgFBXLlZLhC7Ds4=
 github.com/onsi/gomega v1.35.1/go.mod h1:PvZbdDc8J6XJEpDK4HCuRBm8a6Fzp9/DmhC9C7yFlog=
-github.com/openkcm/common-sdk v1.4.5 h1:w8O1MKPViaot89uiGz9K15PUWIX5RsoZuBYmo2f+yMc=
-github.com/openkcm/common-sdk v1.4.5/go.mod h1:QEcHRasBD8BHJaUjHq1XHKB7rvfRmgnHvitS2ANT+kc=
+github.com/openkcm/common-sdk v1.4.6 h1:w1MqBMFXjqsROXDzcSVBpKyG/ajs2lWxs//cGIbP7FY=
+github.com/openkcm/common-sdk v1.4.6/go.mod h1:QEcHRasBD8BHJaUjHq1XHKB7rvfRmgnHvitS2ANT+kc=
 github.com/patrickmn/go-cache v2.1.0+incompatible h1:HRMgzkcYKYpi3C8ajMPV8OFXaaRUnok+kx1WdO15EQc=
 github.com/patrickmn/go-cache v2.1.0+incompatible/go.mod h1:3Qf8kWWT7OJRJbdiICTKqZju1ZixQ/KpMGzzAfe6+WQ=
 github.com/pborman/getopt v0.0.0-20170112200414-7148bc3a4c30/go.mod h1:85jBQOZwpVEaDAr341tbn15RS4fCAsIst0qp7i8ex1o=
