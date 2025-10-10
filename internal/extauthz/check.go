@@ -2,6 +2,7 @@ package extauthz
 
 import (
 	"context"
+	"strings"
 
 	"github.com/go-andiamo/splitter"
 	"github.com/openkcm/common-sdk/pkg/auth"
@@ -48,64 +49,53 @@ func (srv *Server) Check(ctx context.Context, req *envoy_auth.CheckRequest) (*en
 		"path", path,
 	)
 
-	// extract client certificate and authorization header
-	certHeader, certHeaderFound := headers[HeaderForwardedClientCert]
-	authHeader, authHeaderFound := headers[HeaderAuthorization]
-
+	// Authenticate in the following order:
+	// 1. Client certificates
+	// 2. Bearer token in the authorization header
+	// 3. Session cookie (not implemented yet)
+	// All results are merged, the most restrictive result wins.
 	result := checkResult{is: UNKNOWN}
-
-	// Verify if DisableJWTTokenComputation flag was explicitly set in the configuration with value `true`, then the
-	// JWT tokens handling should be disabled
-	// TODO: Remove this hacking code in September
-	if srv.featureGates.IsFeatureEnabled(flags.DisableJWTTokenComputation) {
-		slogctx.Error(ctx, "Check() processing of jwt token has been disabled through feature gates")
-
-		result.is = ALWAYS_ALLOW
-		authHeaderFound = false
-	}
 
 	// Verify if DisableClientCertificateComputation flag was explicitly set in the configuration with value `true`, then the
 	// Client Certificates handling should be disabled
-	// TODO: Remove this hacking code in September
+	// TODO: Remove this hacking code as soon as we have session support
+	skipClientCertificates := false
 	if srv.featureGates.IsFeatureEnabled(flags.DisableClientCertificateComputation) {
 		slogctx.Error(ctx, "Check() processing of client certificate has been disabled through feature gates")
-
 		result.is = ALWAYS_ALLOW
-		certHeaderFound = false
+		skipClientCertificates = true
 	}
 
-	if !certHeaderFound && !authHeaderFound {
-		result.info = "Missing client certificate or authorization header"
-		slogctx.Error(ctx, "Check() "+result.info)
-		// TODO: Enable this line once the above code was removed in September
-		//return respondUnauthenticated(result.info), nil
+	// Verify if DisableJWTTokenComputation flag was explicitly set in the configuration with value `true`, then the
+	// JWT tokens handling should be disabled
+	// TODO: Remove this hacking code as soon as we have session support
+	skipBearerToken := false
+	if srv.featureGates.IsFeatureEnabled(flags.DisableJWTTokenComputation) {
+		slogctx.Error(ctx, "Check() processing of jwt token has been disabled through feature gates")
+		result.is = ALWAYS_ALLOW
+		skipBearerToken = true
 	}
 
-	// prepare the result and run the checks
-	// each check may update the result if it is more restrictive
-	if certHeaderFound {
-		// there can be multiple certificates in the XFCC header
-		certHeaderParts, err := splitCertHeader(certHeader)
-		if err != nil {
-			return respondUnauthenticated("Invalid certificate header"), nil
-		}
-
-		for _, part := range certHeaderParts {
-			slogctx.Debug(ctx, "Check() processing certificate part", "part", part)
-			result.withXFCCHeader = true
-			result.merge(srv.checkClientCert(ctx, part,
-				req.GetAttributes().GetRequest().GetHttp().GetMethod(),
-				req.GetAttributes().GetRequest().GetHttp().GetHost(),
-				req.GetAttributes().GetRequest().GetHttp().GetPath()))
+	// TODO: Remove this hacking code as soon as we have session support
+	if !skipClientCertificates {
+		// 1. Client certificates (if any)
+		if clientCerts, found := extractClientCertificates(headers); found {
+			slogctx.Debug(ctx, "Checking client certificate")
+			for nr, part := range clientCerts {
+				slogctx.Debug(ctx, "Checking client certificate", "part", nr)
+				result.merge(srv.checkClientCert(ctx, part, method, host, path))
+				result.withXFCCHeader = true
+			}
 		}
 	}
 
-	if authHeaderFound {
-		slogctx.Debug(ctx, "Check() processing authorization header")
-		result.merge(srv.checkAuthHeader(ctx, authHeader,
-			req.GetAttributes().GetRequest().GetHttp().GetMethod(),
-			req.GetAttributes().GetRequest().GetHttp().GetHost(),
-			req.GetAttributes().GetRequest().GetHttp().GetPath()))
+	// TODO: Remove this hacking code as soon as we have session support
+	if !skipBearerToken {
+		// 2. Bearer token in the authorization header (if any)
+		if bearerToken, found := extractBearerToken(headers); found {
+			slogctx.Debug(ctx, "Checking bearer token from authorization header")
+			result.merge(srv.checkJWTToken(ctx, bearerToken, method, host, path))
+		}
 	}
 
 	// Log the result for debugging
@@ -146,6 +136,34 @@ func (srv *Server) Check(ctx context.Context, req *envoy_auth.CheckRequest) (*en
 	}
 
 	return respondPermissionDenied(), nil
+}
+
+func extractClientCertificates(headers map[string]string) ([]string, bool) {
+	certHeader, found := headers[HeaderForwardedClientCert]
+	if !found {
+		return nil, false
+	}
+	// there can be multiple certificates in the XFCC header
+	certHeaderParts, err := splitCertHeader(certHeader)
+	if err != nil {
+		return nil, false
+	}
+
+	return certHeaderParts, true
+}
+
+func extractBearerToken(headers map[string]string) (string, bool) {
+	authHeader, found := headers[HeaderAuthorization]
+	if !found {
+		return "", false
+	}
+
+	prefix, bearerToken, found := strings.Cut(authHeader, " ")
+	if !found || prefix != "Bearer" {
+		return "", false
+	}
+
+	return bearerToken, true
 }
 
 // splitCertHeader splits the XFCC header on , in case there are multiple certificates.

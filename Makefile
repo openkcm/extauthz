@@ -44,6 +44,7 @@ test: clean
 
 	# merge coverage
 	go tool covdata textfmt -i=./cover/unit,./cover/integration -o cover.out
+	go tool cover -func=cover.out
 
 	# On a Mac, you can use the following command to open the coverage report in the browser
 	# go tool cover -html=cover.out -o cover.html && open cover.html
