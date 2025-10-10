@@ -213,7 +213,6 @@ func TestCheckAuthHeader(t *testing.T) {
 			if err != nil {
 				t.Fatalf("could not start the server: %s", err)
 			}
-
 			// Act
 			result := srv.checkJWTToken(t.Context(), tc.bearerToken, "GET", "my.service.com", "/foo/bar")
 
