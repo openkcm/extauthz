@@ -38,9 +38,8 @@ type Signer struct {
 	enabled      bool
 	featureGates *commoncfg.FeatureGates
 
-	keyIdFileName     string
-	signingKeyLoader  *loader.Loader
-	signingKeyStorage keyvalue.ReadOnlyStringToBytesStorage
+	keyIdFileName    string
+	signingKeyLoader *loader.Loader
 }
 
 func NewSigner(featureGates *commoncfg.FeatureGates, cfg *config.ClientData) (*Signer, error) {
@@ -51,22 +50,20 @@ func NewSigner(featureGates *commoncfg.FeatureGates, cfg *config.ClientData) (*S
 
 	path, keyIDFileName := filepath.Split(cfg.SigningKeyIDFilePath)
 
-	memoryStorage := keyvalue.NewMemoryStorage[string, []byte]()
 	signingKeyLoader, err := loader.Create(
 		loader.OnPath(path),
 		loader.WithKeyIDType(loader.FileNameWithExtension),
-		loader.WithStorage(memoryStorage),
+		loader.WithStorage(keyvalue.NewMemoryStorage[string, []byte]()),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load signing key: %w", err)
 	}
 
 	return &Signer{
-		enabled:           true,
-		keyIdFileName:     keyIDFileName,
-		signingKeyLoader:  signingKeyLoader,
-		signingKeyStorage: signingKeyLoader.Storage(),
-		featureGates:      featureGates,
+		enabled:          true,
+		keyIdFileName:    keyIDFileName,
+		signingKeyLoader: signingKeyLoader,
+		featureGates:     featureGates,
 	}, nil
 }
 
@@ -87,7 +84,7 @@ func (c *Signer) IsDisabled() bool {
 }
 
 func (c *Signer) Sign(opts ...Option) (string, string, error) {
-	fbytes, exist := c.signingKeyStorage.Get(c.keyIdFileName)
+	fbytes, exist := c.signingKeyLoader.Storage().Get(c.keyIdFileName)
 	if !exist {
 		return "", "", fmt.Errorf("signing key with ID %q not found in storage", c.keyIdFileName)
 	}
@@ -131,7 +128,7 @@ func (c *Signer) Close() error {
 
 func (c *Signer) lookupByKeys(keys ...string) ([]byte, bool) {
 	for _, key := range keys {
-		keyBytes, exist := c.signingKeyStorage.Get(key)
+		keyBytes, exist := c.signingKeyLoader.Storage().Get(key)
 		if exist {
 			return keyBytes, true
 		}

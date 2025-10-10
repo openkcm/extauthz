@@ -9,9 +9,10 @@ import (
 	"testing"
 	"time"
 
-	envoy_auth "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
 	"github.com/gogo/googleapis/google/rpc"
 	"google.golang.org/grpc"
+
+	envoy_auth "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
 )
 
 func TestCheck(t *testing.T) {
