@@ -136,7 +136,7 @@ func (s *jwksHandler) handleJWKS(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *jwksHandler) handleIntrospect(w http.ResponseWriter, r *http.Request) {
-	err := json.NewEncoder(w).Encode(introspection{Active: s.tokenActive})
+	err := json.NewEncoder(w).Encode(Introspection{Active: s.tokenActive})
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 	}

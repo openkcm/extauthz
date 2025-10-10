@@ -222,7 +222,7 @@ func (provider *Provider) getWellKnownOpenIDConfiguraton(ctx context.Context) er
 	return nil
 }
 
-type introspection struct {
+type Introspection struct {
 	Active bool `json:"active"` // Required. Indicator of whether the presented token is currently active.
 	// Scope     string `json:"scope,omitempty"`      // Optional. Comma-separated list of scope.
 	// ClientID  string `json:"client_id,omitempty"`  // Optional. Client identifier.
@@ -233,29 +233,29 @@ type introspection struct {
 	// Nbf       int64  `json:"nbf,omitempty"`        // Optional. Integer timestamp, measured in the number of seconds since January 1 1970 UTC, indicating when this token is not to be used before, as defined in JWT [RFC7519].
 }
 
-func (provider *Provider) introspect(ctx context.Context, rawToken string) (introspection, error) {
+func (provider *Provider) introspect(ctx context.Context, bearerToken, introspectToken string) (Introspection, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, provider.introspectURL.String(), nil)
 	if err != nil {
-		return introspection{}, fmt.Errorf("creating new http request: %w", err)
+		return Introspection{}, fmt.Errorf("creating new http request: %w", err)
 	}
 
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("Authorization", "Bearer "+rawToken)
+	req.Header.Set("Authorization", "Bearer "+bearerToken)
 	q := req.URL.Query()
-	q.Set("token", rawToken)
+	q.Set("token", introspectToken)
 	req.URL.RawQuery = q.Encode()
 
 	resp, err := provider.client.Do(req)
 	if err != nil {
-		return introspection{}, fmt.Errorf("executing http request: %w", err)
+		return Introspection{}, fmt.Errorf("executing http request: %w", err)
 	}
 	defer resp.Body.Close()
 
-	var intr introspection
+	var intr Introspection
 
 	err = json.NewDecoder(resp.Body).Decode(&intr)
 	if err != nil {
-		return introspection{}, fmt.Errorf("decoding introspection response: %w", err)
+		return Introspection{}, fmt.Errorf("decoding introspection response: %w", err)
 	}
 
 	return intr, nil
