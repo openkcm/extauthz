@@ -7,14 +7,14 @@ import (
 type clientDataBuilder struct {
 	auth.ClientData
 
-	factory *Factory
+	signer *Signer
 }
 
 type Option func(*clientDataBuilder) error
 
 func WithClientType(val ClientType) Option {
 	return func(b *clientDataBuilder) error {
-		enrichHeaderWithType := b.factory.featureGates.IsFeatureEnabled(EnrichHeaderWithClientType)
+		enrichHeaderWithType := b.signer.featureGates.IsFeatureEnabled(EnrichHeaderWithClientType)
 		if enrichHeaderWithType {
 			b.Type = string(val)
 		}
@@ -36,7 +36,7 @@ func WithEmail(val string) Option {
 }
 func WithRegion(val string) Option {
 	return func(b *clientDataBuilder) error {
-		enrichHeaderWithRegion := b.factory.featureGates.IsFeatureEnabled(EnrichHeaderWithClientRegion)
+		enrichHeaderWithRegion := b.signer.featureGates.IsFeatureEnabled(EnrichHeaderWithClientRegion)
 		if enrichHeaderWithRegion && val != "" {
 			b.Region = val
 		}

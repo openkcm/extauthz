@@ -15,21 +15,22 @@ import (
 
 func createExtAuthZServer(ctx context.Context, cfg *config.Config) (*extauthz.Server, error) {
 	// prepare the options for the server
-	extauthzServerOptions := []extauthz.ServerOption{
+	ops := []extauthz.ServerOption{
 		extauthz.WithFeatureGates(&cfg.FeatureGates),
 	}
 
 	// Load the private key for signing the client data
-	clientDataFactory, err := clientdata.NewFactory(&cfg.FeatureGates, &cfg.ClientData)
+	clientDataSigner, err := clientdata.NewSigner(&cfg.FeatureGates, &cfg.ClientData)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create client data factory: %w", err)
 	}
-	if clientDataFactory.Enabled() {
-		slogctx.Info(ctx, "Using client data with signing key", "id", clientDataFactory.SigningKeyID())
+	ops = append(ops, extauthz.WithClientDataSigner(clientDataSigner))
+
+	if clientDataSigner.Enabled() {
+		slogctx.Info(ctx, "Using client data with signing key", "id", clientDataSigner.SigningKeyID())
 	} else {
 		slogctx.Info(ctx, "Using client data has been disabled")
 	}
-	extauthzServerOptions = append(extauthzServerOptions, extauthz.WithClientDataFactory(clientDataFactory))
 
 	// Load all Cedar policy files from the policy path
 	slogctx.Info(ctx, "Handling cedar policies", "cedar", cfg.Cedar)
@@ -37,7 +38,7 @@ func createExtAuthZServer(ctx context.Context, cfg *config.Config) (*extauthz.Se
 	if err != nil {
 		return nil, fmt.Errorf("failed to create the policy engine: %w", err)
 	}
-	extauthzServerOptions = append(extauthzServerOptions, extauthz.WithPolicyEngine(pe))
+	ops = append(ops, extauthz.WithPolicyEngine(pe))
 
 	// Load the trusted subjects
 	subjects, err := loadTrustedSubjects(cfg.MTLS.TrustedSubjectsYaml)
@@ -48,7 +49,7 @@ func createExtAuthZServer(ctx context.Context, cfg *config.Config) (*extauthz.Se
 		slogctx.Warn(ctx, "JWT configuration doesn't have the issuer claims keys; Use the default values: [iss].")
 		cfg.JWT.IssuerClaimKeys = jwthandler.DefaultIssuerClaims
 	}
-	extauthzServerOptions = append(extauthzServerOptions, extauthz.WithTrustedSubjects(subjects))
+	ops = append(ops, extauthz.WithTrustedSubjects(subjects))
 
 	// Create the JWT handler
 	slogctx.Debug(ctx, "Using k8s JWT providers", "k8s", cfg.JWT.K8sProviders)
@@ -65,10 +66,10 @@ func createExtAuthZServer(ctx context.Context, cfg *config.Config) (*extauthz.Se
 	if err != nil {
 		return nil, fmt.Errorf("failed to create the JWT handler: %w", err)
 	}
-	extauthzServerOptions = append(extauthzServerOptions, extauthz.WithJWTHandler(hdl))
+	ops = append(ops, extauthz.WithJWTHandler(hdl))
 
 	// Create the ExtAuthZ server
-	srv, err := extauthz.NewServer(extauthzServerOptions...)
+	srv, err := extauthz.NewServer(ops...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create the ExtAuthZ server: %w", err)
 	}

@@ -1,16 +1,23 @@
 package extauthz
 
 import (
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/pem"
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 
 	"github.com/gogo/googleapis/google/rpc"
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
+	"github.com/stretchr/testify/require"
 
 	envoy_auth "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
 
 	"github.com/openkcm/extauthz/internal/clientdata"
-	"github.com/openkcm/extauthz/internal/clientdata/signing"
+	"github.com/openkcm/extauthz/internal/config"
 	"github.com/openkcm/extauthz/internal/policies/cedarpolicy"
 )
 
@@ -47,13 +54,40 @@ permit (
 `
 )
 
-func TestCheck(t *testing.T) {
-	// Arrange
-	signingKey, err := signing.GenerateKey()
+// createFileWithGeneratedKey is used in tests to generate a new signing key.
+func createFileWithGeneratedKey(filepath string) error {
+	privateKey, err := rsa.GenerateKey(rand.Reader, 4096)
 	if err != nil {
-		t.Fatalf("could not generate signing key: %s", err)
+		return err
 	}
 
+	// Convert to PKCS#1 ASN.1 DER form
+	privDER := x509.MarshalPKCS1PrivateKey(privateKey)
+
+	// Create a PEM block
+	privBlock := &pem.Block{
+		Type:  "RSA PRIVATE KEY",
+		Bytes: privDER,
+	}
+
+	// Create or overwrite the output file
+	file, err := os.Create(filepath)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	// Write the PEM block to file
+	err = pem.Encode(file, privBlock)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func TestCheck(t *testing.T) {
+	// Arrange
 	defaultFeatureGates := &commoncfg.FeatureGates{
 		clientdata.EnrichHeaderWithClientRegion: true,
 		clientdata.EnrichHeaderWithClientType:   true,
@@ -177,6 +211,12 @@ func TestCheck(t *testing.T) {
 		},
 	}
 
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "keyId"), []byte("key01"), 0644))
+
+	err := createFileWithGeneratedKey(filepath.Join(dir, "key01.pem"))
+	require.NoError(t, err)
+
 	// run the tests
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -191,12 +231,30 @@ func TestCheck(t *testing.T) {
 				clientdata.EnrichHeaderWithClientType:   true,
 			}
 
+			signer, err := clientdata.NewSigner(featureFlags, &config.ClientData{
+				SigningKeyIDFilePath: filepath.Join(dir, "keyId"),
+			})
+			if err != nil {
+				t.Fatalf("could not create clientdata signer: %s", err)
+			}
+
 			srv, err := NewServer(
-				WithClientDataFactory(clientdata.NewFactoryWithSigningKey(featureFlags, signingKey)),
+				WithClientDataSigner(signer),
 				WithPolicyEngine(pe),
 				WithFeatureGates(tc.featureGates))
 			if err != nil {
 				t.Fatalf("could not create server: %s", err)
+			}
+
+			defer func() {
+				err = srv.Close()
+				if err != nil {
+					t.Fatalf("could not stop the server: %s", err)
+				}
+			}()
+			err = srv.Start()
+			if err != nil {
+				t.Fatalf("could not start the server: %s", err)
 			}
 
 			srv.trustedSubjectToRegion = tc.trustedSubjects

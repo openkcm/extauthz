@@ -121,11 +121,11 @@ func (srv *Server) Check(ctx context.Context, req *envoy_auth.CheckRequest) (*en
 		headersToAdd := []*envoy_core.HeaderValueOption{}
 		headersToRemove := []string{HeaderForwardedClientCert}
 
-		if srv.clientDataFactory == nil || srv.clientDataFactory.IsDisabled() {
+		if srv.clientDataSigner == nil || srv.clientDataSigner.IsDisabled() {
 			return respondAllowed(headersToAdd, headersToRemove), nil
 		}
 
-		b64data, b64sig, err := srv.clientDataFactory.CreateAndEncode(
+		b64data, b64sig, err := srv.clientDataSigner.Sign(
 			result.toClientDataOptions()...,
 		)
 		if err != nil {

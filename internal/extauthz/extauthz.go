@@ -2,9 +2,9 @@ package extauthz
 
 import (
 	"errors"
-	"fmt"
 
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
+	"github.com/samber/oops"
 
 	"github.com/openkcm/extauthz/internal/clientdata"
 	"github.com/openkcm/extauthz/internal/jwthandler"
@@ -15,7 +15,7 @@ import (
 type Server struct {
 	policyEngine           policies.Engine
 	jwtHandler             *jwthandler.Handler
-	clientDataFactory      *clientdata.Factory
+	clientDataSigner       *clientdata.Signer
 	trustedSubjectToRegion map[string]string
 	featureGates           *commoncfg.FeatureGates
 }
@@ -47,13 +47,13 @@ func WithJWTHandler(hdl *jwthandler.Handler) ServerOption {
 	}
 }
 
-func WithClientDataFactory(cdp *clientdata.Factory) ServerOption {
+func WithClientDataSigner(cdp *clientdata.Signer) ServerOption {
 	return func(server *Server) error {
 		if cdp == nil {
 			return errors.New("client data factory must not be nil")
 		}
 
-		server.clientDataFactory = cdp
+		server.clientDataSigner = cdp
 
 		return nil
 	}
@@ -82,12 +82,12 @@ func WithFeatureGates(fg *commoncfg.FeatureGates) ServerOption {
 func NewServer(opts ...ServerOption) (*Server, error) {
 	policyEngine, err := cedarpolicy.NewEngine(cedarpolicy.WithBytes("empty", []byte("")))
 	if err != nil {
-		return nil, fmt.Errorf("failed to create policy engine: %w", err)
+		return nil, oops.Hint("failed to create policy engine").Wrap(err)
 	}
 
 	hdl, err := jwthandler.NewHandler()
 	if err != nil {
-		return nil, fmt.Errorf("failed to create JWT handler: %w", err)
+		return nil, oops.Hint("failed to create JWT handler").Wrap(err)
 	}
 
 	server := &Server{
@@ -103,4 +103,27 @@ func NewServer(opts ...ServerOption) (*Server, error) {
 	}
 
 	return server, nil
+}
+
+// Start starts any internal processes required by the server.
+func (s *Server) Start() error {
+	if s.clientDataSigner != nil {
+		err := s.clientDataSigner.Start()
+		if err != nil {
+			return oops.Hint("failed to start the signing key loader").Wrap(err)
+		}
+	}
+	return nil
+}
+
+// Close starts any internal processes required by the server.
+func (s *Server) Close() error {
+	if s.clientDataSigner != nil {
+		err := s.clientDataSigner.Close()
+		if err != nil {
+			return oops.Hint("failed to stop the signing key loader").Wrap(err)
+		}
+	}
+
+	return nil
 }
