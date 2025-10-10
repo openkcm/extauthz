@@ -327,7 +327,7 @@ func TestProvider_introspect(t *testing.T) {
 		opts      []ProviderOption
 		rawToken  string
 		active    bool
-		want      introspection
+		want      Introspection
 		wantErr   assert.ErrorAssertionFunc
 	}{
 		{
@@ -337,7 +337,7 @@ func TestProvider_introspect(t *testing.T) {
 			opts:      []ProviderOption{WithSigningKeyCacheExpiration(30*time.Second, 10*time.Minute)},
 			active:    true,
 			rawToken:  rawToken,
-			want: introspection{
+			want: Introspection{
 				Active: true,
 			},
 			wantErr: assert.NoError,
@@ -349,7 +349,7 @@ func TestProvider_introspect(t *testing.T) {
 			opts:      []ProviderOption{WithSigningKeyCacheExpiration(30*time.Second, 10*time.Minute)},
 			active:    false,
 			rawToken:  rawToken,
-			want: introspection{
+			want: Introspection{
 				Active: false,
 			},
 			wantErr: assert.NoError,
@@ -360,7 +360,7 @@ func TestProvider_introspect(t *testing.T) {
 			tt.opts = append(tt.opts, WithClient(&http.Client{
 				Transport: localRoundTripper{
 					http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-						err := json.NewEncoder(w).Encode(introspection{Active: tt.active})
+						err := json.NewEncoder(w).Encode(Introspection{Active: tt.active})
 						if err != nil {
 							w.WriteHeader(http.StatusInternalServerError)
 						}
@@ -375,7 +375,7 @@ func TestProvider_introspect(t *testing.T) {
 			provider, err := NewProvider(tt.issuerURL, tt.audiences, tt.opts...)
 			require.NoError(t, err)
 
-			got, err := provider.introspect(t.Context(), tt.rawToken)
+			got, err := provider.introspect(t.Context(), tt.rawToken, tt.rawToken)
 			if !tt.wantErr(t, err, fmt.Sprintf("introspect(ctx, %v)", tt.rawToken)) {
 				return
 			}

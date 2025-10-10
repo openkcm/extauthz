@@ -132,21 +132,21 @@ func TestParseAndValidate(t *testing.T) {
 	})
 
 	mux.HandleFunc("/oauth2/introspect/fail", func(w http.ResponseWriter, r *http.Request) {
-		err := json.NewEncoder(w).Encode(introspection{Active: false})
+		err := json.NewEncoder(w).Encode(Introspection{Active: false})
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 		}
 	})
 
 	mux.HandleFunc("/oauth2/introspect/success", func(w http.ResponseWriter, r *http.Request) {
-		err := json.NewEncoder(w).Encode(introspection{Active: true})
+		err := json.NewEncoder(w).Encode(Introspection{Active: true})
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 		}
 	})
 
 	mux.HandleFunc("/oauth2/introspect", func(w http.ResponseWriter, r *http.Request) {
-		err := json.NewEncoder(w).Encode(introspection{Active: true})
+		err := json.NewEncoder(w).Encode(Introspection{Active: true})
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 		}

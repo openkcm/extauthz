@@ -199,7 +199,7 @@ func (handler *Handler) ParseAndValidate(ctx context.Context, rawToken string, u
 	}
 
 	// Verify if token is not revoked
-	intr, err := handler.introspect(ctx, provider, rawToken, allowIntrospectCache)
+	intr, err := handler.introspect(ctx, provider, rawToken, rawToken, allowIntrospectCache)
 	if err != nil {
 		return fmt.Errorf("introspecting token: %w", err)
 	}
@@ -246,18 +246,40 @@ func (handler *Handler) ProviderFor(ctx context.Context, issuer string) (*Provid
 	return nil, errors.Join(ErrNoProvider, fmt.Errorf("no provider found for issuer %s", issuer))
 }
 
-// introspect a JWT token.
-func (handler *Handler) introspect(ctx context.Context, provider *Provider, rawToken string, allowCache bool) (introspection, error) {
-	cacheKey := "introspect_" + "rawToken"
+// Introspect an access or refresh token with the given issuer.
+func (handler *Handler) Introspect(ctx context.Context, issuer, bearerToken, introspectToken string, allowCache bool) (Introspection, error) {
+	// parse the issuer URL
+	issuerURL, err := url.Parse(issuer)
+	if err != nil {
+		return Introspection{}, err
+	}
+
+	if issuerURL.Scheme != "https" {
+		return Introspection{}, fmt.Errorf("invalid issuer scheme %s", issuerURL.Scheme)
+	}
+
+	// let the handler lookup the identity provider for the issuer host
+	provider, err := handler.ProviderFor(ctx, issuerURL.Host)
+	if err != nil {
+		return Introspection{}, err
+	}
+
+	// let the handler introspect the token
+	return handler.introspect(ctx, provider, bearerToken, introspectToken, allowCache)
+}
+
+// introspect an access or refresh token.
+func (handler *Handler) introspect(ctx context.Context, provider *Provider, bearerToken, introspectToken string, allowCache bool) (Introspection, error) {
+	cacheKey := "introspect_" + introspectToken
 	if allowCache {
 		cache, ok := handler.cache.Get(cacheKey)
 		if ok {
 			//nolint:forcetypeassert
-			return cache.(introspection), nil
+			return cache.(Introspection), nil
 		}
 	}
 
-	intr, err := provider.introspect(ctx, rawToken)
+	intr, err := provider.introspect(ctx, bearerToken, introspectToken)
 	if err != nil {
 		return intr, fmt.Errorf("introspecting token: %w", err)
 	}
