@@ -35,18 +35,22 @@ func (srv *Server) Check(ctx context.Context, req *envoy_auth.CheckRequest) (*en
 
 	// log the header for debugging
 	httpreq := req.GetAttributes().GetRequest().GetHttp()
+	headers := httpreq.GetHeaders()
+	method := httpreq.GetMethod()
+	host := httpreq.GetHost()
+	path := httpreq.GetPath()
 	slogctx.Debug(ctx, "Check() called",
 		"id", httpreq.GetId(),
 		"protocol", httpreq.GetProtocol(),
-		"method", httpreq.GetMethod(),
+		"method", method,
 		"sheme", httpreq.GetScheme(),
-		"host", httpreq.GetHost(),
-		"path", httpreq.GetPath(),
+		"host", host,
+		"path", path,
 	)
 
 	// extract client certificate and authorization header
-	certHeader, certHeaderFound := req.GetAttributes().GetRequest().GetHttp().GetHeaders()[HeaderForwardedClientCert]
-	authHeader, authHeaderFound := req.GetAttributes().GetRequest().GetHttp().GetHeaders()[HeaderAuthorization]
+	certHeader, certHeaderFound := headers[HeaderForwardedClientCert]
+	authHeader, authHeaderFound := headers[HeaderAuthorization]
 
 	result := checkResult{is: UNKNOWN}
 
@@ -88,6 +92,7 @@ func (srv *Server) Check(ctx context.Context, req *envoy_auth.CheckRequest) (*en
 
 		for _, part := range certHeaderParts {
 			slogctx.Debug(ctx, "Check() processing certificate part", "part", part)
+			result.withXFCCHeader = true
 			result.merge(srv.checkClientCert(ctx, part,
 				req.GetAttributes().GetRequest().GetHttp().GetMethod(),
 				req.GetAttributes().GetRequest().GetHttp().GetHost(),
@@ -103,40 +108,37 @@ func (srv *Server) Check(ctx context.Context, req *envoy_auth.CheckRequest) (*en
 			req.GetAttributes().GetRequest().GetHttp().GetPath()))
 	}
 
-	// process the result
+	// Log the result for debugging
 	ctx = slogctx.WithGroup(ctx, "result")
 	slogctx.Debug(ctx, "Check() result",
 		"is", result.is,
 		"info", result.info,
 		"subject", result.subject)
 
+	// Prepare the response
 	switch result.is {
 	case ALLOWED:
-		var (
-			headers         []*envoy_core.HeaderValueOption
-			headersToRemove []string
-		)
+		headersToAdd := []*envoy_core.HeaderValueOption{}
+		headersToRemove := []string{HeaderForwardedClientCert}
 
 		if srv.clientDataFactory == nil || srv.clientDataFactory.IsDisabled() {
-			return respondAllowed(headers, headersToRemove), nil
+			return respondAllowed(headersToAdd, headersToRemove), nil
 		}
 
-		opts := result.toClientDataOptions(certHeaderFound)
-
-		b64data, b64sig, err := srv.clientDataFactory.CreateAndEncode(opts...)
+		b64data, b64sig, err := srv.clientDataFactory.CreateAndEncode(
+			result.toClientDataOptions()...,
+		)
 		if err != nil {
 			slogctx.Error(ctx, "Failed to encode client data", "error", err)
 			return respondInternalServerError(), nil
 		}
 
-		headers = []*envoy_core.HeaderValueOption{
+		headersToAdd = []*envoy_core.HeaderValueOption{
 			headerValueOption(auth.HeaderClientData, b64data),
 			headerValueOption(auth.HeaderClientDataSignature, b64sig),
 		}
-		// remove other headers the backend shall not see
-		headersToRemove = []string{HeaderForwardedClientCert}
 
-		return respondAllowed(headers, headersToRemove), nil
+		return respondAllowed(headersToAdd, headersToRemove), nil
 	case ALWAYS_ALLOW:
 		return respondAllowed([]*envoy_core.HeaderValueOption{}, []string{}), nil
 	case UNKNOWN, UNAUTHENTICATED:

@@ -22,15 +22,17 @@ type checkResult struct {
 	region  string
 	issuer  string
 	groups  []string
+
+	withXFCCHeader bool
 }
 
-func (r *checkResult) toClientDataOptions(withXFCCHeader bool) []clientdata.Option {
+func (r *checkResult) toClientDataOptions() []clientdata.Option {
 	clientType := clientdata.User
 
 	switch {
-	case withXFCCHeader && r.email != "":
+	case r.withXFCCHeader && r.email != "":
 		clientType = clientdata.TechnicalUser
-	case withXFCCHeader && r.email == "":
+	case r.withXFCCHeader && r.email == "":
 		clientType = clientdata.System
 	}
 
