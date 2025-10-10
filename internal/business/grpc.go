@@ -28,7 +28,6 @@ func startGRPCServer(ctx context.Context, cfg *config.Config, extauthzSrv *extau
 		if err != nil {
 			slogctx.Error(ctx, "failed to stop internal processes of server", "error", err)
 		}
-
 	}()
 
 	// Create a new gRPC server
