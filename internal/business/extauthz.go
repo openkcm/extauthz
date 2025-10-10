@@ -15,7 +15,7 @@ import (
 
 func createExtAuthZServer(ctx context.Context, cfg *config.Config) (*extauthz.Server, error) {
 	// prepare the options for the server
-	ops := []extauthz.ServerOption{
+	extauthzServerOptions := []extauthz.ServerOption{
 		extauthz.WithFeatureGates(&cfg.FeatureGates),
 	}
 
@@ -24,7 +24,7 @@ func createExtAuthZServer(ctx context.Context, cfg *config.Config) (*extauthz.Se
 	if err != nil {
 		return nil, fmt.Errorf("failed to create client data factory: %w", err)
 	}
-	ops = append(ops, extauthz.WithClientDataSigner(clientDataSigner))
+	extauthzServerOptions = append(extauthzServerOptions, extauthz.WithClientDataSigner(clientDataSigner))
 
 	if clientDataSigner.Enabled() {
 		slogctx.Info(ctx, "Using client data with signing key", "id", clientDataSigner.SigningKeyID())
@@ -38,7 +38,7 @@ func createExtAuthZServer(ctx context.Context, cfg *config.Config) (*extauthz.Se
 	if err != nil {
 		return nil, fmt.Errorf("failed to create the policy engine: %w", err)
 	}
-	ops = append(ops, extauthz.WithPolicyEngine(pe))
+	extauthzServerOptions = append(extauthzServerOptions, extauthz.WithPolicyEngine(pe))
 
 	// Load the trusted subjects
 	subjects, err := loadTrustedSubjects(cfg.MTLS.TrustedSubjectsYaml)
@@ -49,7 +49,7 @@ func createExtAuthZServer(ctx context.Context, cfg *config.Config) (*extauthz.Se
 		slogctx.Warn(ctx, "JWT configuration doesn't have the issuer claims keys; Use the default values: [iss].")
 		cfg.JWT.IssuerClaimKeys = jwthandler.DefaultIssuerClaims
 	}
-	ops = append(ops, extauthz.WithTrustedSubjects(subjects))
+	extauthzServerOptions = append(extauthzServerOptions, extauthz.WithTrustedSubjects(subjects))
 
 	// Create the JWT handler
 	slogctx.Debug(ctx, "Using k8s JWT providers", "k8s", cfg.JWT.K8sProviders)
@@ -66,10 +66,10 @@ func createExtAuthZServer(ctx context.Context, cfg *config.Config) (*extauthz.Se
 	if err != nil {
 		return nil, fmt.Errorf("failed to create the JWT handler: %w", err)
 	}
-	ops = append(ops, extauthz.WithJWTHandler(hdl))
+	extauthzServerOptions = append(extauthzServerOptions, extauthz.WithJWTHandler(hdl))
 
 	// Create the ExtAuthZ server
-	srv, err := extauthz.NewServer(ops...)
+	srv, err := extauthz.NewServer(extauthzServerOptions...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create the ExtAuthZ server: %w", err)
 	}
