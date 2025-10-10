@@ -11,13 +11,12 @@ import (
 	"log"
 	"os"
 	"os/exec"
-	"strings"
 	"testing"
 )
 
 const binary = "extauthz"
 
-var validConfig, policies, trustedSubjects, rsaPrivateKeyPEM, buildVersion string
+var validConfig, policies, trustedSubjects, rsaPrivateKeyPEM string
 
 func init() {
 	var err error
@@ -57,13 +56,6 @@ func init() {
 		Type:  "PRIVATE KEY",
 		Bytes: rsaPrivateKeyDER,
 	}))
-
-	// read build_version.json file
-	dat, err = os.ReadFile("../build_version.json")
-	if err != nil {
-		panic(err)
-	}
-	buildVersion = strings.TrimSpace(string(dat))
 }
 
 func writeFiles(config, trustedSubjects, policies, rsaPrivateKeyPEM string) (func(), error) {

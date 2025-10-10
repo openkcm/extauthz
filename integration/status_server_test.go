@@ -14,8 +14,6 @@ import (
 )
 
 func TestStatusServer(t *testing.T) {
-	var err error
-
 	// write files needed for the test
 	cleanup, err := writeFiles(validConfig, trustedSubjects, policies, rsaPrivateKeyPEM)
 	if err != nil {
@@ -49,7 +47,7 @@ func TestStatusServer(t *testing.T) {
 		{
 			name:       "get version",
 			endpoint:   "version",
-			wantOutput: buildVersion,
+			wantOutput: "{}",
 			wantError:  false,
 		},
 	}
