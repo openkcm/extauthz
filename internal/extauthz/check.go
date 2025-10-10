@@ -2,6 +2,7 @@ package extauthz
 
 import (
 	"context"
+	"net/http"
 	"strings"
 
 	"github.com/go-andiamo/splitter"
@@ -10,13 +11,13 @@ import (
 	envoy_core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	envoy_auth "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
 	slogctx "github.com/veqryn/slog-context"
-
-	"github.com/openkcm/extauthz/internal/flags"
 )
 
 const (
 	HeaderForwardedClientCert = "x-forwarded-client-cert"
 	HeaderAuthorization       = "authorization"
+	HeaderCookie              = "cookie"
+	SessionCookieName         = "session"
 )
 
 // Ensure Server implements the AuthorizationServer interface
@@ -52,49 +53,31 @@ func (srv *Server) Check(ctx context.Context, req *envoy_auth.CheckRequest) (*en
 	// Authenticate in the following order:
 	// 1. Client certificates
 	// 2. Bearer token in the authorization header
-	// 3. Session cookie (not implemented yet)
+	// 3. Session cookie
 	// All results are merged, the most restrictive result wins.
 	result := checkResult{is: UNKNOWN}
 
-	// Verify if DisableClientCertificateComputation flag was explicitly set in the configuration with value `true`, then the
-	// Client Certificates handling should be disabled
-	// TODO: Remove this hacking code as soon as we have session support
-	skipClientCertificates := false
-	if srv.featureGates.IsFeatureEnabled(flags.DisableClientCertificateComputation) {
-		slogctx.Error(ctx, "Check() processing of client certificate has been disabled through feature gates")
-		result.is = ALWAYS_ALLOW
-		skipClientCertificates = true
-	}
-
-	// Verify if DisableJWTTokenComputation flag was explicitly set in the configuration with value `true`, then the
-	// JWT tokens handling should be disabled
-	// TODO: Remove this hacking code as soon as we have session support
-	skipBearerToken := false
-	if srv.featureGates.IsFeatureEnabled(flags.DisableJWTTokenComputation) {
-		slogctx.Error(ctx, "Check() processing of jwt token has been disabled through feature gates")
-		result.is = ALWAYS_ALLOW
-		skipBearerToken = true
-	}
-
-	// TODO: Remove this hacking code as soon as we have session support
-	if !skipClientCertificates {
-		// 1. Client certificates (if any)
-		if clientCerts, found := extractClientCertificates(headers); found {
-			slogctx.Debug(ctx, "Checking client certificate")
-			for nr, part := range clientCerts {
-				slogctx.Debug(ctx, "Checking client certificate", "part", nr)
-				result.merge(srv.checkClientCert(ctx, part, method, host, path))
-				result.withXFCCHeader = true
-			}
+	// 1. Client certificates (if any)
+	if clientCerts, found := extractClientCertificates(headers); found {
+		slogctx.Debug(ctx, "Checking client certificate")
+		for nr, part := range clientCerts {
+			slogctx.Debug(ctx, "Checking client certificate", "part", nr)
+			result.merge(srv.checkClientCert(ctx, part, method, host, path))
+			result.withXFCCHeader = true
 		}
 	}
 
-	// TODO: Remove this hacking code as soon as we have session support
-	if !skipBearerToken {
-		// 2. Bearer token in the authorization header (if any)
-		if bearerToken, found := extractBearerToken(headers); found {
-			slogctx.Debug(ctx, "Checking bearer token from authorization header")
-			result.merge(srv.checkJWTToken(ctx, bearerToken, method, host, path))
+	// 2. Bearer token in the authorization header (if any)
+	if bearerToken, found := extractBearerToken(headers); found {
+		slogctx.Debug(ctx, "Checking bearer token from authorization header")
+		result.merge(srv.checkJWTToken(ctx, bearerToken, method, host, path))
+	}
+
+	// 3. Session cookie (if any and only if session cache is configured)
+	if srv.sessionCache != nil {
+		if sessionCookie, tenantID, found := extractSessionCookieAndTenantID(headers, path); found {
+			slogctx.Debug(ctx, "Checking session cookie")
+			result.merge(srv.checkSession(ctx, sessionCookie, tenantID, method, host, path))
 		}
 	}
 
@@ -164,6 +147,38 @@ func extractBearerToken(headers map[string]string) (string, bool) {
 	}
 
 	return bearerToken, true
+}
+
+func extractSessionCookieAndTenantID(headers map[string]string, path string) (*http.Cookie, string, bool) {
+	// extract tenant ID from the path
+	var tenantID string
+	switch {
+	case strings.HasPrefix(path, "/cmk/v1/"): // /cmk/v1/{tenantID}/...
+		parts := strings.Split(path, "/")
+		if len(parts) < 4 {
+			return nil, "", false
+		}
+		tenantID = parts[3]
+	default:
+		return nil, "", false
+	}
+
+	// extract the session cookie
+	cookieHeader, found := headers[HeaderCookie]
+	if !found {
+		return nil, "", false
+	}
+	cookies, err := http.ParseCookie(cookieHeader)
+	if err != nil {
+		return nil, "", false
+	}
+	for _, cookie := range cookies {
+		if cookie.Name == SessionCookieName {
+			return cookie, tenantID, true
+		}
+	}
+
+	return nil, "", false
 }
 
 // splitCertHeader splits the XFCC header on , in case there are multiple certificates.

@@ -40,7 +40,7 @@ test: clean
 	go test -count=1 -race -cover ./... -args -test.gocoverdir="${PWD}/cover/unit"
 
 	# integration tests
-	GOCOVERDIR="${PWD}/cover/integration" go test -count=1 -race --tags=integration ./integration
+	GOCOVERDIR="${PWD}/cover/integration" go test -v -count=1 -race --tags=integration ./integration
 
 	# merge coverage
 	go tool covdata textfmt -i=./cover/unit,./cover/integration -o cover.out
