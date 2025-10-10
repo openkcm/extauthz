@@ -3,13 +3,17 @@ package extauthz
 import (
 	"crypto/x509"
 	"log"
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 	"time"
 
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
+	"github.com/stretchr/testify/require"
 
 	"github.com/openkcm/extauthz/internal/clientdata"
+	"github.com/openkcm/extauthz/internal/config"
 	"github.com/openkcm/extauthz/internal/policies/cedarpolicy"
 )
 
@@ -126,6 +130,12 @@ func TestCheckClientCert(t *testing.T) {
 		},
 	}
 
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "keyId"), []byte("key01"), 0644))
+
+	err = createFileWithGeneratedKey(filepath.Join(dir, "key01.pem"))
+	require.NoError(t, err)
+
 	// run the tests
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -135,16 +145,30 @@ func TestCheckClientCert(t *testing.T) {
 				t.Fatalf("could not create policy engine: %s", err)
 			}
 
-			clientdataFactory := clientdata.NewFactoryWithSigningKey(&commoncfg.FeatureGates{
+			signer, err := clientdata.NewSigner(&commoncfg.FeatureGates{
 				clientdata.DisableClientDataComputation: true,
-			}, nil)
+			}, &config.ClientData{
+				SigningKeyIDFilePath: filepath.Join(dir, "keyId"),
+			})
+			require.NoError(t, err)
 
-			srv, err := NewServer(WithClientDataFactory(clientdataFactory), WithPolicyEngine(pe))
+			srv, err := NewServer(WithClientDataSigner(signer), WithPolicyEngine(pe))
 			if err != nil {
 				t.Fatalf("could not create server: %s", err)
 			}
 
 			srv.trustedSubjectToRegion = tc.trustedSubjects
+
+			defer func() {
+				err = srv.Close()
+				if err != nil {
+					t.Fatalf("could not stop the server: %s", err)
+				}
+			}()
+			err = srv.Start()
+			if err != nil {
+				t.Fatalf("could not start the server: %s", err)
+			}
 
 			// Act
 			result := srv.checkClientCert(t.Context(), tc.certHeader, "GET", "my.service.com", "/foo/bar")

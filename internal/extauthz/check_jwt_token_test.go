@@ -15,14 +15,18 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
+	"github.com/stretchr/testify/require"
 
 	"github.com/openkcm/extauthz/internal/clientdata"
+	"github.com/openkcm/extauthz/internal/config"
 	"github.com/openkcm/extauthz/internal/jwthandler"
 	"github.com/openkcm/extauthz/internal/policies/cedarpolicy"
 )
@@ -120,6 +124,12 @@ func TestCheckAuthHeader(t *testing.T) {
 		t.Fatalf("could not marshal JWKS response: %s", err)
 	}
 
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "keyId"), []byte("key01"), 0644))
+
+	err = createFileWithGeneratedKey(filepath.Join(dir, "key01.pem"))
+	require.NoError(t, err)
+
 	// create the test cases
 	tests := []struct {
 		name        string
@@ -177,12 +187,15 @@ func TestCheckAuthHeader(t *testing.T) {
 				t.Fatalf("could not create policy engine: %s", err)
 			}
 
-			clientdataFactory := clientdata.NewFactoryWithSigningKey(&commoncfg.FeatureGates{
+			signer, err := clientdata.NewSigner(&commoncfg.FeatureGates{
 				clientdata.DisableClientDataComputation: true,
-			}, nil)
+			}, &config.ClientData{
+				SigningKeyIDFilePath: filepath.Join(dir, "keyId"),
+			})
+			require.NoError(t, err)
 
 			srv, err := NewServer(
-				WithClientDataFactory(clientdataFactory),
+				WithClientDataSigner(signer),
 				WithPolicyEngine(pe),
 				WithJWTHandler(hdl),
 			)
@@ -190,6 +203,16 @@ func TestCheckAuthHeader(t *testing.T) {
 				t.Fatalf("could not create server: %s", err)
 			}
 
+			defer func() {
+				err = srv.Close()
+				if err != nil {
+					t.Fatalf("could not stop the server: %s", err)
+				}
+			}()
+			err = srv.Start()
+			if err != nil {
+				t.Fatalf("could not start the server: %s", err)
+			}
 			// Act
 			result := srv.checkJWTToken(t.Context(), tc.bearerToken, "GET", "my.service.com", "/foo/bar")
 

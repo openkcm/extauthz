@@ -20,16 +20,17 @@ func createExtAuthZServer(ctx context.Context, cfg *config.Config) (*extauthz.Se
 	}
 
 	// Load the private key for signing the client data
-	clientDataFactory, err := clientdata.NewFactory(&cfg.FeatureGates, &cfg.ClientData)
+	clientDataSigner, err := clientdata.NewSigner(&cfg.FeatureGates, &cfg.ClientData)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create client data factory: %w", err)
 	}
-	if clientDataFactory.Enabled() {
-		slogctx.Info(ctx, "Using client data with signing key", "id", clientDataFactory.SigningKeyID())
+	extauthzServerOptions = append(extauthzServerOptions, extauthz.WithClientDataSigner(clientDataSigner))
+
+	if clientDataSigner.Enabled() {
+		slogctx.Info(ctx, "Using client data with signing key", "id", clientDataSigner.SigningKeyID())
 	} else {
 		slogctx.Info(ctx, "Using client data has been disabled")
 	}
-	extauthzServerOptions = append(extauthzServerOptions, extauthz.WithClientDataFactory(clientDataFactory))
 
 	// Load all Cedar policy files from the policy path
 	slogctx.Info(ctx, "Handling cedar policies", "cedar", cfg.Cedar)

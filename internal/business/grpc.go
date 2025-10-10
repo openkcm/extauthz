@@ -6,6 +6,7 @@ import (
 	"net"
 
 	"github.com/openkcm/common-sdk/pkg/commongrpc"
+	"github.com/samber/oops"
 
 	envoy_auth "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
 	slogctx "github.com/veqryn/slog-context"
@@ -15,6 +16,20 @@ import (
 )
 
 func startGRPCServer(ctx context.Context, cfg *config.Config, extauthzSrv *extauthz.Server) error {
+	// Start internal processes of the server
+	err := extauthzSrv.Start()
+	if err != nil {
+		return oops.Hint("failed to start internal processes of server").Wrap(err)
+	}
+
+	defer func() {
+		// Stop internal processes of the server
+		err := extauthzSrv.Close()
+		if err != nil {
+			slogctx.Error(ctx, "failed to stop internal processes of server", "error", err)
+		}
+	}()
+
 	// Create a new gRPC server
 	grpcServer := commongrpc.NewServer(ctx, &cfg.GRPCServer.GRPCServer)
 
