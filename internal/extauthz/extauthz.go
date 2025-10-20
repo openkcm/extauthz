@@ -7,14 +7,14 @@ import (
 	"github.com/samber/oops"
 
 	"github.com/openkcm/extauthz/internal/clientdata"
-	"github.com/openkcm/extauthz/internal/jwthandler"
+	"github.com/openkcm/extauthz/internal/oidc"
 	"github.com/openkcm/extauthz/internal/policies"
 	"github.com/openkcm/extauthz/internal/policies/cedarpolicy"
 )
 
 type Server struct {
 	policyEngine           policies.Engine
-	jwtHandler             *jwthandler.Handler
+	oidcHandler            *oidc.Handler
 	clientDataSigner       *clientdata.Signer
 	trustedSubjectToRegion map[string]string
 	featureGates           *commoncfg.FeatureGates
@@ -35,13 +35,13 @@ func WithTrustedSubjects(m map[string]string) ServerOption {
 	}
 }
 
-func WithJWTHandler(hdl *jwthandler.Handler) ServerOption {
+func WithOIDCHandler(hdl *oidc.Handler) ServerOption {
 	return func(server *Server) error {
 		if hdl == nil {
 			return errors.New("jwt handler must not be nil")
 		}
 
-		server.jwtHandler = hdl
+		server.oidcHandler = hdl
 
 		return nil
 	}
@@ -85,14 +85,14 @@ func NewServer(opts ...ServerOption) (*Server, error) {
 		return nil, oops.Hint("failed to create policy engine").Wrap(err)
 	}
 
-	hdl, err := jwthandler.NewHandler()
+	hdl, err := oidc.NewHandler()
 	if err != nil {
 		return nil, oops.Hint("failed to create JWT handler").Wrap(err)
 	}
 
 	server := &Server{
 		policyEngine: policyEngine,
-		jwtHandler:   hdl,
+		oidcHandler:  hdl,
 	}
 
 	for _, opt := range opts {
