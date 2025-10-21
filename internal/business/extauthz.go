@@ -94,6 +94,10 @@ func createExtAuthZServer(ctx context.Context, cfg *config.Config) (*extauthz.Se
 		}
 		extauthzServerOptions = append(extauthzServerOptions, extauthz.WithSessionCache(sessionCache))
 	}
+	if cfg.SessionCache.CMKPathPrefix != "" {
+		slogctx.Info(ctx, "Using CMK path prefix for session cache", "prefix", cfg.SessionCache.CMKPathPrefix)
+		extauthzServerOptions = append(extauthzServerOptions, extauthz.WithCMKPathPrefix(cfg.SessionCache.CMKPathPrefix))
+	}
 
 	// Create the ExtAuthZ server
 	srv, err := extauthz.NewServer(extauthzServerOptions...)

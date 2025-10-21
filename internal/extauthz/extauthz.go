@@ -14,6 +14,10 @@ import (
 	"github.com/openkcm/extauthz/internal/policies/cedarpolicy"
 )
 
+const (
+	DefaultCMKPathPrefix = "/cmk/v1/"
+)
+
 // sessionLoaderInterface defines the interface for loading sessions.
 // We don't use session.Repository directly to avoid depending on
 // unnecessary methods and to make testing easier.
@@ -35,6 +39,7 @@ type Server struct {
 	trustedSubjectToRegion map[string]string
 	featureGates           *commoncfg.FeatureGates
 	sessionCache           sessionLoaderInterface
+	cmkPathPrefix          string
 }
 
 // ServerOption is used to configure a server.
@@ -102,6 +107,13 @@ func WithSessionCache(sessionCache sessionLoaderInterface) ServerOption {
 	}
 }
 
+func WithCMKPathPrefix(cmkPathPrefix string) ServerOption {
+	return func(server *Server) error {
+		server.cmkPathPrefix = cmkPathPrefix
+		return nil
+	}
+}
+
 // NewServer creates a new server and applies the given options.
 func NewServer(opts ...ServerOption) (*Server, error) {
 	policyEngine, err := cedarpolicy.NewEngine(cedarpolicy.WithBytes("empty", []byte("")))
@@ -115,8 +127,9 @@ func NewServer(opts ...ServerOption) (*Server, error) {
 	}
 
 	server := &Server{
-		policyEngine: policyEngine,
-		oidcHandler:  hdl,
+		policyEngine:  policyEngine,
+		oidcHandler:   hdl,
+		cmkPathPrefix: DefaultCMKPathPrefix,
 	}
 
 	for _, opt := range opts {
