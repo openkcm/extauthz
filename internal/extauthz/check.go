@@ -19,7 +19,7 @@ const (
 	HeaderForwardedClientCert = "x-forwarded-client-cert"
 	HeaderAuthorization       = "authorization"
 	HeaderCookie              = "cookie"
-	SessionCookieName         = "session"
+	SessionCookieName         = "__Host-Http-SESSION"
 )
 
 // Ensure Server implements the AuthorizationServer interface
