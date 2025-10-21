@@ -9,7 +9,7 @@ import (
 	"github.com/openkcm/extauthz/internal/clientdata"
 	"github.com/openkcm/extauthz/internal/config"
 	"github.com/openkcm/extauthz/internal/extauthz"
-	"github.com/openkcm/extauthz/internal/jwthandler"
+	"github.com/openkcm/extauthz/internal/oidc"
 	"github.com/openkcm/extauthz/internal/policies/cedarpolicy"
 )
 
@@ -47,15 +47,15 @@ func createExtAuthZServer(ctx context.Context, cfg *config.Config) (*extauthz.Se
 	}
 	if len(cfg.JWT.IssuerClaimKeys) == 0 {
 		slogctx.Warn(ctx, "JWT configuration doesn't have the issuer claims keys; Use the default values: [iss].")
-		cfg.JWT.IssuerClaimKeys = jwthandler.DefaultIssuerClaims
+		cfg.JWT.IssuerClaimKeys = oidc.DefaultIssuerClaims
 	}
 	extauthzServerOptions = append(extauthzServerOptions, extauthz.WithTrustedSubjects(subjects))
 
 	// Create the JWT handler
 	slogctx.Debug(ctx, "Using k8s JWT providers", "k8s", cfg.JWT.K8sProviders)
-	hdl, err := jwthandler.NewHandler(
-		jwthandler.WithIssuerClaimKeys(cfg.JWT.IssuerClaimKeys...),
-		jwthandler.WithK8sJWTProviders(
+	hdl, err := oidc.NewHandler(
+		oidc.WithIssuerClaimKeys(cfg.JWT.IssuerClaimKeys...),
+		oidc.WithK8sJWTProviders(
 			cfg.JWT.K8sProviders.Enabled,
 			cfg.JWT.K8sProviders.APIGroup,
 			cfg.JWT.K8sProviders.APIVersion,
@@ -66,7 +66,7 @@ func createExtAuthZServer(ctx context.Context, cfg *config.Config) (*extauthz.Se
 	if err != nil {
 		return nil, fmt.Errorf("failed to create the JWT handler: %w", err)
 	}
-	extauthzServerOptions = append(extauthzServerOptions, extauthz.WithJWTHandler(hdl))
+	extauthzServerOptions = append(extauthzServerOptions, extauthz.WithOIDCHandler(hdl))
 
 	// Create the ExtAuthZ server
 	srv, err := extauthz.NewServer(extauthzServerOptions...)

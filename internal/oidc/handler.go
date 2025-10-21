@@ -1,8 +1,8 @@
-// Package jwthandler implements JWT token handling in a multi-tenant environment.
+// Package oidc implements OIDC token handling in a multi-tenant environment.
 // For this a Handler is created, which holds the Providers for validating tokens.
 // You can either register providers in a static manner, or define them as
 // JWTProvider definition in kubernetes.
-package jwthandler
+package oidc
 
 import (
 	"context"

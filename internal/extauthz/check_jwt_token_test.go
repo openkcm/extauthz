@@ -27,7 +27,7 @@ import (
 
 	"github.com/openkcm/extauthz/internal/clientdata"
 	"github.com/openkcm/extauthz/internal/config"
-	"github.com/openkcm/extauthz/internal/jwthandler"
+	"github.com/openkcm/extauthz/internal/oidc"
 	"github.com/openkcm/extauthz/internal/policies/cedarpolicy"
 )
 
@@ -169,15 +169,15 @@ func TestCheckAuthHeader(t *testing.T) {
 			certpool.AddCert(ts.Certificate())
 			cl := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: certpool}}}
 
-			p, err := jwthandler.NewProvider(issuerURL, []string{},
-				jwthandler.WithClient(cl),
-				jwthandler.WithCustomJWKSURI(jwksURI),
+			p, err := oidc.NewProvider(issuerURL, []string{},
+				oidc.WithClient(cl),
+				oidc.WithCustomJWKSURI(jwksURI),
 			)
 			if err != nil {
 				t.Fatalf("could not create provider: %s", err)
 			}
 
-			hdl, err := jwthandler.NewHandler(jwthandler.WithProvider(p))
+			hdl, err := oidc.NewHandler(oidc.WithProvider(p))
 			if err != nil {
 				t.Fatalf("could not create handler: %s", err)
 			}
@@ -197,7 +197,7 @@ func TestCheckAuthHeader(t *testing.T) {
 			srv, err := NewServer(
 				WithClientDataSigner(signer),
 				WithPolicyEngine(pe),
-				WithJWTHandler(hdl),
+				WithOIDCHandler(hdl),
 			)
 			if err != nil {
 				t.Fatalf("could not create server: %s", err)

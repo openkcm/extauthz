@@ -1,4 +1,4 @@
-package jwthandler
+package oidc
 
 import (
 	"context"
