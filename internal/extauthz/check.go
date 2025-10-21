@@ -103,7 +103,7 @@ func (srv *Server) Check(ctx context.Context, req *envoy_auth.CheckRequest) (*en
 
 	// 3. Session cookie (if any and only if session cache is configured)
 	if srv.sessionCache != nil {
-		if sessionCookie, tenantID, found := extractSessionCookieAndTenantID(headers, path); found {
+		if sessionCookie, tenantID, found := srv.extractSessionCookieAndTenantID(headers, path); found {
 			slogctx.Debug(ctx, "Checking session cookie")
 			result.merge(srv.checkSession(ctx, sessionCookie, tenantID, method, host, path))
 		}
@@ -177,11 +177,11 @@ func extractBearerToken(headers map[string]string) (string, bool) {
 	return bearerToken, true
 }
 
-func extractSessionCookieAndTenantID(headers map[string]string, path string) (*http.Cookie, string, bool) {
+func (srv *Server) extractSessionCookieAndTenantID(headers map[string]string, path string) (*http.Cookie, string, bool) {
 	// extract tenant ID from the path
 	var tenantID string
 	switch {
-	case strings.HasPrefix(path, "/cmk/v1/"): // /cmk/v1/{tenantID}/...
+	case strings.HasPrefix(path, srv.cmkPathPrefix): // /cmk/v1/{tenantID}/...
 		parts := strings.Split(path, "/")
 		if len(parts) < 4 {
 			return nil, "", false
