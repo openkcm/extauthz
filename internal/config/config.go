@@ -21,6 +21,21 @@ type Config struct {
 
 	// ClientData configuration
 	ClientData ClientData `yaml:"clientData"`
+
+	// Session cache configuration (optional)
+	SessionCache SessionCache `yaml:"sessionCache"`
+}
+
+type SessionCache struct {
+	Valkey        *Valkey `yaml:"valkey"`
+	CMKPathPrefix string  `yaml:"cmkPathPrefix"`
+}
+
+type Valkey struct {
+	Host     commoncfg.SourceRef `yaml:"host"`
+	User     commoncfg.SourceRef `yaml:"user"`
+	Password commoncfg.SourceRef `yaml:"password"`
+	Prefix   string              `yaml:"prefix"`
 }
 
 // ClientData configuration
@@ -56,14 +71,22 @@ type JWT struct {
 	// IssuerClaimKeys configures the JWT issuer keys
 	IssuerClaimKeys []string `yaml:"issuerClaimKeys" default:"['iss']"`
 
-	// Define providers as k8s custom resources
-	K8sProviders K8sProviders `yaml:"k8sProviders"`
+	// A list of static JWT providers
+	Providers []Provider `yaml:"providers"`
+
+	// An optional gRPC source to dynamically lookup JWT providers
+	ProviderSource *ProviderSource `yaml:"providerSource"`
 }
 
-type K8sProviders struct {
-	Enabled    bool   `yaml:"enabled" default:"true"`
-	APIGroup   string `yaml:"apiGroup" default:"gateway.extensions.envoyproxy.io"`
-	APIVersion string `yaml:"apoVersion" default:"v1alpha1"`
-	Name       string `yaml:"name" default:"jwtproviders"`
-	Namespace  string `yaml:"namespace" default:"default"`
+type ProviderSource struct {
+	commoncfg.GRPCClient `mapstructure:",squash"`
+
+	// Only MTLS and Insecure are supported
+	SecretRef commoncfg.SecretRef `yaml:"secretRef"`
+}
+
+type Provider struct {
+	Issuer    string   `yaml:"issuer"`
+	Audiences []string `yaml:"audiences"`
+	JwksURIs  []string `yaml:"jwksURIs"`
 }

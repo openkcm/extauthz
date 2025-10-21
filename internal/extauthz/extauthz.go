@@ -1,9 +1,11 @@
 package extauthz
 
 import (
+	"context"
 	"errors"
 
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
+	"github.com/openkcm/session-manager/pkg/session"
 	"github.com/samber/oops"
 
 	"github.com/openkcm/extauthz/internal/clientdata"
@@ -12,12 +14,32 @@ import (
 	"github.com/openkcm/extauthz/internal/policies/cedarpolicy"
 )
 
+const (
+	DefaultCMKPathPrefix = "/cmk/v1/"
+)
+
+// sessionLoaderInterface defines the interface for loading sessions.
+// We don't use session.Repository directly to avoid depending on
+// unnecessary methods and to make testing easier.
+type sessionLoaderInterface interface {
+	LoadSession(ctx context.Context, sessionID string) (session.Session, error)
+}
+
+// oidcHandlerInterface defines the interface for JWT handling.
+// We don't use oidc.Handler directly to make testing easier.
+type oidcHandlerInterface interface {
+	ParseAndValidate(ctx context.Context, rawToken string, userclaims any, useCache bool) error
+	Introspect(ctx context.Context, issuer, bearerToken, introspectToken string, useCache bool) (oidc.Introspection, error)
+}
+
 type Server struct {
 	policyEngine           policies.Engine
-	oidcHandler            *oidc.Handler
+	oidcHandler            oidcHandlerInterface
 	clientDataSigner       *clientdata.Signer
 	trustedSubjectToRegion map[string]string
 	featureGates           *commoncfg.FeatureGates
+	sessionCache           sessionLoaderInterface
+	cmkPathPrefix          string
 }
 
 // ServerOption is used to configure a server.
@@ -35,7 +57,7 @@ func WithTrustedSubjects(m map[string]string) ServerOption {
 	}
 }
 
-func WithOIDCHandler(hdl *oidc.Handler) ServerOption {
+func WithOIDCHandler(hdl oidcHandlerInterface) ServerOption {
 	return func(server *Server) error {
 		if hdl == nil {
 			return errors.New("jwt handler must not be nil")
@@ -78,6 +100,20 @@ func WithFeatureGates(fg *commoncfg.FeatureGates) ServerOption {
 	}
 }
 
+func WithSessionCache(sessionCache sessionLoaderInterface) ServerOption {
+	return func(server *Server) error {
+		server.sessionCache = sessionCache
+		return nil
+	}
+}
+
+func WithCMKPathPrefix(cmkPathPrefix string) ServerOption {
+	return func(server *Server) error {
+		server.cmkPathPrefix = cmkPathPrefix
+		return nil
+	}
+}
+
 // NewServer creates a new server and applies the given options.
 func NewServer(opts ...ServerOption) (*Server, error) {
 	policyEngine, err := cedarpolicy.NewEngine(cedarpolicy.WithBytes("empty", []byte("")))
@@ -91,8 +127,9 @@ func NewServer(opts ...ServerOption) (*Server, error) {
 	}
 
 	server := &Server{
-		policyEngine: policyEngine,
-		oidcHandler:  hdl,
+		policyEngine:  policyEngine,
+		oidcHandler:   hdl,
+		cmkPathPrefix: DefaultCMKPathPrefix,
 	}
 
 	for _, opt := range opts {

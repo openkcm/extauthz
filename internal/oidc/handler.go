@@ -1,12 +1,11 @@
 // Package oidc implements OIDC token handling in a multi-tenant environment.
 // For this a Handler is created, which holds the Providers for validating tokens.
-// You can either register providers in a static manner, or define them as
-// JWTProvider definition in kubernetes.
+// You can either register providers in a static manner, or inject a client to
+// query providers during runtime.
 package oidc
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
@@ -15,8 +14,6 @@ import (
 	"github.com/go-jose/go-jose/v4"
 	"github.com/go-jose/go-jose/v4/jwt"
 	"github.com/patrickmn/go-cache"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 
 	slogctx "github.com/veqryn/slog-context"
 )
@@ -25,14 +22,15 @@ var (
 	DefaultIssuerClaims = []string{"iss"}
 )
 
+// ProviderClient is an interface for looking up providers for the issuer.
+type ProviderClient interface {
+	Get(ctx context.Context, issuer string) (*Provider, error)
+}
+
 // Handler tracks the set of identity providers to support multi tenancy.
 type Handler struct {
-	issuerClaimKeys              []string
-	k8sJWTProvidersEnabled       bool
-	k8sJWTProvidersCRDAPIGroup   string
-	k8sJWTProvidersCRDAPIVersion string
-	k8sJWTProvidersCRDName       string
-	k8sJWTProvidersCRDNamespace  string
+	issuerClaimKeys []string
+	providerClient  ProviderClient
 
 	// cache the providers by issuer
 	cache           *cache.Cache // map[string]*Provider or introspection
@@ -64,15 +62,9 @@ func WithProvider(provider *Provider) HandlerOption {
 	}
 }
 
-// WithK8sJWTProviders enables the use of k8s custom resource definitions
-// for JWT providers.
-func WithK8sJWTProviders(enabled bool, crdAPIGroup, crdAPIVersion, crdName, crdNamespace string) HandlerOption {
+func WithProviderClient(providerClient ProviderClient) HandlerOption {
 	return func(handler *Handler) error {
-		handler.k8sJWTProvidersEnabled = enabled
-		handler.k8sJWTProvidersCRDAPIGroup = crdAPIGroup
-		handler.k8sJWTProvidersCRDAPIVersion = crdAPIVersion
-		handler.k8sJWTProvidersCRDName = crdName
-		handler.k8sJWTProvidersCRDNamespace = crdNamespace
+		handler.providerClient = providerClient
 		handler.cache = cache.New(handler.expiration, handler.cleanupInterval)
 
 		return nil
@@ -111,7 +103,7 @@ func (handler *Handler) RegisterProvider(provider *Provider) {
 	handler.cache.Set(provider.issuerURL.Host, provider, cache.DefaultExpiration)
 }
 
-func (handler *Handler) ParseAndValidate(ctx context.Context, rawToken string, userclaims any, allowIntrospectCache bool) error {
+func (handler *Handler) ParseAndValidate(ctx context.Context, rawToken string, userclaims any, useCache bool) error {
 	// parse the token - at the moment we only support RS256
 	token, err := jwt.ParseSigned(rawToken, []jose.SignatureAlgorithm{jose.RS256})
 	if err != nil {
@@ -199,7 +191,7 @@ func (handler *Handler) ParseAndValidate(ctx context.Context, rawToken string, u
 	}
 
 	// Verify if token is not revoked
-	intr, err := handler.introspect(ctx, provider, rawToken, rawToken, allowIntrospectCache)
+	intr, err := handler.introspect(ctx, provider, rawToken, rawToken, useCache)
 	if err != nil {
 		return fmt.Errorf("introspecting token: %w", err)
 	}
@@ -212,7 +204,7 @@ func (handler *Handler) ParseAndValidate(ctx context.Context, rawToken string, u
 }
 
 // ProviderFor returns the provider for the given issuer. It either looks up the
-// provider in the internal cache or queries the k8s cluster for the provider.
+// provider in the internal cache or queries the provider client.
 func (handler *Handler) ProviderFor(ctx context.Context, issuer string) (*Provider, error) {
 	// check the cache first
 	if providerInterface, found := handler.cache.Get(issuer); found {
@@ -223,14 +215,9 @@ func (handler *Handler) ProviderFor(ctx context.Context, issuer string) (*Provid
 
 	slogctx.Info(ctx, "Provider cache miss", "issuer", issuer)
 
-	// if enabled, create a new provider from k8s JWTProvider definition if any
-	if handler.k8sJWTProvidersEnabled {
-		k8sRestClient, err := handler.k8sRestClient()
-		if err != nil {
-			return nil, err
-		}
-
-		p, err := handler.k8sJWTProviderFor(ctx, k8sRestClient, issuer)
+	// if we have a provider client, use it to get the provider
+	if handler.providerClient != nil {
+		p, err := handler.providerClient.Get(ctx, issuer)
 		if err != nil {
 			return nil, err
 		}
@@ -247,7 +234,7 @@ func (handler *Handler) ProviderFor(ctx context.Context, issuer string) (*Provid
 }
 
 // Introspect an access or refresh token with the given issuer.
-func (handler *Handler) Introspect(ctx context.Context, issuer, bearerToken, introspectToken string, allowCache bool) (Introspection, error) {
+func (handler *Handler) Introspect(ctx context.Context, issuer, bearerToken, introspectToken string, useCache bool) (Introspection, error) {
 	// parse the issuer URL
 	issuerURL, err := url.Parse(issuer)
 	if err != nil {
@@ -265,13 +252,13 @@ func (handler *Handler) Introspect(ctx context.Context, issuer, bearerToken, int
 	}
 
 	// let the handler introspect the token
-	return handler.introspect(ctx, provider, bearerToken, introspectToken, allowCache)
+	return handler.introspect(ctx, provider, bearerToken, introspectToken, useCache)
 }
 
 // introspect an access or refresh token.
-func (handler *Handler) introspect(ctx context.Context, provider *Provider, bearerToken, introspectToken string, allowCache bool) (Introspection, error) {
+func (handler *Handler) introspect(ctx context.Context, provider *Provider, bearerToken, introspectToken string, useCache bool) (Introspection, error) {
 	cacheKey := "introspect_" + introspectToken
-	if allowCache {
+	if useCache {
 		cache, ok := handler.cache.Get(cacheKey)
 		if ok {
 			//nolint:forcetypeassert
@@ -287,105 +274,6 @@ func (handler *Handler) introspect(ctx context.Context, provider *Provider, bear
 	handler.cache.Set(cacheKey, intr, 0)
 
 	return intr, nil
-}
-
-type RemoteJWKS struct {
-	URI string `json:"uri"`
-}
-
-type Spec struct {
-	Name       string     `json:"name"`
-	Issuer     string     `json:"issuer"`
-	Audiences  []string   `json:"audiences,omitempty"`
-	RemoteJwks RemoteJWKS `json:"remoteJwks,omitempty"`
-}
-
-type JWTProvider struct {
-	Spec Spec `json:"spec"`
-}
-
-type JWTProviderResult struct {
-	Items []JWTProvider `json:"items"`
-}
-
-func (handler *Handler) k8sRestClient() (rest.Interface, error) {
-	// read the k8s config
-	config, err := rest.InClusterConfig()
-	if err != nil {
-		return nil, fmt.Errorf("failed to read k8s config: %w", err)
-	}
-
-	// create the k8s clientset
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create k8s clientset: %w", err)
-	}
-
-	return clientset.RESTClient(), nil
-}
-
-// k8sJWTProviderFor queries the k8s cluster for JWT providers.
-func (handler *Handler) k8sJWTProviderFor(ctx context.Context, k8sRestClient rest.Interface, issuer string) (*Provider, error) {
-	// query the jwtproviders
-	result, err := k8sRestClient.Get().
-		AbsPath(fmt.Sprintf("/apis/%s/%s",
-			handler.k8sJWTProvidersCRDAPIGroup,
-			handler.k8sJWTProvidersCRDAPIVersion,
-		)).
-		Namespace(handler.k8sJWTProvidersCRDNamespace).
-		Resource(handler.k8sJWTProvidersCRDName).
-		DoRaw(context.Background())
-	if err != nil {
-		return nil, fmt.Errorf("failed to query jwtproviders: %w", err)
-	}
-
-	rawProviders := JWTProviderResult{}
-
-	err = json.Unmarshal(result, &rawProviders)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal jwtproviders: %w", err)
-	}
-
-	// find the right JWTProvider definition, create a new provider from it, cache and return it
-	slogctx.Debug(ctx, "Found k8s JWT providers", "count", len(rawProviders.Items))
-
-	for _, provider := range rawProviders.Items {
-		slogctx.Debug(ctx, "Checking k8s JWT provider", "name", provider.Spec.Name, "issuer", provider.Spec.Issuer)
-		// parse the issuer URL
-		issuerURL, err := url.Parse(provider.Spec.Issuer)
-		if err != nil {
-			slogctx.Error(ctx, "failed to parse issuer URL", "error", err)
-			continue
-		}
-
-		// skip if the issuer does not match
-		if issuerURL.Host != issuer {
-			continue
-		}
-
-		var opts []ProviderOption
-
-		// parse the JWKS URI if any
-		if provider.Spec.RemoteJwks.URI != "" {
-			jwksURI, err := url.Parse(provider.Spec.RemoteJwks.URI)
-			if err != nil {
-				slogctx.Error(ctx, "failed to parse JWKS URI", "JWKSURI", provider.Spec.RemoteJwks.URI, "error", err)
-				continue
-			}
-
-			opts = append(opts, WithCustomJWKSURI(jwksURI))
-		}
-
-		// create and return the provider
-		p, err := NewProvider(issuerURL, provider.Spec.Audiences, opts...)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create provider: %w", err)
-		}
-
-		return p, nil
-	}
-
-	return nil, errors.Join(ErrNoProvider, fmt.Errorf("no provider found for issuer %s", issuer))
 }
 
 func extractFromClaims(claims map[string]any, keys ...string) string {

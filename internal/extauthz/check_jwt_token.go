@@ -22,9 +22,9 @@ func (srv *Server) checkJWTToken(ctx context.Context, bearerToken, method, host,
 		Groups  []string `json:"groups,omitempty"`
 	}{}
 
-	allowIntrospectCache := method == http.MethodGet // Allow using cache for token introspection for GET requests
+	useCache := method == http.MethodGet // Allow using cache for token introspection for GET requests
 
-	err := srv.oidcHandler.ParseAndValidate(ctx, bearerToken, &claims, allowIntrospectCache)
+	err := srv.oidcHandler.ParseAndValidate(ctx, bearerToken, &claims, useCache)
 	if err != nil {
 		slogctx.Debug(ctx, "JWT validation failed", "error", err)
 
