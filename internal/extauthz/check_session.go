@@ -49,23 +49,18 @@ func (srv *Server) checkSession(ctx context.Context, sessionCookie *http.Cookie,
 		}
 	}
 
-	// TODO: need to store this in the session
-	subject := "me"
-	email := ""
-	groups := []string{}
-
 	// prepare the result
 	res := checkResult{
 		is:      UNKNOWN,
-		subject: subject,
-		email:   email,
-		groups:  groups,
+		subject: session.Claims.Subject,
+		email:   session.Claims.Email,
+		groups:  session.Claims.Groups,
 		issuer:  session.Issuer,
 	}
 
 	// check the policies
 	slogctx.Debug(ctx, "Checking policies for session",
-		"subject", subject,
+		"subject", session.Claims.Subject,
 		"issuer", session.Issuer,
 		"method", method,
 		"host", host,
@@ -78,7 +73,7 @@ func (srv *Server) checkSession(ctx context.Context, sessionCookie *http.Cookie,
 	}
 
 	allowed, reason, err := srv.policyEngine.Check(
-		cedarpolicy.WithSubject(subject),
+		cedarpolicy.WithSubject(session.Claims.Subject),
 		cedarpolicy.WithAction(method),
 		cedarpolicy.WithRoute(host+path),
 		cedarpolicy.WithContextData(data),
