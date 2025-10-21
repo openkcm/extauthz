@@ -116,6 +116,7 @@ func TestCheckSession(t *testing.T) {
 				sc.On("LoadSession", mock.Anything, "").
 					Return(session.Session{
 						Issuer: "https://127.0.0.1:8443",
+						Claims: session.Claims{Subject: "me"},
 					}, nil)
 				jh.On("Introspect", mock.Anything, "https://127.0.0.1:8443", "", "", false).
 					Return(oidc.Introspection{Active: true}, nil)
@@ -131,6 +132,7 @@ func TestCheckSession(t *testing.T) {
 				sc.On("LoadSession", mock.Anything, "").
 					Return(session.Session{
 						Issuer: "https://127.0.0.1:8443",
+						Claims: session.Claims{Subject: "me"},
 					}, nil)
 				jh.On("Introspect", mock.Anything, "https://127.0.0.1:8443", "", "", true).
 					Return(oidc.Introspection{Active: true}, nil)
@@ -146,6 +148,7 @@ func TestCheckSession(t *testing.T) {
 				sc.On("LoadSession", mock.Anything, "").
 					Return(session.Session{
 						Issuer: "https://127.0.0.1:8443",
+						Claims: session.Claims{Subject: "me"},
 					}, nil)
 				jh.On("Introspect", mock.Anything, "https://127.0.0.1:8443", "", "", true).
 					Return(oidc.Introspection{Active: true}, nil)
@@ -161,6 +164,7 @@ func TestCheckSession(t *testing.T) {
 				sc.On("LoadSession", mock.Anything, "").
 					Return(session.Session{
 						Issuer: "https://127.0.0.1:8443",
+						Claims: session.Claims{Subject: "me"},
 					}, nil)
 				jh.On("Introspect", mock.Anything, "https://127.0.0.1:8443", "", "", true).
 					Return(oidc.Introspection{Active: true}, nil)
