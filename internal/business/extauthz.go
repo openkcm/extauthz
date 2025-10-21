@@ -60,77 +60,38 @@ func createExtAuthZServer(ctx context.Context, cfg *config.Config) (*extauthz.Se
 	}
 	extauthzServerOptions = append(extauthzServerOptions, extauthz.WithTrustedSubjects(subjects))
 
-	// Create the JWT handler
-	opts := make([]oidc.HandlerOption, 0, 2+len(cfg.JWT.Providers))
-	opts = append(opts, oidc.WithIssuerClaimKeys(cfg.JWT.IssuerClaimKeys...))
+	// Create the OIDC handler
+	oidcHandlerOptions := make([]oidc.HandlerOption, 0, 2+len(cfg.JWT.Providers))
+	oidcHandlerOptions = append(oidcHandlerOptions, oidc.WithIssuerClaimKeys(cfg.JWT.IssuerClaimKeys...))
 	// add static providers (if any)
 	for _, p := range cfg.JWT.Providers {
-		slogctx.Info(ctx, "Using static JWT provider", "issuer", p.Issuer, "audiences", p.Audiences, "jwksURIs", p.JwksURIs)
-		issuerURL, err := url.Parse(p.Issuer)
+		oidcProvider, err := createOIDCProvider(ctx, &p)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse issuer URL %q: %w", p.Issuer, err)
+			return nil, fmt.Errorf("failed to create OIDC provider: %w", err)
 		}
-		var popts []oidc.ProviderOption
-		p, err := oidc.NewProvider(issuerURL, p.Audiences, popts...)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create static JWT provider: %w", err)
-		}
-		opts = append(opts, oidc.WithProvider(p))
+		oidcHandlerOptions = append(oidcHandlerOptions, oidc.WithProvider(oidcProvider))
 	}
 	// add provider source (if any)
 	if cfg.JWT.ProviderSource != nil {
-		slogctx.Info(ctx, "Using JWT provider source", "address", cfg.JWT.ProviderSource.Address)
-		creds, err := transportCredentialsFromSecretRef(&cfg.JWT.ProviderSource.SecretRef)
+		providerSource, err := createOIDCProviderSource(ctx, cfg.JWT.ProviderSource)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create transport credentials: %w", err)
+			return nil, fmt.Errorf("failed to create OIDC provider source: %w", err)
 		}
-		// create the gRPC connection to the provider source
-		grpcConn, err := commongrpc.NewClient(&cfg.JWT.ProviderSource.GRPCClient,
-			grpc.WithTransportCredentials(creds),
-		)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create gRPC connection: %w", err)
-		}
-		pc, err := oidc.NewProviderSource(oidc.WithGRPCConn(grpcConn))
-		if err != nil {
-			return nil, fmt.Errorf("failed to create OIDC provider client: %w", err)
-		}
-		opts = append(opts, oidc.WithProviderClient(pc))
+		oidcHandlerOptions = append(oidcHandlerOptions, oidc.WithProviderClient(providerSource))
 	}
 	// create the handler
-	hdl, err := oidc.NewHandler(opts...)
+	hdl, err := oidc.NewHandler(oidcHandlerOptions...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create the JWT handler: %w", err)
+		return nil, fmt.Errorf("failed to create the OIDC handler: %w", err)
 	}
 	extauthzServerOptions = append(extauthzServerOptions, extauthz.WithOIDCHandler(hdl))
 
 	// Create the session cache (if any)
 	if cfg.SessionCache.Valkey != nil {
-		valkeyHost, err := commoncfg.LoadValueFromSourceRef(cfg.SessionCache.Valkey.Host)
+		sessionCache, err := createValkeySessionCache(ctx, cfg.SessionCache.Valkey)
 		if err != nil {
-			return nil, fmt.Errorf("loading valkey host: %w", err)
+			return nil, fmt.Errorf("failed to create Valkey session cache: %w", err)
 		}
-		valkeyUsername, err := commoncfg.LoadValueFromSourceRef(cfg.SessionCache.Valkey.User)
-		if err != nil {
-			return nil, fmt.Errorf("loading valkey username: %w", err)
-		}
-		valkeyPassword, err := commoncfg.LoadValueFromSourceRef(cfg.SessionCache.Valkey.Password)
-		if err != nil {
-			return nil, fmt.Errorf("loading valkey password: %w", err)
-		}
-		slogctx.Info(ctx, "Using Valkey for session cache", "address", valkeyHost, "user", valkeyUsername)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create transport credentials: %w", err)
-		}
-		valkeyClient, err := valkey.NewClient(valkey.ClientOption{
-			InitAddress: []string{string(valkeyHost)},
-			Username:    string(valkeyUsername),
-			Password:    string(valkeyPassword),
-		})
-		if err != nil {
-			return nil, fmt.Errorf("failed to create the Valkey client: %w", err)
-		}
-		sessionCache := sessrepo.NewRepository(valkeyClient, cfg.SessionCache.Valkey.Prefix)
 		extauthzServerOptions = append(extauthzServerOptions, extauthz.WithSessionCache(sessionCache))
 	}
 
@@ -155,4 +116,66 @@ func transportCredentialsFromSecretRef(secref *commoncfg.SecretRef) (credentials
 		return credentials.NewTLS(tlsConfig), nil
 	}
 	return nil, fmt.Errorf("invalid secret type: %s", secref.Type)
+}
+
+func createOIDCProvider(ctx context.Context, cfg *config.Provider) (*oidc.Provider, error) {
+	slogctx.Info(ctx, "Using static OIDC provider", "issuer", cfg.Issuer, "audiences", cfg.Audiences, "jwksURIs", cfg.JwksURIs)
+	issuerURL, err := url.Parse(cfg.Issuer)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse issuer URL %q: %w", cfg.Issuer, err)
+	}
+	var popts []oidc.ProviderOption
+	oidcProvider, err := oidc.NewProvider(issuerURL, cfg.Audiences, popts...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create static OIDC provider: %w", err)
+	}
+	return oidcProvider, nil
+}
+
+func createOIDCProviderSource(ctx context.Context, cfg *config.ProviderSource) (*oidc.ProviderSource, error) {
+	slogctx.Info(ctx, "Using OIDC provider source", "address", cfg.Address)
+	creds, err := transportCredentialsFromSecretRef(&cfg.SecretRef)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create transport credentials: %w", err)
+	}
+	// create the gRPC connection to the provider source
+	grpcConn, err := commongrpc.NewClient(&cfg.GRPCClient,
+		grpc.WithTransportCredentials(creds),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create gRPC connection: %w", err)
+	}
+	pc, err := oidc.NewProviderSource(oidc.WithGRPCConn(grpcConn))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create OIDC provider client: %w", err)
+	}
+	return pc, nil
+}
+
+func createValkeySessionCache(ctx context.Context, cfg *config.Valkey) (*sessrepo.Repository, error) {
+	valkeyHost, err := commoncfg.LoadValueFromSourceRef(cfg.Host)
+	if err != nil {
+		return nil, fmt.Errorf("loading valkey host: %w", err)
+	}
+	valkeyUsername, err := commoncfg.LoadValueFromSourceRef(cfg.User)
+	if err != nil {
+		return nil, fmt.Errorf("loading valkey username: %w", err)
+	}
+	valkeyPassword, err := commoncfg.LoadValueFromSourceRef(cfg.Password)
+	if err != nil {
+		return nil, fmt.Errorf("loading valkey password: %w", err)
+	}
+	slogctx.Info(ctx, "Using Valkey for session cache", "address", valkeyHost, "user", valkeyUsername)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create transport credentials: %w", err)
+	}
+	valkeyClient, err := valkey.NewClient(valkey.ClientOption{
+		InitAddress: []string{string(valkeyHost)},
+		Username:    string(valkeyUsername),
+		Password:    string(valkeyPassword),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create the Valkey client: %w", err)
+	}
+	return sessrepo.NewRepository(valkeyClient, cfg.Prefix), nil
 }
