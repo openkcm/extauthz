@@ -24,22 +24,16 @@ import (
 
 func createExtAuthZServer(ctx context.Context, cfg *config.Config) (*extauthz.Server, error) {
 	// prepare the options for the server
-	extauthzServerOptions := []extauthz.ServerOption{
+	opts := []extauthz.ServerOption{
 		extauthz.WithFeatureGates(&cfg.FeatureGates),
 	}
 
 	// Load the private key for signing the client data
-	clientDataSigner, err := clientdata.NewSigner(&cfg.FeatureGates, &cfg.ClientData)
+	clientDataSigner, err := createClientDataSigner(ctx, cfg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create client data factory: %w", err)
+		return nil, fmt.Errorf("failed to create client data signer: %w", err)
 	}
-	extauthzServerOptions = append(extauthzServerOptions, extauthz.WithClientDataSigner(clientDataSigner))
-
-	if clientDataSigner.Enabled() {
-		slogctx.Info(ctx, "Using client data with signing key", "id", clientDataSigner.SigningKeyID())
-	} else {
-		slogctx.Info(ctx, "Using client data has been disabled")
-	}
+	opts = append(opts, extauthz.WithClientDataSigner(clientDataSigner))
 
 	// Load all Cedar policy files from the policy path
 	slogctx.Info(ctx, "Handling cedar policies", "cedar", cfg.Cedar)
@@ -47,44 +41,21 @@ func createExtAuthZServer(ctx context.Context, cfg *config.Config) (*extauthz.Se
 	if err != nil {
 		return nil, fmt.Errorf("failed to create the policy engine: %w", err)
 	}
-	extauthzServerOptions = append(extauthzServerOptions, extauthz.WithPolicyEngine(pe))
+	opts = append(opts, extauthz.WithPolicyEngine(pe))
 
 	// Load the trusted subjects
 	subjects, err := loadTrustedSubjects(cfg.MTLS.TrustedSubjectsYaml)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load trusted subjects: %w", err)
 	}
-	if len(cfg.JWT.IssuerClaimKeys) == 0 {
-		slogctx.Warn(ctx, "JWT configuration doesn't have the issuer claims keys; Use the default values: [iss].")
-		cfg.JWT.IssuerClaimKeys = oidc.DefaultIssuerClaims
-	}
-	extauthzServerOptions = append(extauthzServerOptions, extauthz.WithTrustedSubjects(subjects))
+	opts = append(opts, extauthz.WithTrustedSubjects(subjects))
 
 	// Create the OIDC handler
-	oidcHandlerOptions := make([]oidc.HandlerOption, 0, 2+len(cfg.JWT.Providers))
-	oidcHandlerOptions = append(oidcHandlerOptions, oidc.WithIssuerClaimKeys(cfg.JWT.IssuerClaimKeys...))
-	// add static providers (if any)
-	for _, p := range cfg.JWT.Providers {
-		oidcProvider, err := createOIDCProvider(ctx, &p)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create OIDC provider: %w", err)
-		}
-		oidcHandlerOptions = append(oidcHandlerOptions, oidc.WithProvider(oidcProvider))
-	}
-	// add provider source (if any)
-	if cfg.JWT.ProviderSource != nil {
-		providerSource, err := createOIDCProviderSource(ctx, cfg.JWT.ProviderSource)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create OIDC provider source: %w", err)
-		}
-		oidcHandlerOptions = append(oidcHandlerOptions, oidc.WithProviderClient(providerSource))
-	}
-	// create the handler
-	hdl, err := oidc.NewHandler(oidcHandlerOptions...)
+	oidcHandler, err := createOIDCHandler(ctx, &cfg.JWT)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create the OIDC handler: %w", err)
+		return nil, fmt.Errorf("failed to create OIDC handler: %w", err)
 	}
-	extauthzServerOptions = append(extauthzServerOptions, extauthz.WithOIDCHandler(hdl))
+	opts = append(opts, extauthz.WithOIDCHandler(oidcHandler))
 
 	// Create the session cache (if any)
 	if cfg.SessionCache.Valkey != nil {
@@ -92,19 +63,18 @@ func createExtAuthZServer(ctx context.Context, cfg *config.Config) (*extauthz.Se
 		if err != nil {
 			return nil, fmt.Errorf("failed to create Valkey session cache: %w", err)
 		}
-		extauthzServerOptions = append(extauthzServerOptions, extauthz.WithSessionCache(sessionCache))
+		opts = append(opts, extauthz.WithSessionCache(sessionCache))
 	}
 	if cfg.SessionCache.CMKPathPrefix != "" {
 		slogctx.Info(ctx, "Using CMK path prefix for session cache", "prefix", cfg.SessionCache.CMKPathPrefix)
-		extauthzServerOptions = append(extauthzServerOptions, extauthz.WithCMKPathPrefix(cfg.SessionCache.CMKPathPrefix))
+		opts = append(opts, extauthz.WithCMKPathPrefix(cfg.SessionCache.CMKPathPrefix))
 	}
 
 	// Create the ExtAuthZ server
-	srv, err := extauthz.NewServer(extauthzServerOptions...)
+	srv, err := extauthz.NewServer(opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create the ExtAuthZ server: %w", err)
 	}
-
 	return srv, nil
 }
 
@@ -120,6 +90,50 @@ func transportCredentialsFromSecretRef(secref *commoncfg.SecretRef) (credentials
 		return credentials.NewTLS(tlsConfig), nil
 	}
 	return nil, fmt.Errorf("invalid secret type: %s", secref.Type)
+}
+
+func createClientDataSigner(ctx context.Context, cfg *config.Config) (*clientdata.Signer, error) {
+	clientDataSigner, err := clientdata.NewSigner(&cfg.FeatureGates, &cfg.ClientData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create client data factory: %w", err)
+	}
+	if clientDataSigner.Enabled() {
+		slogctx.Info(ctx, "Using client data with signing key", "id", clientDataSigner.SigningKeyID())
+	} else {
+		slogctx.Info(ctx, "Using client data has been disabled")
+	}
+	return clientDataSigner, nil
+}
+
+func createOIDCHandler(ctx context.Context, cfg *config.JWT) (*oidc.Handler, error) {
+	opts := make([]oidc.HandlerOption, 0, 2+len(cfg.Providers))
+	if len(cfg.IssuerClaimKeys) == 0 {
+		slogctx.Warn(ctx, "JWT configuration doesn't have the issuer claims keys; Use the default values: [iss].")
+		cfg.IssuerClaimKeys = oidc.DefaultIssuerClaims
+	}
+	opts = append(opts, oidc.WithIssuerClaimKeys(cfg.IssuerClaimKeys...))
+	// add static providers (if any)
+	for _, p := range cfg.Providers {
+		oidcProvider, err := createOIDCProvider(ctx, &p)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create OIDC provider: %w", err)
+		}
+		opts = append(opts, oidc.WithProvider(oidcProvider))
+	}
+	// add provider source (if any)
+	if cfg.ProviderSource != nil {
+		providerSource, err := createOIDCProviderSource(ctx, cfg.ProviderSource)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create OIDC provider source: %w", err)
+		}
+		opts = append(opts, oidc.WithProviderClient(providerSource))
+	}
+	// create the handler
+	hdl, err := oidc.NewHandler(opts...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create the OIDC handler: %w", err)
+	}
+	return hdl, nil
 }
 
 func createOIDCProvider(ctx context.Context, cfg *config.Provider) (*oidc.Provider, error) {
