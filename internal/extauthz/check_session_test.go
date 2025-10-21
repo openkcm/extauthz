@@ -36,8 +36,8 @@ type MockOIDCHandler struct {
 	mock.Mock
 }
 
-func (m *MockOIDCHandler) Introspect(ctx context.Context, issuer, bearerToken, introspectToken string, allowCache bool) (oidc.Introspection, error) {
-	args := m.Called(ctx, issuer, bearerToken, introspectToken, allowCache)
+func (m *MockOIDCHandler) Introspect(ctx context.Context, issuer, bearerToken, introspectToken string, useCache bool) (oidc.Introspection, error) {
+	args := m.Called(ctx, issuer, bearerToken, introspectToken, useCache)
 	if args.Get(0) == nil {
 		return oidc.Introspection{}, args.Error(1)
 	}
@@ -45,8 +45,8 @@ func (m *MockOIDCHandler) Introspect(ctx context.Context, issuer, bearerToken, i
 	return args.Get(0).(oidc.Introspection), args.Error(1)
 }
 
-func (m *MockOIDCHandler) ParseAndValidate(ctx context.Context, rawToken string, userclaims any, allowIntrospectCache bool) error {
-	args := m.Called(ctx, rawToken, userclaims, allowIntrospectCache)
+func (m *MockOIDCHandler) ParseAndValidate(ctx context.Context, rawToken string, userclaims any, useCache bool) error {
+	args := m.Called(ctx, rawToken, userclaims, useCache)
 	if args.Get(0) == nil {
 		return args.Error(1)
 	}

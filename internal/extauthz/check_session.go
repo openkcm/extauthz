@@ -33,10 +33,10 @@ func (srv *Server) checkSession(ctx context.Context, sessionCookie *http.Cookie,
 	}
 
 	// Allow using cache for token introspection for GET requests
-	allowIntrospectCache := method == http.MethodGet
+	useCache := method == http.MethodGet
 
 	// Verify if token is not revoked
-	intr, err := srv.oidcHandler.Introspect(ctx, session.Issuer, session.AccessToken, session.AccessToken, allowIntrospectCache)
+	intr, err := srv.oidcHandler.Introspect(ctx, session.Issuer, session.AccessToken, session.AccessToken, useCache)
 	if err != nil {
 		slogctx.Debug(ctx, "Failed to introspect token", "error", err)
 		return checkResult{is: UNAUTHENTICATED,
