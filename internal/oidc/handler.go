@@ -103,7 +103,7 @@ func (handler *Handler) RegisterProvider(provider *Provider) {
 	handler.cache.Set(provider.issuerURL.Host, provider, cache.DefaultExpiration)
 }
 
-func (handler *Handler) ParseAndValidate(ctx context.Context, rawToken string, userclaims any, allowIntrospectCache bool) error {
+func (handler *Handler) ParseAndValidate(ctx context.Context, rawToken string, userclaims any, useCache bool) error {
 	// parse the token - at the moment we only support RS256
 	token, err := jwt.ParseSigned(rawToken, []jose.SignatureAlgorithm{jose.RS256})
 	if err != nil {
@@ -191,7 +191,7 @@ func (handler *Handler) ParseAndValidate(ctx context.Context, rawToken string, u
 	}
 
 	// Verify if token is not revoked
-	intr, err := handler.introspect(ctx, provider, rawToken, rawToken, allowIntrospectCache)
+	intr, err := handler.introspect(ctx, provider, rawToken, rawToken, useCache)
 	if err != nil {
 		return fmt.Errorf("introspecting token: %w", err)
 	}
@@ -234,7 +234,7 @@ func (handler *Handler) ProviderFor(ctx context.Context, issuer string) (*Provid
 }
 
 // Introspect an access or refresh token with the given issuer.
-func (handler *Handler) Introspect(ctx context.Context, issuer, bearerToken, introspectToken string, allowCache bool) (Introspection, error) {
+func (handler *Handler) Introspect(ctx context.Context, issuer, bearerToken, introspectToken string, useCache bool) (Introspection, error) {
 	// parse the issuer URL
 	issuerURL, err := url.Parse(issuer)
 	if err != nil {
@@ -252,13 +252,13 @@ func (handler *Handler) Introspect(ctx context.Context, issuer, bearerToken, int
 	}
 
 	// let the handler introspect the token
-	return handler.introspect(ctx, provider, bearerToken, introspectToken, allowCache)
+	return handler.introspect(ctx, provider, bearerToken, introspectToken, useCache)
 }
 
 // introspect an access or refresh token.
-func (handler *Handler) introspect(ctx context.Context, provider *Provider, bearerToken, introspectToken string, allowCache bool) (Introspection, error) {
+func (handler *Handler) introspect(ctx context.Context, provider *Provider, bearerToken, introspectToken string, useCache bool) (Introspection, error) {
 	cacheKey := "introspect_" + introspectToken
-	if allowCache {
+	if useCache {
 		cache, ok := handler.cache.Get(cacheKey)
 		if ok {
 			//nolint:forcetypeassert
