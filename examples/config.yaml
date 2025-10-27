@@ -39,14 +39,29 @@ mtls:
 # JWT Token handling
 jwt:
   issuerClaimKeys:
-    - ias_iss
     - iss
-  k8sProviders:
-    apiGroup: gateway.extensions.envoyproxy.io
-    apiVersion: v1alpha1
-    name: jwtproviders
-    namespace: default
+  providers:
+    - issuer: https://my.oidc.jwt.provider.com/
+      audiences:
+        - my-audience
+  providerSource:
+    address: localhost:5555
+    secretRef:
+      type: insecure
 
 clientData:
   # Signing client data
   signingKeyIDFilePath: ./keyId.txt
+
+sessionCache:
+  valkey:
+    host:
+      source: embedded
+      value: localhost:6379 # integration tests replace this value, be careful when changing
+    user:
+      source: embedded
+      value: ""
+    password:
+      source: embedded
+      value: secret
+    prefix: session-manager

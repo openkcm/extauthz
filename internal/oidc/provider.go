@@ -15,7 +15,7 @@ import (
 	slogctx "github.com/veqryn/slog-context"
 )
 
-// Provider represents a specific JWT provider.
+// Provider represents a specific OIDC provider.
 type Provider struct {
 	issuerURL     *url.URL
 	jwksURI       *url.URL
