@@ -17,7 +17,7 @@ type ProviderSource struct {
 
 var _ ProviderClient = &ProviderSource{}
 
-// ProviderSourceOption is used to configure an JWT provider source.
+// ProviderSourceOption is used to configure an OIDC provider source.
 type ProviderSourceOption func(*ProviderSource) error
 
 func WithGRPCConn(grpcConn *grpc.ClientConn) ProviderSourceOption {
@@ -27,7 +27,7 @@ func WithGRPCConn(grpcConn *grpc.ClientConn) ProviderSourceOption {
 	}
 }
 
-// NewProviderSource creates a new JWT provider and applies the given options.
+// NewProviderSource creates a new OIDC provider and applies the given options.
 func NewProviderSource(opts ...ProviderSourceOption) (*ProviderSource, error) {
 	oidcProvider := &ProviderSource{}
 	for _, opt := range opts {

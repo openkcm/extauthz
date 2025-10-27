@@ -25,7 +25,7 @@ const (
 // Ensure Server implements the AuthorizationServer interface
 var _ envoy_auth.AuthorizationServer = &Server{}
 
-// Check processes the JWT token and/or client certificate to authorize the request.
+// Check authorizes the request based on either client certificate, bearer token or session cookie.
 func (srv *Server) Check(ctx context.Context, req *envoy_auth.CheckRequest) (*envoy_auth.CheckResponse, error) {
 	// check the header
 	if req == nil ||
@@ -70,11 +70,11 @@ func (srv *Server) Check(ctx context.Context, req *envoy_auth.CheckRequest) (*en
 	}
 
 	// Verify if DisableJWTTokenComputation flag was explicitly set in the configuration with value `true`, then the
-	// JWT tokens handling should be disabled
+	// bearer token handling should be disabled
 	// TODO: Remove this hacking code when session support is added and tested
 	skipBearerToken := false
 	if srv.featureGates.IsFeatureEnabled(flags.DisableJWTTokenComputation) {
-		slogctx.Error(ctx, "Check() processing of jwt token has been disabled through feature gates")
+		slogctx.Error(ctx, "Check() processing of bearer token has been disabled through feature gates")
 		result.is = ALWAYS_ALLOW
 		skipBearerToken = true
 	}

@@ -25,7 +25,7 @@ type sessionLoaderInterface interface {
 	LoadSession(ctx context.Context, sessionID string) (session.Session, error)
 }
 
-// oidcHandlerInterface defines the interface for JWT handling.
+// oidcHandlerInterface defines the interface for OIDC handling.
 // We don't use oidc.Handler directly to make testing easier.
 type oidcHandlerInterface interface {
 	ParseAndValidate(ctx context.Context, rawToken string, userclaims any, useCache bool) error
@@ -60,7 +60,7 @@ func WithTrustedSubjects(m map[string]string) ServerOption {
 func WithOIDCHandler(hdl oidcHandlerInterface) ServerOption {
 	return func(server *Server) error {
 		if hdl == nil {
-			return errors.New("jwt handler must not be nil")
+			return errors.New("OIDC handler must not be nil")
 		}
 
 		server.oidcHandler = hdl
@@ -123,7 +123,7 @@ func NewServer(opts ...ServerOption) (*Server, error) {
 
 	hdl, err := oidc.NewHandler()
 	if err != nil {
-		return nil, oops.Hint("failed to create JWT handler").Wrap(err)
+		return nil, oops.Hint("failed to create OIDC handler").Wrap(err)
 	}
 
 	server := &Server{
