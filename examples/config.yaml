@@ -54,6 +54,7 @@ clientData:
   signingKeyIDFilePath: ./keyId.txt
 
 sessionCache:
+  enabled: true
   valkey:
     host:
       source: embedded

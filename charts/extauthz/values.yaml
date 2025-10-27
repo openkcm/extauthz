@@ -271,7 +271,15 @@ config:
     signingKeyIDFilePath: /etc/extauthz-signing/keyId
 
   sessionCache:
+    enabled: true
     valkey:
-      initAddress: ["localhost:6379"]
-      secretRef:
-        type: insecure
+      host:
+        source: embedded
+        value: valkey:6379
+      user:
+        source: embedded
+        value: ""
+      password:
+        source: embedded
+        value: secret
+      prefix: session-manager

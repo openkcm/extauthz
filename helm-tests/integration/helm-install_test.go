@@ -33,6 +33,25 @@ func TestHelmInstall(t *testing.T) {
 	// Create required k8s resources
 	kubeOpts := k8s.NewKubectlOptions("", "", "default")
 
+	// Install Valkey
+	valkeyOptions := &helm.Options{
+		SetValues: map[string]string{
+			"Image.Tag": "latest",
+		},
+	}
+	helm.AddRepo(t, valkeyOptions, "valkey", "https://valkey.io/valkey-helm/")
+	defer helm.RemoveRepo(t, valkeyOptions, "valkey")
+	helm.Install(t, valkeyOptions, "valkey/valkey", "valkey")
+	defer helm.Delete(t, valkeyOptions, "valkey", true)
+	valkeyCtx, valkeyCancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer valkeyCancel()
+	valkeyPods := waitForPodCreation(valkeyCtx, t, kubeOpts, "app.kubernetes.io/name=valkey")
+	for _, pod := range valkeyPods {
+		t.Logf("Checking pod: %s", pod.Name)
+		waitForPodAvailability(valkeyCtx, t, kubeOpts, pod.Name)
+	}
+
+	// Create required resources
 	trustedSubjects := "../../examples/trustedSubjectsConfigmap.yaml"
 	k8s.KubectlApply(t, kubeOpts, trustedSubjects)
 	defer k8s.KubectlDelete(t, kubeOpts, trustedSubjects)
