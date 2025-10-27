@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.5.0](https://github.com/openkcm/extauthz/compare/v0.4.2...v0.5.0) (2025-10-27)
+
+
+### Features
+
+* integrate session manager ([#90](https://github.com/openkcm/extauthz/issues/90)) ([35ff06f](https://github.com/openkcm/extauthz/commit/35ff06f08d36cfc5a7a1afa8809c383d67e6c28d))
+
+
+### Bug Fixes
+
+* remove build_version.json leftofvers ([#109](https://github.com/openkcm/extauthz/issues/109)) ([220a94f](https://github.com/openkcm/extauthz/commit/220a94fcbe9e018a0380e4be8f872fbb41425eaf))
+* use the commonfs Loader, loading from a given path by watching on their changes and load file content from memory ([#112](https://github.com/openkcm/extauthz/issues/112)) ([a5ccf64](https://github.com/openkcm/extauthz/commit/a5ccf648f3caf0a86c05f8017c8dc1eb66916469))
+
 ## [0.4.2](https://github.com/openkcm/extauthz/compare/v0.4.1...v0.4.2) (2025-10-07)
 
 
