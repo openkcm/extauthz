@@ -57,9 +57,9 @@ func createExtAuthZServer(ctx context.Context, cfg *config.Config) (*extauthz.Se
 	}
 	opts = append(opts, extauthz.WithOIDCHandler(oidcHandler))
 
-	// Create the session cache (if any)
-	if cfg.SessionCache.Valkey != nil {
-		sessionCache, err := createValkeySessionCache(ctx, cfg.SessionCache.Valkey)
+	// Create the session cache
+	if cfg.SessionCache.Enabled {
+		sessionCache, err := createValkeySessionCache(ctx, &cfg.SessionCache.Valkey)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create Valkey session cache: %w", err)
 		}
@@ -183,10 +183,7 @@ func createValkeySessionCache(ctx context.Context, cfg *config.Valkey) (*sessrep
 	if err != nil {
 		return nil, fmt.Errorf("loading valkey password: %w", err)
 	}
-	slogctx.Info(ctx, "Using Valkey for session cache", "address", valkeyHost, "user", valkeyUsername)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create transport credentials: %w", err)
-	}
+	slogctx.Info(ctx, "Using Valkey for session cache", "address", string(valkeyHost), "user", string(valkeyUsername))
 	valkeyClient, err := valkey.NewClient(valkey.ClientOption{
 		InitAddress: []string{string(valkeyHost)},
 		Username:    string(valkeyUsername),

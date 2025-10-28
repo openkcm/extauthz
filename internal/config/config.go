@@ -27,8 +27,9 @@ type Config struct {
 }
 
 type SessionCache struct {
-	Valkey        *Valkey `yaml:"valkey"`
-	CMKPathPrefix string  `yaml:"cmkPathPrefix"`
+	Enabled       bool   `yaml:"enabled"`
+	Valkey        Valkey `yaml:"valkey"`
+	CMKPathPrefix string `yaml:"cmkPathPrefix"`
 }
 
 type Valkey struct {
