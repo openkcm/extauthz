@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.1](https://github.com/openkcm/extauthz/compare/v0.5.0...v0.5.1) (2025-10-28)
+
+
+### Bug Fixes
+
+* tests and chart ([#118](https://github.com/openkcm/extauthz/issues/118)) ([e6b434b](https://github.com/openkcm/extauthz/commit/e6b434b6ee0ece9a7844473306c0ae81c84ebaf3))
+
 ## [0.5.0](https://github.com/openkcm/extauthz/compare/v0.4.2...v0.5.0) (2025-10-27)
 
 
