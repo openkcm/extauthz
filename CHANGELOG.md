@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.2](https://github.com/openkcm/extauthz/compare/v0.5.1...v0.5.2) (2025-10-29)
+
+
+### Bug Fixes
+
+* mark obsolete configs as deprecated instead of removing them ([#122](https://github.com/openkcm/extauthz/issues/122)) ([e767279](https://github.com/openkcm/extauthz/commit/e76727913448c0c0266e2fe927dfa8223c8daea5))
+
 ## [0.5.1](https://github.com/openkcm/extauthz/compare/v0.5.0...v0.5.1) (2025-10-28)
 
 
