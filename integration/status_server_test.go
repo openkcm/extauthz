@@ -49,6 +49,16 @@ func TestStatusServer(t *testing.T) {
 			endpoint:   "version",
 			wantOutput: "{}",
 			wantError:  false,
+		}, {
+			name:       "get readiness",
+			endpoint:   "probe/readiness",
+			wantOutput: "",
+			wantError:  false,
+		}, {
+			name:       "get liveness",
+			endpoint:   "probe/liveness",
+			wantOutput: "",
+			wantError:  false,
 		},
 	}
 
@@ -89,7 +99,8 @@ func TestStatusServer(t *testing.T) {
 				if err != nil {
 					t.Errorf("unexpected error: %s", err)
 				} else {
-					if strings.TrimSpace(string(got)) != strings.TrimSpace(tc.wantOutput) {
+					t.Logf("response: %s", got)
+					if tc.wantOutput != "" && strings.TrimSpace(string(got)) != strings.TrimSpace(tc.wantOutput) {
 						t.Errorf("expected: %s, got: %s", tc.wantOutput, got)
 					}
 				}
