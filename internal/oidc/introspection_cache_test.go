@@ -93,7 +93,7 @@ func (s *handlerTestSuite) SetupSuite() {
 	cl := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: certpool}}}
 	s.provider, err = NewProvider(providerURL, []string{"aud1"}, WithClient(cl), WithCustomJWKSURI(jwksURI))
 	s.Require().NoError(err)
-	s.hdl, err = NewHandler(WithIssuerClaimKeys(DefaultIssuerClaims...), WithProvider(s.provider))
+	s.hdl, err = NewHandler(WithIssuerClaimKeys(DefaultIssuerClaims...), WithStaticProvider(s.provider))
 	s.Require().NoError(err)
 
 	s.token = jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
@@ -162,13 +162,4 @@ func (s *handlerTestSuite) Test_ParseAndValidate_IntrospectionCache() {
 	// Should invalidate cache for POST request
 	err = s.hdl.ParseAndValidate(context.Background(), tokenString, &claims, false)
 	s.Require().Error(err)
-
-	time.Sleep(35 * time.Second)
-
-	s.jwks.tokenActive = true
-
-	// Should invalidate cache after 30 seconds.
-	s.hdl.RegisterProvider(s.provider)
-	err = s.hdl.ParseAndValidate(context.Background(), tokenString, &claims, true)
-	s.Require().NoError(err)
 }

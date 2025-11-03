@@ -30,6 +30,7 @@ type ProviderClient interface {
 // Handler tracks the set of identity providers to support multi tenancy.
 type Handler struct {
 	issuerClaimKeys []string
+	staticProviders map[string]*Provider
 	providerClient  ProviderClient
 
 	// cache the providers by issuer
@@ -49,14 +50,14 @@ func WithIssuerClaimKeys(issuerClaimKeys ...string) HandlerOption {
 	}
 }
 
-// WithProvider registers the given provider.
-func WithProvider(provider *Provider) HandlerOption {
+// WithStaticProvider registers the given provider.
+func WithStaticProvider(provider *Provider) HandlerOption {
 	return func(handler *Handler) error {
 		if provider == nil {
 			return errors.New("provider must not be nil")
 		}
 
-		handler.RegisterProvider(provider)
+		handler.RegisterStaticProvider(provider)
 
 		return nil
 	}
@@ -87,6 +88,7 @@ func NewHandler(opts ...HandlerOption) (*Handler, error) {
 	handler := &Handler{
 		issuerClaimKeys: DefaultIssuerClaims,
 		cache:           cache.New(30*time.Second, 10*time.Minute),
+		staticProviders: make(map[string]*Provider),
 	}
 	for _, opt := range opts {
 		err := opt(handler)
@@ -98,9 +100,9 @@ func NewHandler(opts ...HandlerOption) (*Handler, error) {
 	return handler, nil
 }
 
-// RegisterProvider registers a provider with the handler.
-func (handler *Handler) RegisterProvider(provider *Provider) {
-	handler.cache.Set(provider.issuerURL.Host, provider, cache.DefaultExpiration)
+// RegisterStaticProvider registers a provider with the handler.
+func (handler *Handler) RegisterStaticProvider(provider *Provider) {
+	handler.staticProviders[provider.issuerURL.Host] = provider
 }
 
 func (handler *Handler) ParseAndValidate(ctx context.Context, rawToken string, userclaims any, useCache bool) error {
@@ -206,14 +208,21 @@ func (handler *Handler) ParseAndValidate(ctx context.Context, rawToken string, u
 // ProviderFor returns the provider for the given issuer. It either looks up the
 // provider in the internal cache or queries the provider client.
 func (handler *Handler) ProviderFor(ctx context.Context, issuer string) (*Provider, error) {
-	// check the cache first
+	// check the static providers first
+	if provider, ok := handler.staticProviders[issuer]; ok {
+		return provider, nil
+	}
+
+	slogctx.Info(ctx, "Issuer not found in the static provider list", "issuer", issuer)
+
+	// check the cache then
 	if providerInterface, found := handler.cache.Get(issuer); found {
 		if key, ok := providerInterface.(*Provider); ok {
 			return key, nil
 		}
 	}
 
-	slogctx.Info(ctx, "Provider cache miss", "issuer", issuer)
+	slogctx.Info(ctx, "Issuer not found in the provider cache", "issuer", issuer)
 
 	// if we have a provider client, use it to get the provider
 	if handler.providerClient != nil {
