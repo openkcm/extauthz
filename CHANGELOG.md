@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.4](https://github.com/openkcm/extauthz/compare/v0.5.3...v0.5.4) (2025-11-03)
+
+
+### Bug Fixes
+
+* handling of static providers ([#130](https://github.com/openkcm/extauthz/issues/130)) ([4390a25](https://github.com/openkcm/extauthz/commit/4390a25502a1fc04d6ffcf48dfb29fb413225960))
+
 ## [0.5.3](https://github.com/openkcm/extauthz/compare/v0.5.2...v0.5.3) (2025-10-30)
 
 
