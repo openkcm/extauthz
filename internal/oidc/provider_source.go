@@ -12,7 +12,7 @@ import (
 
 type ProviderSource struct {
 	grpcConn *grpc.ClientConn
-	pclient  oidcproviderv1.OIDCProviderClient
+	pclient  oidcproviderv1.ServiceClient
 }
 
 var _ ProviderClient = &ProviderSource{}
@@ -39,7 +39,7 @@ func NewProviderSource(opts ...ProviderSourceOption) (*ProviderSource, error) {
 	if oidcProvider.grpcConn == nil {
 		return nil, errors.New("grpc connection is required")
 	}
-	oidcProvider.pclient = oidcproviderv1.NewOIDCProviderClient(oidcProvider.grpcConn)
+	oidcProvider.pclient = oidcproviderv1.NewServiceClient(oidcProvider.grpcConn)
 	return oidcProvider, nil
 }
 
