@@ -59,18 +59,18 @@ func TestNewHandler(t *testing.T) {
 		}, {
 			name: "with nil provider",
 			opts: []HandlerOption{
-				WithProvider(nil),
+				WithStaticProvider(nil),
 			},
 			wantError: true,
 		}, {
 			name: "with provider",
 			opts: []HandlerOption{
-				WithProvider(&Provider{
+				WithStaticProvider(&Provider{
 					issuerURL: providerUrl,
 				}),
 			},
 			checkFunc: func(h *Handler) error {
-				if _, found := h.cache.Get(providerUrl.Host); !found {
+				if _, found := h.staticProviders[providerUrl.Host]; !found {
 					return errors.New("expected providers to be initialized")
 				}
 				return nil
@@ -370,7 +370,7 @@ func TestParseAndValidate(t *testing.T) {
 
 			hdl, err := NewHandler(
 				WithIssuerClaimKeys(tc.issuerClaimKeys...),
-				WithProvider(p),
+				WithStaticProvider(p),
 			)
 			if err != nil {
 				t.Fatalf("could not create handler: %s", err)

@@ -118,7 +118,7 @@ func createOIDCHandler(ctx context.Context, cfg *config.JWT) (*oidc.Handler, err
 		if err != nil {
 			return nil, fmt.Errorf("failed to create OIDC provider: %w", err)
 		}
-		opts = append(opts, oidc.WithProvider(oidcProvider))
+		opts = append(opts, oidc.WithStaticProvider(oidcProvider))
 	}
 	// add provider source (if any)
 	if cfg.ProviderSource != nil {

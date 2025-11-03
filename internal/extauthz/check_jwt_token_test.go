@@ -177,7 +177,7 @@ func TestCheckAuthHeader(t *testing.T) {
 				t.Fatalf("could not create provider: %s", err)
 			}
 
-			hdl, err := oidc.NewHandler(oidc.WithProvider(p))
+			hdl, err := oidc.NewHandler(oidc.WithStaticProvider(p))
 			if err != nil {
 				t.Fatalf("could not create handler: %s", err)
 			}
