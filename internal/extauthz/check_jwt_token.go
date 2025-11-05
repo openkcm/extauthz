@@ -104,7 +104,7 @@ func jwtPayload(tokenString string) (string, error) {
 	}
 	payloadBytes, err := base64.RawURLEncoding.DecodeString(parts[1])
 	if err != nil {
-		return "", errors.New("could not base64 decode JWT payload")
+		return "", errors.New("could not decode JWT payload")
 	}
 	return string(payloadBytes), nil
 }
