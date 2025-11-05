@@ -4,7 +4,7 @@ go 1.25.1
 
 require (
 	github.com/cedar-policy/cedar-go v1.2.9
-	github.com/envoyproxy/go-control-plane/envoy v1.35.0
+	github.com/envoyproxy/go-control-plane/envoy v1.36.0
 	github.com/go-andiamo/splitter v1.2.5
 	github.com/go-jose/go-jose/v4 v4.1.3
 	github.com/gogo/googleapis v1.4.1
