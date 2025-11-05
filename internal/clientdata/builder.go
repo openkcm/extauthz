@@ -56,6 +56,12 @@ func WithGroups(vals []string) Option {
 		return nil
 	}
 }
+func WithRawClaims(val string) Option {
+	return func(b *clientDataBuilder) error {
+		b.RawClaims = val
+		return nil
+	}
+}
 func WithSignatureAlgorithm(val auth.SignatureAlgorithm) Option {
 	return func(b *clientDataBuilder) error {
 		b.SignatureAlgorithm = val

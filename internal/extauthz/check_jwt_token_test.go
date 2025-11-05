@@ -60,11 +60,12 @@ func TestCheckAuthHeader(t *testing.T) {
 	}
 
 	// create a JWT token
+	exp := time.Now().Add(48 * time.Hour).Unix()
 	token := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
 		"sub":    "me",
 		"mail":   "me@my.world",
 		"iss":    issuerURL.String(),
-		"exp":    time.Now().Add(48 * time.Hour).Unix(),
+		"exp":    exp,
 		"groups": []string{"groupA", "groupB"},
 	})
 	token.Header["kid"] = rsaKeyID
@@ -85,7 +86,7 @@ func TestCheckAuthHeader(t *testing.T) {
 		"sub":    "me",
 		"mail":   "me@my.world",
 		"iss":    "https://invalid.issuer",
-		"exp":    time.Now().Add(48 * time.Hour).Unix(),
+		"exp":    exp,
 		"groups": []string{"groupA", "groupB"},
 	})
 	tokenInvalid.Header["kid"] = rsaKeyID
@@ -141,6 +142,7 @@ func TestCheckAuthHeader(t *testing.T) {
 		wantEmail           string
 		wantIssuer          string
 		wantGroups          []string
+		wantRawClaims       string
 	}{
 		{
 			name:                "zero values",
@@ -157,6 +159,7 @@ func TestCheckAuthHeader(t *testing.T) {
 			wantEmail:           "me@my.world",
 			wantIssuer:          issuerURL.String(),
 			wantGroups:          []string{"groupA", "groupB"},
+			wantRawClaims:       fmt.Sprintf(`{"exp":%d,"groups":["groupA","groupB"],"iss":"%s","mail":"me@my.world","sub":"me"}`, exp, issuerURL.String()),
 		},
 	}
 
@@ -219,6 +222,10 @@ func TestCheckAuthHeader(t *testing.T) {
 			// Assert
 			if result.is != tc.wantCheckResultCode {
 				t.Errorf("expected: %v, got: %v", tc.wantCheckResultCode, result.is)
+			}
+
+			if result.rawClaims != tc.wantRawClaims {
+				t.Errorf("expected: %v, got: %v", tc.wantRawClaims, result.rawClaims)
 			}
 
 			if result.subject != tc.wantSubject {

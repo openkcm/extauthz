@@ -51,11 +51,12 @@ func (srv *Server) checkSession(ctx context.Context, sessionCookie *http.Cookie,
 
 	// prepare the result
 	res := checkResult{
-		is:      UNKNOWN,
-		subject: session.Claims.Subject,
-		email:   session.Claims.Email,
-		groups:  session.Claims.Groups,
-		issuer:  session.Issuer,
+		is:        UNKNOWN,
+		subject:   session.Claims.Subject,
+		email:     session.Claims.Email,
+		groups:    session.Claims.Groups,
+		issuer:    session.Issuer,
+		rawClaims: session.RawClaims,
 	}
 
 	// check the policies

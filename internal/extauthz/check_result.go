@@ -15,13 +15,14 @@ const (
 )
 
 type checkResult struct {
-	is      checkResultCode
-	info    string
-	subject string
-	email   string
-	region  string
-	issuer  string
-	groups  []string
+	is        checkResultCode
+	info      string
+	subject   string
+	email     string
+	region    string
+	issuer    string
+	groups    []string
+	rawClaims string
 
 	withXFCCHeader bool
 }
@@ -43,6 +44,7 @@ func (r *checkResult) toClientDataOptions() []clientdata.Option {
 		clientdata.WithRegion(r.region),
 		clientdata.WithGroups(r.groups),
 		clientdata.WithIssuer(r.issuer),
+		clientdata.WithRawClaims(r.rawClaims),
 	}
 }
 
