@@ -155,8 +155,8 @@ github.com/opencontainers/go-digest v1.0.0 h1:apOUWs51W5PlhuyGyz9FCeeBIOUDA/6nW8
 github.com/opencontainers/go-digest v1.0.0/go.mod h1:0JzlMkj0TRzQZfJkVvzbP0HBR3IKzErnv2BNG4W4MAM=
 github.com/opencontainers/image-spec v1.1.1 h1:y0fUlFfIZhPF1W537XOLg0/fcx6zcHCJwooC2xJA040=
 github.com/opencontainers/image-spec v1.1.1/go.mod h1:qpqAh3Dmcf36wStyyWU+kCeDgrGnAve2nCC8+7h8Q0M=
-github.com/openkcm/api-sdk v0.10.0 h1:Ua15/PfOAd+N4wXZR9syO+eiAFhgHN3/zfqZsnnswwM=
-github.com/openkcm/api-sdk v0.10.0/go.mod h1:I15YnS0cB7PiZwPFg3a/j+MuAngxeJSLZu+axE4Qf1I=
+github.com/openkcm/api-sdk v0.11.0 h1:edO/baMEoHkM6rZbcVoqTdYXbgGcEcmGEfZ62xptVR8=
+github.com/openkcm/api-sdk v0.11.0/go.mod h1:I15YnS0cB7PiZwPFg3a/j+MuAngxeJSLZu+axE4Qf1I=
 github.com/openkcm/common-sdk v1.5.3-0.20251105072938-48c91f8fe690 h1:cGxFmzyrd5wxwy6xDbuunOxKMX3Cb/nsWdFav+dOq04=
 github.com/openkcm/common-sdk v1.5.3-0.20251105072938-48c91f8fe690/go.mod h1:HiA9dMdXUDRrdL7aGewUYEa7c6u7urUAVHe+nk33Qrk=
 github.com/openkcm/session-manager v0.6.1-0.20251105072936-3acf92ede3d3 h1:L45oQYti2gIX3z3QgFmpOur55SUtLMRCfTS8lYSQuqA=
