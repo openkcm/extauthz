@@ -11,10 +11,11 @@ import (
 	"time"
 
 	"github.com/go-jose/go-jose/v4"
-	"github.com/openkcm/extauthz/internal/utils"
 	"github.com/patrickmn/go-cache"
 
 	slogctx "github.com/veqryn/slog-context"
+
+	"github.com/openkcm/extauthz/internal/utils"
 )
 
 // Provider represents a specific OIDC provider.
@@ -289,6 +290,7 @@ func (p *Provider) introspect(ctx context.Context, bearerToken, introspectToken 
 
 func parseEndpoint(endpoint string) (*url.URL, error) {
 	if endpoint == "" {
+		//nolint: nilnil
 		return nil, nil
 	}
 	return url.Parse(endpoint)
