@@ -10,6 +10,7 @@ featureGates:
   enrich-header-with-client-region: false
   disable-client-certificate-computation: false
   disable-jwt-token-computation: false
+  disable-jwt-token-introspection: false
   disable-client-data-computation: false
 
 logger:

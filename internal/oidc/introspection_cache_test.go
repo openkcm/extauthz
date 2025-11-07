@@ -74,8 +74,8 @@ func (s *handlerTestSuite) SetupSuite() {
 	binary.BigEndian.PutUint64(eBytes, uint64(s.rsaPrivateKey.E))
 	eBytes = bytes.TrimLeft(eBytes, "\x00")
 	sum := sha256.Sum256(x509Cert)
-	s.jwks.jwksResponse, err = json.Marshal(map[string]interface{}{
-		"keys": []map[string]interface{}{{
+	s.jwks.jwksResponse, err = json.Marshal(map[string]any{
+		"keys": []map[string]any{{
 			"kty":      "RSA",
 			"x5t#S256": base64.RawURLEncoding.EncodeToString(sum[:]),
 			"e":        base64.RawURLEncoding.EncodeToString(eBytes),

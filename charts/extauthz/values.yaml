@@ -245,6 +245,7 @@ config:
     enrich-header-with-client-region: true
     disable-client-certificate-computation: false
     disable-jwt-token-computation: false
+    disable-jwt-token-introspection: false
 
   cedar:
     policyPath: /etc/extauthz-policies
