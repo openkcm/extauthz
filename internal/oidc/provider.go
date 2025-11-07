@@ -139,15 +139,12 @@ func (p *Provider) IntrospectionEnabled() bool {
 // SigningKeyFor returns the key for the given key.
 func (p *Provider) SigningKeyFor(ctx context.Context, keyID string) (*jose.JSONWebKey, error) {
 	// check the cache first
-	if p.signkeys != nil {
-		if keyInterface, found := p.signkeys.Get(keyID); found {
-			if key, ok := keyInterface.(*jose.JSONWebKey); ok {
-				return key, nil
-			}
-		}
-
-		slogctx.Debug(ctx, "Signing key cache miss", "keyID", keyID)
+	key, found := getSigningKey(p.signkeys, keyID)
+	if found {
+		return key, nil
 	}
+
+	slogctx.Debug(ctx, "Signing key cache miss", "keyID", keyID)
 
 	// otherwise fetch the key using the JWKS URI and cache it if found
 	if p.jwksURL == nil {
@@ -180,18 +177,10 @@ func (p *Provider) SigningKeyFor(ctx context.Context, keyID string) (*jose.JSONW
 	}
 
 	// find the key for the given key ID, cache it and return it
-	for _, k := range jwks.Keys {
-		if k.Use == "sig" && k.KeyID == keyID {
-			if p.signkeys != nil {
-				// Cache the item. Constant `cache.DefaultExpiration` means
-				// that this item does not have a custom expiration, but uses
-				// the configured expiration of the cache.
-				// https://pkg.go.dev/github.com/patrickmn/go-cache#Cache.Set
-				p.signkeys.Set(keyID, &k, cache.DefaultExpiration)
-			}
-
-			return &k, nil
-		}
+	checkedKey, found := lookupValidSigningKey(keyID, &jwks)
+	if found {
+		storeSigningKey(p.signkeys, keyID, checkedKey)
+		return checkedKey, nil
 	}
 
 	// return an error if the key was not found
