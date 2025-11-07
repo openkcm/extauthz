@@ -29,6 +29,12 @@ func (srv *Server) checkJWTToken(ctx context.Context, bearerToken, method, host,
 	err := srv.oidcHandler.ParseAndValidate(ctx, bearerToken, &claims, useCache)
 	if err != nil {
 		slogctx.Debug(ctx, "JWT validation failed", "error", err)
+		// Log the header and payload of the token
+		// Never ever log the signature!
+		parts := strings.Split(bearerToken, ".")
+		if len(parts) == 3 {
+			slogctx.Debug(ctx, "Token details", "header", parts[0], "payload", parts[1])
+		}
 
 		switch {
 		case errors.Is(err, oidc.ErrInvalidToken):
