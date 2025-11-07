@@ -18,6 +18,11 @@ import (
 	"github.com/openkcm/extauthz/internal/utils"
 )
 
+// ProviderClient is an interface for looking up providers for the issuer.
+type ProviderClient interface {
+	Get(ctx context.Context, issuer string) (*Provider, error)
+}
+
 // Provider represents a specific OIDC provider.
 type Provider struct {
 	issuerURL     *url.URL

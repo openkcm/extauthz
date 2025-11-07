@@ -25,11 +25,6 @@ var (
 	DefaultIssuerClaims = []string{"iss"}
 )
 
-// ProviderClient is an interface for looking up providers for the issuer.
-type ProviderClient interface {
-	Get(ctx context.Context, issuer string) (*Provider, error)
-}
-
 // Handler tracks the set of identity providers to support multi tenancy.
 type Handler struct {
 	issuerClaimKeys []string
