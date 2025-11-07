@@ -79,6 +79,10 @@ func createExtAuthZServer(ctx context.Context, cfg *config.Config) (*extauthz.Se
 }
 
 func transportCredentialsFromSecretRef(secref *commoncfg.SecretRef) (credentials.TransportCredentials, error) {
+	if secref == nil {
+		return insecure.NewCredentials(), nil
+	}
+
 	switch secref.Type {
 	case commoncfg.InsecureSecretType:
 		return insecure.NewCredentials(), nil
@@ -122,8 +126,8 @@ func createOIDCHandler(ctx context.Context, cfg *config.JWT, fg *commoncfg.Featu
 		opts = append(opts, oidc.WithStaticProvider(oidcProvider))
 	}
 	// add provider source (if any)
-	if cfg.ProviderSource != nil {
-		providerSource, err := createOIDCProviderSource(ctx, cfg.ProviderSource)
+	if cfg.ProviderSource.Enabled {
+		providerSource, err := createOIDCProviderSource(ctx, &cfg.ProviderSource)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create OIDC provider source: %w", err)
 		}
@@ -138,27 +142,41 @@ func createOIDCHandler(ctx context.Context, cfg *config.JWT, fg *commoncfg.Featu
 }
 
 func createOIDCProvider(ctx context.Context, cfg *config.Provider) (*oidc.Provider, error) {
-	slogctx.Info(ctx, "Using static OIDC provider", "issuer", cfg.Issuer, "audiences", cfg.Audiences, "jwksURIs", cfg.JwksURIs)
+	slogctx.Info(ctx, "Using static OIDC provider",
+		"issuer", cfg.Issuer,
+		"audiences", cfg.Audiences,
+		"jwksURI", cfg.JwksURI,
+		"introspectionEndpoint", cfg.IntrospectionEndpoint,
+	)
 	issuerURL, err := url.Parse(cfg.Issuer)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse issuer URL %q: %w", cfg.Issuer, err)
 	}
-	var popts []oidc.ProviderOption
+	var popts = []oidc.ProviderOption{
+		oidc.WithRawJWKSURI(cfg.JwksURI),
+		oidc.WithRawIntrospectTokenURL(cfg.IntrospectionEndpoint),
+	}
+
 	oidcProvider, err := oidc.NewProvider(issuerURL, cfg.Audiences, popts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create static OIDC provider: %w", err)
 	}
+	err = oidcProvider.PopulateFromWellKnownOpenIDConfiguration(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to populate OpenID Connect provider configuration: %w", err)
+	}
+
 	return oidcProvider, nil
 }
 
-func createOIDCProviderSource(ctx context.Context, cfg *config.ProviderSource) (*oidc.ProviderSource, error) {
+func createOIDCProviderSource(ctx context.Context, cfg *commoncfg.GRPCClient) (*oidc.ProviderSource, error) {
 	slogctx.Info(ctx, "Using OIDC provider source", "address", cfg.Address)
-	creds, err := transportCredentialsFromSecretRef(&cfg.SecretRef)
+	creds, err := transportCredentialsFromSecretRef(cfg.SecretRef)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create transport credentials: %w", err)
 	}
 	// create the gRPC connection to the provider source
-	grpcConn, err := commongrpc.NewClient(&cfg.GRPCClient,
+	grpcConn, err := commongrpc.NewClient(cfg,
 		grpc.WithTransportCredentials(creds),
 	)
 	if err != nil {

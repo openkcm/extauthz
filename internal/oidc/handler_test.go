@@ -360,7 +360,7 @@ func TestParseAndValidate(t *testing.T) {
 			cl := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: certpool}}}
 			opts := append([]ProviderOption{
 				WithClient(cl),
-				WithCustomJWKSURI(jwksURI),
+				WithJWKSURI(jwksURI),
 			}, tc.providerOptions...)
 
 			p, err := NewProvider(providerURL, []string{"aud1"}, opts...)

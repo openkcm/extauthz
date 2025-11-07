@@ -216,7 +216,10 @@ func (handler *Handler) ParseAndValidate(ctx context.Context, rawToken string, u
 		}
 	}
 
-	if !handler.featureGates.IsFeatureEnabled(flags.DisableJWTTokenIntrospection) {
+	disabledTokenIntrospection := handler.featureGates.IsFeatureEnabled(flags.DisableJWTTokenIntrospection)
+	introspectionEnabled := !disabledTokenIntrospection && provider.IntrospectionEnabled()
+
+	if introspectionEnabled {
 		// Verify if token is not revoked
 		intr, err := handler.introspect(ctx, provider, rawToken, rawToken, useCache)
 		if err != nil {
@@ -288,8 +291,14 @@ func (handler *Handler) Introspect(ctx context.Context, issuer, bearerToken, int
 		return Introspection{}, err
 	}
 
-	// let the handler introspect the token
-	return handler.introspect(ctx, provider, bearerToken, introspectToken, useCache)
+	introspectionEnabled :=
+		!handler.featureGates.IsFeatureEnabled(flags.DisableJWTTokenIntrospection) && provider.IntrospectionEnabled()
+	if introspectionEnabled {
+		// let the handler introspect the token
+		return handler.introspect(ctx, provider, bearerToken, introspectToken, useCache)
+	}
+
+	return Introspection{Active: true}, nil
 }
 
 // introspect an access or refresh token.

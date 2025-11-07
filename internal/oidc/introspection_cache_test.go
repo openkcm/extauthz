@@ -55,6 +55,9 @@ func (s *handlerTestSuite) SetupSuite() {
 	jwksURI, err := url.Parse(s.ts.URL + "/jwks")
 	s.Require().NoError(err)
 
+	introspectionURL, err := url.Parse(s.ts.URL + "/oauth2/introspect")
+	s.Require().NoError(err)
+
 	rsaKeyID := uuid.New().String()
 
 	// create a x509 certificate
@@ -91,7 +94,11 @@ func (s *handlerTestSuite) SetupSuite() {
 	certpool := x509.NewCertPool()
 	certpool.AddCert(s.ts.Certificate())
 	cl := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: certpool}}}
-	s.provider, err = NewProvider(providerURL, []string{"aud1"}, WithClient(cl), WithCustomJWKSURI(jwksURI))
+	s.provider, err = NewProvider(providerURL, []string{"aud1"},
+		WithClient(cl),
+		WithJWKSURI(jwksURI),
+		WithIntrospectTokenURL(introspectionURL),
+	)
 	s.Require().NoError(err)
 	s.hdl, err = NewHandler(WithIssuerClaimKeys(DefaultIssuerClaims...), WithStaticProvider(s.provider))
 	s.Require().NoError(err)

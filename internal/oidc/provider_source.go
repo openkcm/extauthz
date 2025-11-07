@@ -3,6 +3,7 @@ package oidc
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/url"
 
 	"google.golang.org/grpc"
@@ -57,5 +58,14 @@ func (c *ProviderSource) Get(ctx context.Context, issuer string) (*Provider, err
 	if err != nil {
 		return nil, err
 	}
-	return NewProvider(issuerURL, resp.GetAudiences(), nil)
+
+	oidcProvider, err := NewProvider(issuerURL, resp.GetAudiences())
+	if err != nil {
+		return nil, fmt.Errorf("error creating oidc provider: %w", err)
+	}
+	err = oidcProvider.PopulateFromWellKnownOpenIDConfiguration(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to populate OpenID Connect provider configuration: %w", err)
+	}
+	return oidcProvider, nil
 }
