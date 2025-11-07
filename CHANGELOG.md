@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.1](https://github.com/openkcm/extauthz/compare/v0.6.0...v0.6.1) (2025-11-07)
+
+
+### Bug Fixes
+
+* log token header and payload for error analysis ([#141](https://github.com/openkcm/extauthz/issues/141)) ([fc27c1f](https://github.com/openkcm/extauthz/commit/fc27c1f1747f2b6b02b218bd897fbb5a1f9b0337))
+
 ## [0.6.0](https://github.com/openkcm/extauthz/compare/v0.5.4...v0.6.0) (2025-11-07)
 
 
