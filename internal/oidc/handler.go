@@ -109,6 +109,7 @@ func (handler *Handler) ParseAndValidate(ctx context.Context, rawToken string, u
 	// parse the token - at the moment we only support RS256
 	token, err := jwt.ParseSigned(rawToken, []jose.SignatureAlgorithm{jose.RS256})
 	if err != nil {
+		slogctx.Error(ctx, "Failed to parse token", "error", err)
 		return errors.Join(ErrInvalidToken, err)
 	}
 
@@ -117,27 +118,32 @@ func (handler *Handler) ParseAndValidate(ctx context.Context, rawToken string, u
 
 	err = token.UnsafeClaimsWithoutVerification(&claims)
 	if err != nil {
+		slogctx.Error(ctx, "Failed to parse token claims (unsafe)", "error", err)
 		return errors.Join(ErrInvalidToken, err)
 	}
 
 	// check the issuer to find the right provider
 	issuer := extractFromClaims(claims, handler.issuerClaimKeys...)
 	if issuer == "" { // in case its empty
+		slogctx.Error(ctx, "Missing issuer in token claims")
 		return errors.Join(ErrInvalidToken, fmt.Errorf("missing keys %v in token claims", handler.issuerClaimKeys))
 	}
 
 	issuerURL, err := url.Parse(issuer)
 	if err != nil {
+		slogctx.Error(ctx, "Failed to parse issuer URL", "error", err, "issuer", issuer)
 		return errors.Join(ErrInvalidToken, err)
 	}
 
 	if issuerURL.Scheme != "https" {
+		slogctx.Error(ctx, "Invalid issuer scheme", "scheme", issuerURL.Scheme)
 		return errors.Join(ErrInvalidToken, fmt.Errorf("invalid issuer scheme %s", issuerURL.Scheme))
 	}
 
 	// let the handler lookup the identity provider for the issuer host
 	provider, err := handler.ProviderFor(ctx, issuerURL.Host)
 	if err != nil {
+		slogctx.Error(ctx, "Failed to get provider for issuer", "error", err, "issuer", issuerURL.Host)
 		return errors.Join(ErrNoProvider, err)
 	}
 
@@ -153,12 +159,14 @@ func (handler *Handler) ParseAndValidate(ctx context.Context, rawToken string, u
 	}
 
 	if keyID == "" {
+		slogctx.Error(ctx, "Missing kid in token header")
 		return errors.Join(ErrInvalidToken, errors.New("missing kid in token header"))
 	}
 
 	// let the provider lookup the key for the key ID
 	key, err := provider.SigningKeyFor(ctx, keyID)
 	if err != nil {
+		slogctx.Error(ctx, "Failed to get signing key for token", "error", err, "kid", keyID)
 		return errors.Join(ErrInvalidToken, err)
 	}
 
@@ -167,11 +175,13 @@ func (handler *Handler) ParseAndValidate(ctx context.Context, rawToken string, u
 
 	err = token.Claims(*key, &standardClaims, userclaims)
 	if err != nil {
+		slogctx.Error(ctx, "Failed to verify and deserialize token into claims", "error", err)
 		return errors.Join(ErrInvalidToken, err)
 	}
 
 	// verify the expiry and not before
 	if standardClaims.Expiry == nil {
+		slogctx.Error(ctx, "Missing exp in token claims")
 		return errors.Join(ErrInvalidToken, errors.New("missing exp in token claims"))
 	}
 
@@ -179,6 +189,7 @@ func (handler *Handler) ParseAndValidate(ctx context.Context, rawToken string, u
 		Time: time.Now(),
 	})
 	if err != nil {
+		slogctx.Error(ctx, "Failed to validate token claims", "error", err)
 		return errors.Join(ErrInvalidToken, err)
 	}
 
@@ -188,6 +199,7 @@ func (handler *Handler) ParseAndValidate(ctx context.Context, rawToken string, u
 			AnyAudience: provider.audiences,
 		})
 		if err != nil {
+			slogctx.Error(ctx, "Failed to validate token audience", "error", err)
 			return errors.Join(ErrInvalidToken, err)
 		}
 	}
@@ -195,10 +207,12 @@ func (handler *Handler) ParseAndValidate(ctx context.Context, rawToken string, u
 	// Verify if token is not revoked
 	intr, err := handler.introspect(ctx, provider, rawToken, rawToken, useCache)
 	if err != nil {
+		slogctx.Error(ctx, "Failed to introspect token", "error", err)
 		return fmt.Errorf("introspecting token: %w", err)
 	}
 
 	if !intr.Active {
+		slogctx.Error(ctx, "Token is not active")
 		return ErrInvalidToken
 	}
 
