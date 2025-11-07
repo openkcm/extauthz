@@ -51,7 +51,7 @@ func createExtAuthZServer(ctx context.Context, cfg *config.Config) (*extauthz.Se
 	opts = append(opts, extauthz.WithTrustedSubjects(subjects))
 
 	// Create the OIDC handler
-	oidcHandler, err := createOIDCHandler(ctx, &cfg.JWT)
+	oidcHandler, err := createOIDCHandler(ctx, &cfg.JWT, &cfg.FeatureGates)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create OIDC handler: %w", err)
 	}
@@ -105,8 +105,9 @@ func createClientDataSigner(ctx context.Context, cfg *config.Config) (*clientdat
 	return clientDataSigner, nil
 }
 
-func createOIDCHandler(ctx context.Context, cfg *config.JWT) (*oidc.Handler, error) {
-	opts := make([]oidc.HandlerOption, 0, 2+len(cfg.Providers))
+func createOIDCHandler(ctx context.Context, cfg *config.JWT, fg *commoncfg.FeatureGates) (*oidc.Handler, error) {
+	opts := make([]oidc.HandlerOption, 0, 3+len(cfg.Providers))
+	opts = append(opts, oidc.WithFeatureGates(fg))
 	if len(cfg.IssuerClaimKeys) == 0 {
 		slogctx.Warn(ctx, "JWT configuration doesn't have the issuer claims keys; Use the default values: [iss].")
 		cfg.IssuerClaimKeys = oidc.DefaultIssuerClaims

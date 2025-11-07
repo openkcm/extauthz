@@ -13,9 +13,12 @@ import (
 
 	"github.com/go-jose/go-jose/v4"
 	"github.com/go-jose/go-jose/v4/jwt"
+	"github.com/openkcm/common-sdk/pkg/commoncfg"
 	"github.com/patrickmn/go-cache"
 
 	slogctx "github.com/veqryn/slog-context"
+
+	"github.com/openkcm/extauthz/internal/flags"
 )
 
 var (
@@ -32,6 +35,7 @@ type Handler struct {
 	issuerClaimKeys []string
 	staticProviders map[string]*Provider
 	providerClient  ProviderClient
+	featureGates    *commoncfg.FeatureGates
 
 	// cache the providers by issuer
 	cache           *cache.Cache // map[string]*Provider or introspection
@@ -72,6 +76,13 @@ func WithProviderClient(providerClient ProviderClient) HandlerOption {
 	}
 }
 
+func WithFeatureGates(fg *commoncfg.FeatureGates) HandlerOption {
+	return func(server *Handler) error {
+		server.featureGates = fg
+		return nil
+	}
+}
+
 // WithProviderCacheExpiration configures the expiration of cached providers.
 func WithProviderCacheExpiration(expiration, cleanup time.Duration) HandlerOption {
 	return func(handler *Handler) error {
@@ -89,6 +100,7 @@ func NewHandler(opts ...HandlerOption) (*Handler, error) {
 		issuerClaimKeys: DefaultIssuerClaims,
 		cache:           cache.New(30*time.Second, 10*time.Minute),
 		staticProviders: make(map[string]*Provider),
+		featureGates:    &commoncfg.FeatureGates{},
 	}
 	for _, opt := range opts {
 		err := opt(handler)
@@ -204,16 +216,18 @@ func (handler *Handler) ParseAndValidate(ctx context.Context, rawToken string, u
 		}
 	}
 
-	// Verify if token is not revoked
-	intr, err := handler.introspect(ctx, provider, rawToken, rawToken, useCache)
-	if err != nil {
-		slogctx.Error(ctx, "Failed to introspect token", "error", err)
-		return fmt.Errorf("introspecting token: %w", err)
-	}
+	if !handler.featureGates.IsFeatureEnabled(flags.DisableJWTTokenIntrospection) {
+		// Verify if token is not revoked
+		intr, err := handler.introspect(ctx, provider, rawToken, rawToken, useCache)
+		if err != nil {
+			slogctx.Error(ctx, "Failed to introspect token", "error", err)
+			return fmt.Errorf("introspecting token: %w", err)
+		}
 
-	if !intr.Active {
-		slogctx.Error(ctx, "Token is not active")
-		return ErrInvalidToken
+		if !intr.Active {
+			slogctx.Error(ctx, "Token is not active")
+			return ErrInvalidToken
+		}
 	}
 
 	return nil

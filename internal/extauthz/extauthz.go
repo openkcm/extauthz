@@ -130,6 +130,7 @@ func NewServer(opts ...ServerOption) (*Server, error) {
 		policyEngine:  policyEngine,
 		oidcHandler:   hdl,
 		cmkPathPrefix: DefaultCMKPathPrefix,
+		featureGates:  &commoncfg.FeatureGates{},
 	}
 
 	for _, opt := range opts {
