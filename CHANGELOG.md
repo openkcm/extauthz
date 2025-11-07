@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.0](https://github.com/openkcm/extauthz/compare/v0.6.1...v0.7.0) (2025-11-07)
+
+
+### Features
+
+* optionally disable JWT introspection ([#143](https://github.com/openkcm/extauthz/issues/143)) ([469abe7](https://github.com/openkcm/extauthz/commit/469abe791e20dcf5ccaf1c64a260fac54570c654))
+
 ## [0.6.1](https://github.com/openkcm/extauthz/compare/v0.6.0...v0.6.1) (2025-11-07)
 
 
