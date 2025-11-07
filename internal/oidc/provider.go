@@ -112,7 +112,7 @@ func (provider *Provider) SigningKeyFor(ctx context.Context, keyID string) (*jos
 			}
 		}
 
-		slogctx.Info(ctx, "Signing key cache miss", "keyID", keyID)
+		slogctx.Debug(ctx, "Signing key cache miss", "keyID", keyID)
 	}
 
 	// otherwise fetch the key using the JWKS URI and cache it if found
