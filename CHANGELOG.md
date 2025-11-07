@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.6.0](https://github.com/openkcm/extauthz/compare/v0.5.4...v0.6.0) (2025-11-07)
+
+
+### Features
+
+* pass on all claims as raw JSON via client data ([#134](https://github.com/openkcm/extauthz/issues/134)) ([5389e04](https://github.com/openkcm/extauthz/commit/5389e04bd4ff0d00b12da4e350c8330b3100c78f))
+
+
+### Bug Fixes
+
+* better logs ([#139](https://github.com/openkcm/extauthz/issues/139)) ([9d32e86](https://github.com/openkcm/extauthz/commit/9d32e867d8ede5b2c7c3128a0aea7654e64ae256))
+
 ## [0.5.4](https://github.com/openkcm/extauthz/compare/v0.5.3...v0.5.4) (2025-11-03)
 
 
