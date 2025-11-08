@@ -257,9 +257,9 @@ func TestSigningKeyFor(t *testing.T) {
 	if err != nil {
 		t.Fatalf("could not create provider: %s", err)
 	}
-	err = p.PopulateFromWellKnownOpenIDConfiguration(t.Context())
+	err = p.RefreshConfiguration(t.Context())
 	if err != nil {
-		t.Fatalf("could not populate provider from Well-Known OpenID Connect configuration: %s", err)
+		t.Fatalf("could not update provider configuration: %s", err)
 	}
 
 	// run the tests
@@ -276,7 +276,7 @@ func TestSigningKeyFor(t *testing.T) {
 			responses.Store("jwks", string(jwksResponse))
 
 			// Act
-			key, err := p.SigningKeyFor(t.Context(), tc.keyID)
+			key, err := p.lookupSigningKey(t.Context(), tc.keyID)
 
 			// Assert
 			if tc.wantError {
@@ -338,7 +338,7 @@ func TestProvider_introspect(t *testing.T) {
 		wantErr   assert.ErrorAssertionFunc
 	}{
 		{
-			name:      "Introspect active token",
+			name:      "IntrospectToken active token",
 			issuerURL: issuerURL,
 			audiences: []string{"aud1", "aud2"},
 			opts:      []ProviderOption{WithSigningKeyCacheExpiration(30*time.Second, 10*time.Minute)},
@@ -350,7 +350,7 @@ func TestProvider_introspect(t *testing.T) {
 			wantErr: assert.NoError,
 		},
 		{
-			name:      "Introspect inactive token",
+			name:      "IntrospectToken inactive token",
 			issuerURL: issuerURL,
 			audiences: []string{"aud1", "aud2"},
 			opts:      []ProviderOption{WithSigningKeyCacheExpiration(30*time.Second, 10*time.Minute)},

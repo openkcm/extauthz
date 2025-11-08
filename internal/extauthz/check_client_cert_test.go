@@ -14,6 +14,7 @@ import (
 
 	"github.com/openkcm/extauthz/internal/clientdata"
 	"github.com/openkcm/extauthz/internal/config"
+	"github.com/openkcm/extauthz/internal/oidc"
 	"github.com/openkcm/extauthz/internal/policies/cedarpolicy"
 )
 
@@ -152,7 +153,15 @@ func TestCheckClientCert(t *testing.T) {
 			})
 			require.NoError(t, err)
 
-			srv, err := NewServer(WithClientDataSigner(signer), WithPolicyEngine(pe))
+			handler, err := oidc.NewHandler()
+			require.NoError(t, err)
+
+			srv, err := NewServer(
+				WithClientDataSigner(signer),
+				WithPolicyEngine(pe),
+				WithOIDCHandler(handler),
+			)
+
 			if err != nil {
 				t.Fatalf("could not create server: %s", err)
 			}

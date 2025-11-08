@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"sync"
 	"time"
 
 	"github.com/go-jose/go-jose/v4"
@@ -18,6 +19,7 @@ import (
 
 	slogctx "github.com/veqryn/slog-context"
 
+	"github.com/openkcm/extauthz/internal/config"
 	"github.com/openkcm/extauthz/internal/flags"
 )
 
@@ -27,10 +29,16 @@ var (
 
 // Handler tracks the set of identity providers to support multi tenancy.
 type Handler struct {
-	issuerClaimKeys []string
-	staticProviders map[string]*Provider
-	providerClient  ProviderClient
-	featureGates    *commoncfg.FeatureGates
+	started bool
+	done    chan struct{}
+
+	mu             sync.RWMutex
+	providers      map[string]*Provider
+	providerClient ProviderClient
+
+	issuerClaimKeys   []string
+	k8sJWTProviderRef *config.K8SProviderRef
+	featureGates      *commoncfg.FeatureGates
 
 	// cache the providers by issuer
 	cache           *cache.Cache // map[string]*Provider or introspection
@@ -56,8 +64,16 @@ func WithStaticProvider(provider *Provider) HandlerOption {
 			return errors.New("provider must not be nil")
 		}
 
-		handler.RegisterStaticProvider(provider)
+		handler.registerProvider(provider)
 
+		return nil
+	}
+}
+
+// WithK8SJWTProviderRef registering the K8SProviderRef
+func WithK8SJWTProviderRef(k8sJWTProviderRef *config.K8SProviderRef) HandlerOption {
+	return func(handler *Handler) error {
+		handler.k8sJWTProviderRef = k8sJWTProviderRef
 		return nil
 	}
 }
@@ -65,7 +81,6 @@ func WithStaticProvider(provider *Provider) HandlerOption {
 func WithProviderClient(providerClient ProviderClient) HandlerOption {
 	return func(handler *Handler) error {
 		handler.providerClient = providerClient
-		handler.cache = cache.New(handler.expiration, handler.cleanupInterval)
 
 		return nil
 	}
@@ -83,7 +98,6 @@ func WithProviderCacheExpiration(expiration, cleanup time.Duration) HandlerOptio
 	return func(handler *Handler) error {
 		handler.expiration = expiration
 		handler.cleanupInterval = cleanup
-		handler.cache = cache.New(expiration, cleanup)
 
 		return nil
 	}
@@ -93,9 +107,13 @@ func WithProviderCacheExpiration(expiration, cleanup time.Duration) HandlerOptio
 func NewHandler(opts ...HandlerOption) (*Handler, error) {
 	handler := &Handler{
 		issuerClaimKeys: DefaultIssuerClaims,
-		cache:           cache.New(30*time.Second, 10*time.Minute),
-		staticProviders: make(map[string]*Provider),
 		featureGates:    &commoncfg.FeatureGates{},
+
+		mu:              sync.RWMutex{},
+		expiration:      30 * time.Second,
+		cleanupInterval: 10 * time.Minute,
+
+		providers: make(map[string]*Provider),
 	}
 	for _, opt := range opts {
 		err := opt(handler)
@@ -104,15 +122,12 @@ func NewHandler(opts ...HandlerOption) (*Handler, error) {
 		}
 	}
 
+	handler.cache = cache.New(handler.expiration, handler.cleanupInterval)
+
 	return handler, nil
 }
 
-// RegisterStaticProvider registers a provider with the handler.
-func (handler *Handler) RegisterStaticProvider(provider *Provider) {
-	handler.staticProviders[provider.issuerURL.Host] = provider
-}
-
-func (handler *Handler) ParseAndValidate(ctx context.Context, rawToken string, userclaims any, useCache bool) error {
+func (h *Handler) ValidateToken(ctx context.Context, rawToken string, userclaims any, useCache bool) error {
 	// parse the token - at the moment we only support RS256
 	token, err := jwt.ParseSigned(rawToken, []jose.SignatureAlgorithm{jose.RS256})
 	if err != nil {
@@ -130,10 +145,10 @@ func (handler *Handler) ParseAndValidate(ctx context.Context, rawToken string, u
 	}
 
 	// check the issuer to find the right provider
-	issuer := extractFromClaims(claims, handler.issuerClaimKeys...)
+	issuer := extractFromClaims(claims, h.issuerClaimKeys...)
 	if issuer == "" { // in case its empty
 		slogctx.Error(ctx, "Missing issuer in token claims")
-		return errors.Join(ErrInvalidToken, fmt.Errorf("missing keys %v in token claims", handler.issuerClaimKeys))
+		return errors.Join(ErrInvalidToken, fmt.Errorf("missing keys %v in token claims", h.issuerClaimKeys))
 	}
 
 	issuerURL, err := url.Parse(issuer)
@@ -147,8 +162,8 @@ func (handler *Handler) ParseAndValidate(ctx context.Context, rawToken string, u
 		return errors.Join(ErrInvalidToken, fmt.Errorf("invalid issuer scheme %s", issuerURL.Scheme))
 	}
 
-	// let the handler lookup the identity provider for the issuer host
-	provider, err := handler.ProviderFor(ctx, issuerURL.Host)
+	// let the h lookup the identity provider for the issuer host
+	provider, err := h.lookupProviderByIssuer(ctx, issuerURL.Host)
 	if err != nil {
 		slogctx.Error(ctx, "Failed to get provider for issuer", "error", err, "issuer", issuerURL.Host)
 		return errors.Join(ErrNoProvider, err)
@@ -171,7 +186,7 @@ func (handler *Handler) ParseAndValidate(ctx context.Context, rawToken string, u
 	}
 
 	// let the provider lookup the key for the key ID
-	key, err := provider.SigningKeyFor(ctx, keyID)
+	key, err := provider.lookupSigningKey(ctx, keyID)
 	if err != nil {
 		slogctx.Error(ctx, "Failed to get signing key for token", "error", err, "kid", keyID)
 		return errors.Join(ErrInvalidToken, err)
@@ -211,65 +226,23 @@ func (handler *Handler) ParseAndValidate(ctx context.Context, rawToken string, u
 		}
 	}
 
-	disabledTokenIntrospection := handler.featureGates.IsFeatureEnabled(flags.DisableJWTTokenIntrospection)
-	introspectionEnabled := !disabledTokenIntrospection && provider.IntrospectionEnabled()
+	// Verify if token is not revoked
+	intr, err := h.introspect(ctx, provider, rawToken, rawToken, useCache)
+	if err != nil {
+		slogctx.Error(ctx, "Failed to introspect token", "error", err)
+		return fmt.Errorf("introspecting token: %w", err)
+	}
 
-	if introspectionEnabled {
-		// Verify if token is not revoked
-		intr, err := handler.introspect(ctx, provider, rawToken, rawToken, useCache)
-		if err != nil {
-			slogctx.Error(ctx, "Failed to introspect token", "error", err)
-			return fmt.Errorf("introspecting token: %w", err)
-		}
-
-		if !intr.Active {
-			slogctx.Error(ctx, "Token is not active")
-			return ErrInvalidToken
-		}
+	if !intr.Active {
+		slogctx.Error(ctx, "Token is not active")
+		return ErrInvalidToken
 	}
 
 	return nil
 }
 
-// ProviderFor returns the provider for the given issuer. It either looks up the
-// provider in the internal cache or queries the provider client.
-func (handler *Handler) ProviderFor(ctx context.Context, issuer string) (*Provider, error) {
-	// check the static providers first
-	if provider, ok := handler.staticProviders[issuer]; ok {
-		return provider, nil
-	}
-
-	slogctx.Info(ctx, "Issuer not found in the static provider list", "issuer", issuer)
-
-	// check the cache then
-	if providerInterface, found := handler.cache.Get(issuer); found {
-		if key, ok := providerInterface.(*Provider); ok {
-			return key, nil
-		}
-	}
-
-	slogctx.Info(ctx, "Issuer not found in the provider cache", "issuer", issuer)
-
-	// if we have a provider client, use it to get the provider
-	if handler.providerClient != nil {
-		p, err := handler.providerClient.Get(ctx, issuer)
-		if err != nil {
-			return nil, err
-		}
-		// Cache the item. Constant `cache.DefaultExpiration` means
-		// that this item does not have a custom expiration, but uses
-		// the configured expiration of the cache.
-		// https://pkg.go.dev/github.com/patrickmn/go-cache#Cache.Set
-		handler.cache.Set(issuer, p, cache.DefaultExpiration)
-
-		return p, nil
-	}
-
-	return nil, errors.Join(ErrNoProvider, fmt.Errorf("no provider found for issuer %s", issuer))
-}
-
-// Introspect an access or refresh token with the given issuer.
-func (handler *Handler) Introspect(ctx context.Context, issuer, bearerToken, introspectToken string, useCache bool) (Introspection, error) {
+// IntrospectToken an access or refresh token with the given issuer.
+func (h *Handler) IntrospectToken(ctx context.Context, issuer, bearerToken, introspectToken string, useCache bool) (Introspection, error) {
 	// parse the issuer URL
 	issuerURL, err := url.Parse(issuer)
 	if err != nil {
@@ -280,30 +253,133 @@ func (handler *Handler) Introspect(ctx context.Context, issuer, bearerToken, int
 		return Introspection{}, fmt.Errorf("invalid issuer scheme %s", issuerURL.Scheme)
 	}
 
-	// let the handler lookup the identity provider for the issuer host
-	provider, err := handler.ProviderFor(ctx, issuerURL.Host)
+	// let the h lookup the identity provider for the issuer host
+	provider, err := h.lookupProviderByIssuer(ctx, issuerURL.Host)
 	if err != nil {
 		return Introspection{}, err
 	}
 
-	introspectionEnabled :=
-		!handler.featureGates.IsFeatureEnabled(flags.DisableJWTTokenIntrospection) && provider.IntrospectionEnabled()
-	if introspectionEnabled {
-		// let the handler introspect the token
-		return handler.introspect(ctx, provider, bearerToken, introspectToken, useCache)
+	// Verify if token is not revoked
+	return h.introspect(ctx, provider, bearerToken, introspectToken, useCache)
+}
+
+func (h *Handler) IsStarted() bool {
+	return h.started
+}
+
+// Start starts any internal processes required by the server.
+func (h *Handler) Start() error {
+	if h.IsStarted() {
+		return nil
 	}
 
-	return Introspection{Active: true}, nil
+	defer func() {
+		h.started = true
+	}()
+
+	h.done = make(chan struct{})
+
+	if h.k8sJWTProviderRef != nil {
+		go func() {
+			err := h.startK8SProviderWatcher(h.done, h.k8sJWTProviderRef)
+			if err != nil {
+				slogctx.Error(context.Background(), "Failed to start k8s provider watcher", "error", err)
+			}
+		}()
+	}
+
+	return nil
+}
+
+// Close starts any internal processes required by the server.
+func (h *Handler) Close() error {
+	if !h.IsStarted() {
+		return nil
+	}
+
+	h.started = false
+	close(h.done)
+	return nil
+}
+
+// lookupProviderByIssuer returns the provider for the given issuer. It either looks up the
+// provider in the internal cache or queries the provider client.
+func (h *Handler) lookupProviderByIssuer(ctx context.Context, issuer string) (*Provider, error) {
+	// check the static providers first
+	if provider, ok := h.providers[issuer]; ok {
+		return provider, nil
+	}
+
+	slogctx.Info(ctx, "Issuer not found in the static provider list", "issuer", issuer)
+
+	// check the cache then
+	if providerInterface, found := h.cache.Get(issuer); found {
+		if key, ok := providerInterface.(*Provider); ok {
+			return key, nil
+		}
+	}
+
+	slogctx.Info(ctx, "Issuer not found in the provider cache", "issuer", issuer)
+
+	// if we have a provider client, use it to get the provider
+	if h.providerClient != nil {
+		p, err := h.providerClient.Get(ctx, issuer)
+		if err != nil {
+			return nil, err
+		}
+		// Cache the item. Constant `cache.DefaultExpiration` means
+		// that this item does not have a custom expiration, but uses
+		// the configured expiration of the cache.
+		// https://pkg.go.dev/github.com/patrickmn/go-cache#Cache.Set
+		h.cache.Set(issuer, p, cache.DefaultExpiration)
+
+		return p, nil
+	}
+
+	return nil, errors.Join(ErrNoProvider, fmt.Errorf("no provider found for issuer %s", issuer))
+}
+
+// registerProvider registers a provider with the handler.
+func (h *Handler) registerProvider(provider *Provider) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	issuer := provider.issuerURL.Host
+	h.providers[issuer] = provider
+}
+
+// swapProvider swap providers with same key with the handler.
+func (h *Handler) swapProvider(oldProv *Provider, newProv *Provider) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	delete(h.providers, oldProv.issuerURL.Host)
+	h.providers[newProv.issuerURL.Host] = newProv
+}
+
+// unRegisterProvider remove a provider from the handler.
+func (h *Handler) unRegisterProvider(provider *Provider) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	issuer := provider.issuerURL.Host
+	delete(h.providers, issuer)
 }
 
 // introspect an access or refresh token.
-func (handler *Handler) introspect(ctx context.Context, provider *Provider, bearerToken, introspectToken string, useCache bool) (Introspection, error) {
+func (h *Handler) introspect(ctx context.Context, provider *Provider, bearerToken, introspectToken string, useCache bool) (Introspection, error) {
+	introspectionDisabled := h.featureGates.IsFeatureEnabled(flags.DisableJWTTokenIntrospection) ||
+		!provider.hasIntrospectionEnabled()
+	if introspectionDisabled {
+		return Introspection{Active: true}, nil
+	}
+
 	cacheKey := "introspect_" + introspectToken
 	if useCache {
-		cache, ok := handler.cache.Get(cacheKey)
+		value, ok := h.cache.Get(cacheKey)
 		if ok {
 			//nolint:forcetypeassert
-			return cache.(Introspection), nil
+			return value.(Introspection), nil
 		}
 	}
 
@@ -312,7 +388,7 @@ func (handler *Handler) introspect(ctx context.Context, provider *Provider, bear
 		return intr, fmt.Errorf("introspecting token: %w", err)
 	}
 
-	handler.cache.Set(cacheKey, intr, 0)
+	h.cache.Set(cacheKey, intr, 0)
 
 	return intr, nil
 }

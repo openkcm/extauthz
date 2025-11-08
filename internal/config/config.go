@@ -72,24 +72,21 @@ type JWT struct {
 	// IssuerClaimKeys configures the JWT issuer keys
 	IssuerClaimKeys []string `yaml:"issuerClaimKeys" default:"['iss']"`
 
-	// Define providers as k8s custom resources
-	// Deprecated: use Providers and ProviderSource instead
-	K8sProviders K8sProviders `yaml:"k8sProviders"`
-
 	// A list of static JWT providers
 	Providers []Provider `yaml:"providers"`
 
 	// An optional gRPC source to dynamically lookup JWT providers
 	ProviderSource commoncfg.GRPCClient `yaml:"providerSource"`
+
+	// Define providers as k8s custom resources
+	K8SProviderRef *K8SProviderRef `yaml:"k8sProviderRef"`
 }
 
-// Deprecated: use Providers and ProviderSource instead
-type K8sProviders struct {
-	Enabled    bool   `yaml:"enabled" default:"true"`
-	APIGroup   string `yaml:"apiGroup" default:"gateway.extensions.envoyproxy.io"`
-	APIVersion string `yaml:"apoVersion" default:"v1alpha1"`
-	Name       string `yaml:"name" default:"jwtproviders"`
-	Namespace  string `yaml:"namespace" default:"default"`
+type K8SProviderRef struct {
+	Group     string `yaml:"group" default:"gateway.extensions.envoyproxy.io"`
+	Version   string `yaml:"version" default:"v1alpha1"`
+	Resource  string `yaml:"resource" default:"jwtproviders"`
+	Namespace string `yaml:"namespace" default:""`
 }
 
 type Provider struct {

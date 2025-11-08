@@ -36,7 +36,7 @@ type MockOIDCHandler struct {
 	mock.Mock
 }
 
-func (m *MockOIDCHandler) Introspect(ctx context.Context, issuer, bearerToken, introspectToken string, useCache bool) (oidc.Introspection, error) {
+func (m *MockOIDCHandler) IntrospectToken(ctx context.Context, issuer, bearerToken, introspectToken string, useCache bool) (oidc.Introspection, error) {
 	args := m.Called(ctx, issuer, bearerToken, introspectToken, useCache)
 	if args.Get(0) == nil {
 		return oidc.Introspection{}, args.Error(1)
@@ -45,12 +45,20 @@ func (m *MockOIDCHandler) Introspect(ctx context.Context, issuer, bearerToken, i
 	return args.Get(0).(oidc.Introspection), args.Error(1)
 }
 
-func (m *MockOIDCHandler) ParseAndValidate(ctx context.Context, rawToken string, userclaims any, useCache bool) error {
+func (m *MockOIDCHandler) ValidateToken(ctx context.Context, rawToken string, userclaims any, useCache bool) error {
 	args := m.Called(ctx, rawToken, userclaims, useCache)
 	if args.Get(0) == nil {
 		return args.Error(1)
 	}
 	return args.Error(0)
+}
+
+func (m *MockOIDCHandler) Start() error {
+	return nil
+}
+
+func (m *MockOIDCHandler) Close() error {
+	return nil
 }
 
 func TestCheckSession(t *testing.T) {
@@ -77,22 +85,22 @@ func TestCheckSession(t *testing.T) {
 			},
 			expectedResult: checkResult{is: UNAUTHENTICATED},
 		}, {
-			name:   "Introspect fails",
+			name:   "IntrospectToken fails",
 			cookie: &http.Cookie{Name: "session", Value: ""},
 			setupMocks: func(sc *MockSessionCache, jh *MockOIDCHandler) {
 				sc.On("LoadSession", mock.Anything, "").
 					Return(session.Session{}, nil)
-				jh.On("Introspect", mock.Anything, "", "", "", false).
+				jh.On("IntrospectToken", mock.Anything, "", "", "", false).
 					Return(oidc.Introspection{}, errors.New("introspect error"))
 			},
 			expectedResult: checkResult{is: UNAUTHENTICATED},
 		}, {
-			name:   "Introspect inactive",
+			name:   "IntrospectToken inactive",
 			cookie: &http.Cookie{Name: "session", Value: ""},
 			setupMocks: func(sc *MockSessionCache, jh *MockOIDCHandler) {
 				sc.On("LoadSession", mock.Anything, "").
 					Return(session.Session{}, nil)
-				jh.On("Introspect", mock.Anything, "", "", "", false).
+				jh.On("IntrospectToken", mock.Anything, "", "", "", false).
 					Return(oidc.Introspection{Active: false}, nil)
 			},
 			expectedResult: checkResult{is: UNAUTHENTICATED},
@@ -102,7 +110,7 @@ func TestCheckSession(t *testing.T) {
 			setupMocks: func(sc *MockSessionCache, jh *MockOIDCHandler) {
 				sc.On("LoadSession", mock.Anything, "").
 					Return(session.Session{}, nil)
-				jh.On("Introspect", mock.Anything, "", "", "", false).
+				jh.On("IntrospectToken", mock.Anything, "", "", "", false).
 					Return(oidc.Introspection{Active: true}, nil)
 			},
 			expectedResult: checkResult{is: DENIED},
@@ -118,7 +126,7 @@ func TestCheckSession(t *testing.T) {
 						Issuer: "https://127.0.0.1:8443",
 						Claims: session.Claims{Subject: "me"},
 					}, nil)
-				jh.On("Introspect", mock.Anything, "https://127.0.0.1:8443", "", "", false).
+				jh.On("IntrospectToken", mock.Anything, "https://127.0.0.1:8443", "", "", false).
 					Return(oidc.Introspection{Active: true}, nil)
 			},
 			expectedResult: checkResult{is: DENIED},
@@ -134,7 +142,7 @@ func TestCheckSession(t *testing.T) {
 						Issuer: "https://127.0.0.1:8443",
 						Claims: session.Claims{Subject: "me"},
 					}, nil)
-				jh.On("Introspect", mock.Anything, "https://127.0.0.1:8443", "", "", true).
+				jh.On("IntrospectToken", mock.Anything, "https://127.0.0.1:8443", "", "", true).
 					Return(oidc.Introspection{Active: true}, nil)
 			},
 			expectedResult: checkResult{is: DENIED},
@@ -150,7 +158,7 @@ func TestCheckSession(t *testing.T) {
 						Issuer: "https://127.0.0.1:8443",
 						Claims: session.Claims{Subject: "me"},
 					}, nil)
-				jh.On("Introspect", mock.Anything, "https://127.0.0.1:8443", "", "", true).
+				jh.On("IntrospectToken", mock.Anything, "https://127.0.0.1:8443", "", "", true).
 					Return(oidc.Introspection{Active: true}, nil)
 			},
 			expectedResult: checkResult{is: DENIED},
@@ -166,7 +174,7 @@ func TestCheckSession(t *testing.T) {
 						Issuer: "https://127.0.0.1:8443",
 						Claims: session.Claims{Subject: "me"},
 					}, nil)
-				jh.On("Introspect", mock.Anything, "https://127.0.0.1:8443", "", "", true).
+				jh.On("IntrospectToken", mock.Anything, "https://127.0.0.1:8443", "", "", true).
 					Return(oidc.Introspection{Active: true}, nil)
 			},
 			expectedResult: checkResult{is: ALLOWED},

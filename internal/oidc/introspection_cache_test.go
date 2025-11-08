@@ -157,16 +157,16 @@ func (s *handlerTestSuite) Test_ParseAndValidate_IntrospectionCache() {
 
 	// Act
 	s.jwks.tokenActive = true
-	err = s.hdl.ParseAndValidate(context.Background(), tokenString, &claims, true)
+	err = s.hdl.ValidateToken(context.Background(), tokenString, &claims, true)
 	s.Require().NoError(err)
 
 	s.jwks.tokenActive = false
 
 	// Should not return an error because we use cache for GET requests
-	err = s.hdl.ParseAndValidate(context.Background(), tokenString, &claims, true)
+	err = s.hdl.ValidateToken(context.Background(), tokenString, &claims, true)
 	s.Require().NoError(err)
 
 	// Should invalidate cache for POST request
-	err = s.hdl.ParseAndValidate(context.Background(), tokenString, &claims, false)
+	err = s.hdl.ValidateToken(context.Background(), tokenString, &claims, false)
 	s.Require().Error(err)
 }

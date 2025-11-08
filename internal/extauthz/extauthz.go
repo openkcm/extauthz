@@ -3,6 +3,7 @@ package extauthz
 import (
 	"context"
 	"errors"
+	"io"
 
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
 	"github.com/openkcm/session-manager/pkg/session"
@@ -18,27 +19,30 @@ const (
 	DefaultCMKPathPrefix = "/cmk/v1/"
 )
 
-// sessionLoaderInterface defines the interface for loading sessions.
+// SessionReader defines the interface for loading sessions.
 // We don't use session.Repository directly to avoid depending on
 // unnecessary methods and to make testing easier.
-type sessionLoaderInterface interface {
+type SessionReader interface {
 	LoadSession(ctx context.Context, sessionID string) (session.Session, error)
 }
 
-// oidcHandlerInterface defines the interface for OIDC handling.
+// OIDCHandler defines the interface for OIDC handling.
 // We don't use oidc.Handler directly to make testing easier.
-type oidcHandlerInterface interface {
-	ParseAndValidate(ctx context.Context, rawToken string, userclaims any, useCache bool) error
-	Introspect(ctx context.Context, issuer, bearerToken, introspectToken string, useCache bool) (oidc.Introspection, error)
+type OIDCHandler interface {
+	io.Closer
+	Start() error
+
+	ValidateToken(ctx context.Context, rawToken string, userclaims any, useCache bool) error
+	IntrospectToken(ctx context.Context, issuer, bearerToken, introspectToken string, useCache bool) (oidc.Introspection, error)
 }
 
 type Server struct {
 	policyEngine           policies.Engine
-	oidcHandler            oidcHandlerInterface
+	oidcHandler            OIDCHandler
 	clientDataSigner       *clientdata.Signer
 	trustedSubjectToRegion map[string]string
 	featureGates           *commoncfg.FeatureGates
-	sessionCache           sessionLoaderInterface
+	sessionCache           SessionReader
 	cmkPathPrefix          string
 }
 
@@ -57,7 +61,7 @@ func WithTrustedSubjects(m map[string]string) ServerOption {
 	}
 }
 
-func WithOIDCHandler(hdl oidcHandlerInterface) ServerOption {
+func WithOIDCHandler(hdl OIDCHandler) ServerOption {
 	return func(server *Server) error {
 		if hdl == nil {
 			return errors.New("OIDC handler must not be nil")
@@ -100,7 +104,7 @@ func WithFeatureGates(fg *commoncfg.FeatureGates) ServerOption {
 	}
 }
 
-func WithSessionCache(sessionCache sessionLoaderInterface) ServerOption {
+func WithSessionCache(sessionCache SessionReader) ServerOption {
 	return func(server *Server) error {
 		server.sessionCache = sessionCache
 		return nil
@@ -121,14 +125,8 @@ func NewServer(opts ...ServerOption) (*Server, error) {
 		return nil, oops.Hint("failed to create policy engine").Wrap(err)
 	}
 
-	hdl, err := oidc.NewHandler()
-	if err != nil {
-		return nil, oops.Hint("failed to create OIDC handler").Wrap(err)
-	}
-
 	server := &Server{
 		policyEngine:  policyEngine,
-		oidcHandler:   hdl,
 		cmkPathPrefix: DefaultCMKPathPrefix,
 		featureGates:  &commoncfg.FeatureGates{},
 	}
@@ -140,11 +138,22 @@ func NewServer(opts ...ServerOption) (*Server, error) {
 		}
 	}
 
+	if server.oidcHandler == nil {
+		return nil, oops.New("OIDC handler must not be nil")
+	}
+
 	return server, nil
 }
 
 // Start starts any internal processes required by the server.
 func (s *Server) Start() error {
+	if s.oidcHandler != nil {
+		err := s.oidcHandler.Start()
+		if err != nil {
+			return oops.Hint("failed to start the oidc handler").Wrap(err)
+		}
+	}
+
 	if s.clientDataSigner != nil {
 		err := s.clientDataSigner.Start()
 		if err != nil {
@@ -156,6 +165,13 @@ func (s *Server) Start() error {
 
 // Close starts any internal processes required by the server.
 func (s *Server) Close() error {
+	if s.oidcHandler != nil {
+		err := s.oidcHandler.Close()
+		if err != nil {
+			return oops.Hint("failed to stop the oidc handler").Wrap(err)
+		}
+	}
+
 	if s.clientDataSigner != nil {
 		err := s.clientDataSigner.Close()
 		if err != nil {

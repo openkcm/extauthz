@@ -8,9 +8,6 @@ import (
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
 	"github.com/openkcm/common-sdk/pkg/commongrpc"
 	"github.com/valkey-io/valkey-go"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/credentials/insecure"
 
 	sessrepo "github.com/openkcm/session-manager/pkg/session/valkey"
 	slogctx "github.com/veqryn/slog-context"
@@ -78,24 +75,6 @@ func createExtAuthZServer(ctx context.Context, cfg *config.Config) (*extauthz.Se
 	return srv, nil
 }
 
-func transportCredentialsFromSecretRef(secref *commoncfg.SecretRef) (credentials.TransportCredentials, error) {
-	if secref == nil {
-		return insecure.NewCredentials(), nil
-	}
-
-	switch secref.Type {
-	case commoncfg.InsecureSecretType:
-		return insecure.NewCredentials(), nil
-	case commoncfg.MTLSSecretType:
-		tlsConfig, err := commoncfg.LoadMTLSConfig(&secref.MTLS)
-		if err != nil {
-			return nil, err
-		}
-		return credentials.NewTLS(tlsConfig), nil
-	}
-	return nil, fmt.Errorf("invalid secret type: %s", secref.Type)
-}
-
 func createClientDataSigner(ctx context.Context, cfg *config.Config) (*clientdata.Signer, error) {
 	clientDataSigner, err := clientdata.NewSigner(&cfg.FeatureGates, &cfg.ClientData)
 	if err != nil {
@@ -117,14 +96,19 @@ func createOIDCHandler(ctx context.Context, cfg *config.JWT, fg *commoncfg.Featu
 		cfg.IssuerClaimKeys = oidc.DefaultIssuerClaims
 	}
 	opts = append(opts, oidc.WithIssuerClaimKeys(cfg.IssuerClaimKeys...))
-	// add static providers (if any)
+
+	// add list of providers from configuration
 	for _, p := range cfg.Providers {
 		oidcProvider, err := createOIDCProvider(ctx, &p)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create OIDC provider: %w", err)
+			return nil, fmt.Errorf("failed to create the OIDC provider: %w", err)
 		}
 		opts = append(opts, oidc.WithStaticProvider(oidcProvider))
 	}
+
+	// setup the K8SProviderRef to load providers based on the k8s JWTProvider CRD
+	opts = append(opts, oidc.WithK8SJWTProviderRef(cfg.K8SProviderRef))
+
 	// add provider source (if any)
 	if cfg.ProviderSource.Enabled {
 		providerSource, err := createOIDCProviderSource(ctx, &cfg.ProviderSource)
@@ -133,6 +117,7 @@ func createOIDCHandler(ctx context.Context, cfg *config.JWT, fg *commoncfg.Featu
 		}
 		opts = append(opts, oidc.WithProviderClient(providerSource))
 	}
+
 	// create the handler
 	hdl, err := oidc.NewHandler(opts...)
 	if err != nil {
@@ -148,22 +133,23 @@ func createOIDCProvider(ctx context.Context, cfg *config.Provider) (*oidc.Provid
 		"jwksURI", cfg.JwksURI,
 		"introspectionEndpoint", cfg.IntrospectionEndpoint,
 	)
+
 	issuerURL, err := url.Parse(cfg.Issuer)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse issuer URL %q: %w", cfg.Issuer, err)
 	}
-	var popts = []oidc.ProviderOption{
+
+	oidcProvider, err := oidc.NewProvider(issuerURL, cfg.Audiences,
 		oidc.WithRawJWKSURI(cfg.JwksURI),
 		oidc.WithRawIntrospectTokenURL(cfg.IntrospectionEndpoint),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create the oidc provider: %w", err)
 	}
 
-	oidcProvider, err := oidc.NewProvider(issuerURL, cfg.Audiences, popts...)
+	err = oidcProvider.RefreshConfiguration(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create static OIDC provider: %w", err)
-	}
-	err = oidcProvider.PopulateFromWellKnownOpenIDConfiguration(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to populate OpenID Connect provider configuration: %w", err)
+		return nil, fmt.Errorf("failed to refresh the provider configuration: %w", err)
 	}
 
 	return oidcProvider, nil
@@ -171,21 +157,18 @@ func createOIDCProvider(ctx context.Context, cfg *config.Provider) (*oidc.Provid
 
 func createOIDCProviderSource(ctx context.Context, cfg *commoncfg.GRPCClient) (*oidc.ProviderSource, error) {
 	slogctx.Info(ctx, "Using OIDC provider source", "address", cfg.Address)
-	creds, err := transportCredentialsFromSecretRef(cfg.SecretRef)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create transport credentials: %w", err)
-	}
+
 	// create the gRPC connection to the provider source
-	grpcConn, err := commongrpc.NewClient(cfg,
-		grpc.WithTransportCredentials(creds),
-	)
+	grpcConn, err := commongrpc.NewClient(cfg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create gRPC connection: %w", err)
+		return nil, fmt.Errorf("failed to create gRPC connection to OIDC provider source: %w", err)
 	}
+
 	pc, err := oidc.NewProviderSource(oidc.WithGRPCConn(grpcConn))
 	if err != nil {
-		return nil, fmt.Errorf("failed to create OIDC provider client: %w", err)
+		return nil, fmt.Errorf("failed to create OIDC provider source client: %w", err)
 	}
+
 	return pc, nil
 }
 
@@ -194,14 +177,17 @@ func createValkeySessionCache(ctx context.Context, cfg *config.Valkey) (*sessrep
 	if err != nil {
 		return nil, fmt.Errorf("loading valkey host: %w", err)
 	}
+
 	valkeyUsername, err := commoncfg.LoadValueFromSourceRef(cfg.User)
 	if err != nil {
 		return nil, fmt.Errorf("loading valkey username: %w", err)
 	}
+
 	valkeyPassword, err := commoncfg.LoadValueFromSourceRef(cfg.Password)
 	if err != nil {
 		return nil, fmt.Errorf("loading valkey password: %w", err)
 	}
+
 	slogctx.Info(ctx, "Using Valkey for session cache", "address", string(valkeyHost), "user", string(valkeyUsername))
 	valkeyClient, err := valkey.NewClient(valkey.ClientOption{
 		InitAddress: []string{string(valkeyHost)},
@@ -211,5 +197,6 @@ func createValkeySessionCache(ctx context.Context, cfg *config.Valkey) (*sessrep
 	if err != nil {
 		return nil, fmt.Errorf("failed to create the Valkey client: %w", err)
 	}
+
 	return sessrepo.NewRepository(valkeyClient, cfg.Prefix), nil
 }

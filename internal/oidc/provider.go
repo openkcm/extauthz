@@ -12,6 +12,7 @@ import (
 
 	"github.com/go-jose/go-jose/v4"
 	"github.com/patrickmn/go-cache"
+	"github.com/samber/oops"
 
 	slogctx "github.com/veqryn/slog-context"
 
@@ -29,10 +30,11 @@ type Provider struct {
 	jwksURL       *url.URL
 	introspectURL *url.URL
 	audiences     []string
-	client        *http.Client
+
+	client *http.Client
 
 	// cache the signing keys by key ID
-	signkeys *cache.Cache
+	cacheSignKeys *cache.Cache
 }
 
 // ProviderOption is used to configure a provider.
@@ -42,14 +44,14 @@ type ProviderOption func(*Provider) error
 // A cach miss will result in a new request to the JWKS URI.
 func WithSigningKeyCacheExpiration(expiration, cleanup time.Duration) ProviderOption {
 	return func(provider *Provider) error {
-		provider.signkeys = cache.New(expiration, cleanup)
+		provider.cacheSignKeys = cache.New(expiration, cleanup)
 		return nil
 	}
 }
 
 func WithoutCache() ProviderOption {
 	return func(provider *Provider) error {
-		provider.signkeys = nil
+		provider.cacheSignKeys = nil
 		return nil
 	}
 }
@@ -117,10 +119,10 @@ func WithRawIntrospectTokenURL(endpoint string) ProviderOption {
 // NewProvider creates a new provider and applies the given options.
 func NewProvider(issuerURL *url.URL, audiences []string, opts ...ProviderOption) (*Provider, error) {
 	provider := &Provider{
-		issuerURL: issuerURL,
-		audiences: audiences,
-		client:    http.DefaultClient,
-		signkeys:  cache.New(30*time.Second, 10*time.Minute),
+		issuerURL:     issuerURL,
+		audiences:     audiences,
+		client:        http.DefaultClient,
+		cacheSignKeys: cache.New(30*time.Second, 10*time.Minute),
 	}
 
 	for _, opt := range opts {
@@ -132,60 +134,6 @@ func NewProvider(issuerURL *url.URL, audiences []string, opts ...ProviderOption)
 
 	return provider, nil
 }
-func (p *Provider) IntrospectionEnabled() bool {
-	return p.introspectURL != nil
-}
-
-// SigningKeyFor returns the key for the given key.
-func (p *Provider) SigningKeyFor(ctx context.Context, keyID string) (*jose.JSONWebKey, error) {
-	// check the cache first
-	key, found := getSigningKey(p.signkeys, keyID)
-	if found {
-		return key, nil
-	}
-
-	slogctx.Debug(ctx, "Signing key cache miss", "keyID", keyID)
-
-	// otherwise fetch the key using the JWKS URI and cache it if found
-	if p.jwksURL == nil {
-		return nil, errors.New("JWKS endpoint must not be empty")
-	}
-
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, p.jwksURL.String(), nil)
-	if err != nil {
-		return nil, fmt.Errorf("could not build request to get JWKS: %w", err)
-	}
-
-	response, err := p.client.Do(request)
-	if err != nil {
-		return nil, err
-	}
-
-	defer func() {
-		err := response.Body.Close()
-		if err != nil {
-			slogctx.Error(ctx, "could not close response body", "error", err)
-		}
-	}()
-
-	// decode the jwks
-	var jwks jose.JSONWebKeySet
-
-	err = json.NewDecoder(response.Body).Decode(&jwks)
-	if err != nil {
-		return nil, fmt.Errorf("could not decode jwks: %w", err)
-	}
-
-	// find the key for the given key ID, cache it and return it
-	checkedKey, found := lookupValidSigningKey(keyID, &jwks)
-	if found {
-		storeSigningKey(p.signkeys, keyID, checkedKey)
-		return checkedKey, nil
-	}
-
-	// return an error if the key was not found
-	return nil, fmt.Errorf("could not find key for key ID %s", keyID)
-}
 
 type wellKnownOpenIDConfiguration struct {
 	Issuer                string `json:"issuer"`
@@ -193,7 +141,16 @@ type wellKnownOpenIDConfiguration struct {
 	IntrospectionEndpoint string `json:"introspection_endpoint,omitempty"` // optional
 }
 
-func (p *Provider) PopulateFromWellKnownOpenIDConfiguration(ctx context.Context) error {
+func (p *Provider) RefreshConfiguration(ctx context.Context) error {
+	err := p.extractDataFromWellKnownConfiguration(ctx)
+	if err != nil {
+		return oops.Hint("failed to extract information from ../.well-known/openid-configuration endpoint").Wrap(err)
+	}
+
+	return nil
+}
+
+func (p *Provider) extractDataFromWellKnownConfiguration(ctx context.Context) error {
 	if utils.CheckAllPopulated(p.jwksURL, p.introspectURL) {
 		return nil
 	}
@@ -235,6 +192,61 @@ func (p *Provider) PopulateFromWellKnownOpenIDConfiguration(ctx context.Context)
 	}
 
 	return nil
+}
+
+// lookupSigningKey returns the key for the given key.
+func (p *Provider) lookupSigningKey(ctx context.Context, keyID string) (*jose.JSONWebKey, error) {
+	// check the cache first
+	key, found := getSigningKey(p.cacheSignKeys, keyID)
+	if found {
+		return key, nil
+	}
+
+	slogctx.Debug(ctx, "Signing key cache miss", "keyID", keyID)
+
+	// otherwise fetch the key using the JWKS URI and cache it if found
+	if p.jwksURL == nil {
+		return nil, errors.New("JWKS endpoint must not be empty")
+	}
+
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, p.jwksURL.String(), nil)
+	if err != nil {
+		return nil, fmt.Errorf("could not build request to get JWKS: %w", err)
+	}
+
+	response, err := p.client.Do(request)
+	if err != nil {
+		return nil, err
+	}
+
+	defer func() {
+		err := response.Body.Close()
+		if err != nil {
+			slogctx.Error(ctx, "could not close response body", "error", err)
+		}
+	}()
+
+	// decode the jwks
+	var jwks jose.JSONWebKeySet
+
+	err = json.NewDecoder(response.Body).Decode(&jwks)
+	if err != nil {
+		return nil, fmt.Errorf("could not decode jwks: %w", err)
+	}
+
+	// find the key for the given key ID, cache it and return it
+	checkedKey, found := lookupValidSigningKey(keyID, &jwks)
+	if found {
+		storeSigningKey(p.cacheSignKeys, keyID, checkedKey)
+		return checkedKey, nil
+	}
+
+	// return an error if the key was not found
+	return nil, fmt.Errorf("could not find key for key ID %s", keyID)
+}
+
+func (p *Provider) hasIntrospectionEnabled() bool {
+	return p.introspectURL != nil
 }
 
 type Introspection struct {
