@@ -11,6 +11,11 @@ import (
 	oidcproviderv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/sessionmanager/oidcprovider/v1"
 )
 
+// ProviderClient is an interface for looking up providers for the issuer.
+type ProviderClient interface {
+	Get(ctx context.Context, issuer string) (*Provider, error)
+}
+
 type ProviderSource struct {
 	grpcConn *grpc.ClientConn
 	pclient  oidcproviderv1.ServiceClient

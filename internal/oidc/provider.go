@@ -19,11 +19,6 @@ import (
 	"github.com/openkcm/extauthz/internal/utils"
 )
 
-// ProviderClient is an interface for looking up providers for the issuer.
-type ProviderClient interface {
-	Get(ctx context.Context, issuer string) (*Provider, error)
-}
-
 // Provider represents a specific OIDC provider.
 type Provider struct {
 	issuerURL     *url.URL
@@ -135,12 +130,6 @@ func NewProvider(issuerURL *url.URL, audiences []string, opts ...ProviderOption)
 	return provider, nil
 }
 
-type wellKnownOpenIDConfiguration struct {
-	Issuer                string `json:"issuer"`
-	JWKSURI               string `json:"jwks_uri"`
-	IntrospectionEndpoint string `json:"introspection_endpoint,omitempty"` // optional
-}
-
 func (p *Provider) RefreshConfiguration(ctx context.Context) error {
 	err := p.extractDataFromWellKnownConfiguration(ctx)
 	if err != nil {
@@ -148,6 +137,12 @@ func (p *Provider) RefreshConfiguration(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+type wellKnownOpenIDConfiguration struct {
+	Issuer                string `json:"issuer"`
+	JWKSURI               string `json:"jwks_uri"`
+	IntrospectionEndpoint string `json:"introspection_endpoint,omitempty"` // optional
 }
 
 func (p *Provider) extractDataFromWellKnownConfiguration(ctx context.Context) error {
