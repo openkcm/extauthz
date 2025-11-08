@@ -151,35 +151,16 @@ func (h *Handler) ValidateToken(ctx context.Context, rawToken string, userclaims
 		return errors.Join(ErrInvalidToken, fmt.Errorf("missing keys %v in token claims", h.issuerClaimKeys))
 	}
 
-	issuerURL, err := url.Parse(issuer)
-	if err != nil {
-		slogctx.Error(ctx, "Failed to parse issuer URL", "error", err, "issuer", issuer)
-		return errors.Join(ErrInvalidToken, err)
-	}
-
-	if issuerURL.Scheme != "https" {
-		slogctx.Error(ctx, "Invalid issuer scheme", "scheme", issuerURL.Scheme)
-		return errors.Join(ErrInvalidToken, fmt.Errorf("invalid issuer scheme %s", issuerURL.Scheme))
-	}
-
 	// let the h lookup the identity provider for the issuer host
-	provider, err := h.lookupProviderByIssuer(ctx, issuerURL.Host)
+	provider, err := h.lookupProviderByIssuer(ctx, issuer)
 	if err != nil {
-		slogctx.Error(ctx, "Failed to get provider for issuer", "error", err, "issuer", issuerURL.Host)
+		slogctx.Error(ctx, "Failed to get provider for issuer", "error", err, "issuer", issuer)
 		return errors.Join(ErrNoProvider, err)
 	}
 
 	// read the key ID from the token headers
 	// Not sure why there are multiple headers, take the first one with key ID
-	var keyID string
-
-	for _, header := range token.Headers {
-		if header.KeyID != "" {
-			keyID = header.KeyID
-			break
-		}
-	}
-
+	keyID := extractHeaderKeyID(token.Headers)
 	if keyID == "" {
 		slogctx.Error(ctx, "Missing kid in token header")
 		return errors.Join(ErrInvalidToken, errors.New("missing kid in token header"))
@@ -194,7 +175,6 @@ func (h *Handler) ValidateToken(ctx context.Context, rawToken string, userclaims
 
 	// check the signature and read the claims
 	standardClaims := jwt.Claims{}
-
 	err = token.Claims(*key, &standardClaims, userclaims)
 	if err != nil {
 		slogctx.Error(ctx, "Failed to verify and deserialize token into claims", "error", err)
@@ -243,18 +223,8 @@ func (h *Handler) ValidateToken(ctx context.Context, rawToken string, userclaims
 
 // IntrospectToken an access or refresh token with the given issuer.
 func (h *Handler) IntrospectToken(ctx context.Context, issuer, bearerToken, introspectToken string, useCache bool) (Introspection, error) {
-	// parse the issuer URL
-	issuerURL, err := url.Parse(issuer)
-	if err != nil {
-		return Introspection{}, err
-	}
-
-	if issuerURL.Scheme != "https" {
-		return Introspection{}, fmt.Errorf("invalid issuer scheme %s", issuerURL.Scheme)
-	}
-
 	// let the h lookup the identity provider for the issuer host
-	provider, err := h.lookupProviderByIssuer(ctx, issuerURL.Host)
+	provider, err := h.lookupProviderByIssuer(ctx, issuer)
 	if err != nil {
 		return Introspection{}, err
 	}
@@ -304,7 +274,20 @@ func (h *Handler) Close() error {
 
 // lookupProviderByIssuer returns the provider for the given issuer. It either looks up the
 // provider in the internal cache or queries the provider client.
-func (h *Handler) lookupProviderByIssuer(ctx context.Context, issuer string) (*Provider, error) {
+func (h *Handler) lookupProviderByIssuer(ctx context.Context, issuerURLString string) (*Provider, error) {
+	issuerURL, err := url.Parse(issuerURLString)
+	if err != nil {
+		slogctx.Error(ctx, "Failed to parse issuer URL", "error", err, "issuer", issuerURLString)
+		return nil, errors.Join(ErrInvalidToken, err)
+	}
+
+	if issuerURL.Scheme != "https" {
+		slogctx.Error(ctx, "Invalid issuer scheme", "scheme", issuerURL.Scheme)
+		return nil, errors.Join(ErrInvalidToken, fmt.Errorf("invalid issuer scheme %s", issuerURL.Scheme))
+	}
+
+	issuer := issuerURL.Host
+
 	// check the static providers first
 	if provider, ok := h.providers[issuer]; ok {
 		return provider, nil
@@ -402,5 +385,14 @@ func extractFromClaims(claims map[string]any, keys ...string) string {
 		}
 	}
 
+	return ""
+}
+
+func extractHeaderKeyID(headers []jose.Header) string {
+	for _, header := range headers {
+		if header.KeyID != "" {
+			return header.KeyID
+		}
+	}
 	return ""
 }
