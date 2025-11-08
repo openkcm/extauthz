@@ -350,7 +350,7 @@ func TestProvider_introspect(t *testing.T) {
 			wantErr: assert.NoError,
 		},
 		{
-			name:      "IntrospectToken inactive token",
+			name:      "Introspect inactive token",
 			issuerURL: issuerURL,
 			audiences: []string{"aud1", "aud2"},
 			opts:      []ProviderOption{WithSigningKeyCacheExpiration(30*time.Second, 10*time.Minute)},

@@ -85,7 +85,7 @@ func TestCheckSession(t *testing.T) {
 			},
 			expectedResult: checkResult{is: UNAUTHENTICATED},
 		}, {
-			name:   "IntrospectToken fails",
+			name:   "Introspect fails",
 			cookie: &http.Cookie{Name: "session", Value: ""},
 			setupMocks: func(sc *MockSessionCache, jh *MockOIDCHandler) {
 				sc.On("LoadSession", mock.Anything, "").
