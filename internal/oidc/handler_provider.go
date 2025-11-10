@@ -7,6 +7,7 @@ import (
 	"net/url"
 
 	"github.com/patrickmn/go-cache"
+
 	slogctx "github.com/veqryn/slog-context"
 )
 

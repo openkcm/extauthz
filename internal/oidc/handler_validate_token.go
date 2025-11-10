@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-jose/go-jose/v4"
 	"github.com/go-jose/go-jose/v4/jwt"
+
 	slogctx "github.com/veqryn/slog-context"
 )
 

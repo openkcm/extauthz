@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-jose/go-jose/v4"
 	"github.com/patrickmn/go-cache"
+
 	slogctx "github.com/veqryn/slog-context"
 )
 

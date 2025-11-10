@@ -6,8 +6,9 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/openkcm/extauthz/internal/utils"
 	slogctx "github.com/veqryn/slog-context"
+
+	"github.com/openkcm/extauthz/internal/utils"
 )
 
 type wellKnownOpenIDConfiguration struct {
