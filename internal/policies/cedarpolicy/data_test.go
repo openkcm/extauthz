@@ -8,26 +8,70 @@ const (
 var policies = map[string]string{
 	policy1: `
 		permit (
-			principal == Subject::"me",
+			principal,
 			action == Action::"GET",
 			resource is Route
-		) when { context.route == "my.service.com/mine" };
+		) when {
+			principal in [
+				Subject::"me!t1",
+				Subject::"me!t2"
+			] &&
+			context.type == "jwt" &&
+			context.route like "*/my/stuff*" &&
+			[
+				"https://localhost:1234",
+				"https://127.0.0.1:1234"
+			].contains(context.issuer)
+		};
 		permit (
-			principal == Subject::"me",
+			principal,
 			action == Action::"DELETE",
 			resource is Route
-		) when { context.route == "my.service.com/mine" };
+		) when {
+			principal in [
+				Subject::"me!t1",
+				Subject::"me!t2"
+			] &&
+			context.type == "jwt" &&
+			context.route like "*/my/stuff*" &&
+			[
+				"https://localhost:1234",
+				"https://127.0.0.1:1234"
+			].contains(context.issuer)
+		};
 	`,
 	policy2: `
 		permit (
-			principal == Subject::"you",
+			principal,
 			action == Action::"GET",
 			resource is Route
-		) when { context.route == "my.service.com/yours" };
+		) when {
+			principal in [
+				Subject::"you!t1",
+				Subject::"you!t2"
+			] &&
+			context.type == "jwt" &&
+			context.route like "*/your/stuff*" &&
+			[
+				"https://localhost:1234",
+				"https://127.0.0.1:1234"
+			].contains(context.issuer)
+		};
 		permit (
-			principal == Subject::"you",
+			principal,
 			action == Action::"DELETE",
 			resource is Route
-		) when { context.route == "my.service.com/yours" };
+		) when {
+			principal in [
+				Subject::"you!t1",
+				Subject::"you!t2"
+			] &&
+			context.type == "jwt" &&
+			context.route like "*/your/stuff*" &&
+			[
+				"https://localhost:1234",
+				"https://127.0.0.1:1234"
+			].contains(context.issuer)
+		};
 	`,
 }

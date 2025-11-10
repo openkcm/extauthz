@@ -28,7 +28,8 @@ permit (
 	action == Action::"GET",
 	resource is Route
 ) when {
-	context.route == "my.service.com/foo/bar" && context.issuer like "https://127.0.0.1:*"
+	context.route like "*.service.com/foo/bar*"
+	&& context.issuer like "https://127.0.0.1:*"
 };
 
 permit (
@@ -36,7 +37,7 @@ permit (
 	action == Action::"GET",
 	resource is Route
 ) when {
-	context.route == "my.service.com/foo/bar"
+	context.route == "our.service.com/foo/bar"
 };
 
 // Registry Service
@@ -138,7 +139,7 @@ func TestCheck(t *testing.T) {
 					Request: &envoy_auth.AttributeContext_Request{
 						Http: &envoy_auth.AttributeContext_HttpRequest{
 							Method:  "GET",
-							Host:    "my.service.com",
+							Host:    "our.service.com",
 							Path:    "/foo/bar",
 							Headers: map[string]string{HeaderForwardedClientCert: "Hash=123;Subject=\"CN=minime\";Cert=" + x509CertPEMURLEncoded}}}}},
 			wantError: false,
@@ -152,7 +153,7 @@ func TestCheck(t *testing.T) {
 					Request: &envoy_auth.AttributeContext_Request{
 						Http: &envoy_auth.AttributeContext_HttpRequest{
 							Method:  "GET",
-							Host:    "my.service.com",
+							Host:    "our.service.com",
 							Path:    "/foo/bar",
 							Headers: map[string]string{HeaderForwardedClientCert: "Hash=123;Subject=\"CN=daummy\";Cert=" + x509CertPEMURLEncoded}}}}},
 			wantError: false,
@@ -189,7 +190,7 @@ func TestCheck(t *testing.T) {
 					Request: &envoy_auth.AttributeContext_Request{
 						Http: &envoy_auth.AttributeContext_HttpRequest{
 							Method:  "POST",
-							Host:    "my.service.com",
+							Host:    "our.service.com",
 							Path:    "/kms.api.cmk.registry.system.v1.Service/RegisterSystem",
 							Headers: map[string]string{HeaderForwardedClientCert: "Hash=123;Subject=\"CN=minime\";Cert=" + x509CertPEMURLEncoded}}}}},
 			wantError: false,
@@ -203,7 +204,7 @@ func TestCheck(t *testing.T) {
 					Request: &envoy_auth.AttributeContext_Request{
 						Http: &envoy_auth.AttributeContext_HttpRequest{
 							Method:  "POST",
-							Host:    "my.service.com",
+							Host:    "our.service.com",
 							Path:    "/kms.api.cmk.registry.tenant.v1.Service/RegisterTenant",
 							Headers: map[string]string{HeaderForwardedClientCert: "Hash=123;Subject=\"CN=minime\";Cert=" + x509CertPEMURLEncoded}}}}},
 			wantError: false,

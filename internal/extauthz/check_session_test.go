@@ -110,7 +110,7 @@ func TestCheckSession(t *testing.T) {
 			name:   "Policy deny method",
 			cookie: &http.Cookie{Name: "session", Value: ""},
 			method: "POST",
-			host:   "my.service.com",
+			host:   "our.service.com",
 			path:   "/foo/bar",
 			setupMocks: func(sc *MockSessionCache, jh *MockOIDCHandler) {
 				sc.On("LoadSession", mock.Anything, "").
@@ -126,7 +126,7 @@ func TestCheckSession(t *testing.T) {
 			name:   "Policy deny host",
 			cookie: &http.Cookie{Name: "session", Value: ""},
 			method: "GET",
-			host:   "your.service.com",
+			host:   "my.service.org",
 			path:   "/foo/bar",
 			setupMocks: func(sc *MockSessionCache, jh *MockOIDCHandler) {
 				sc.On("LoadSession", mock.Anything, "").
@@ -142,8 +142,8 @@ func TestCheckSession(t *testing.T) {
 			name:   "Policy deny path",
 			cookie: &http.Cookie{Name: "session", Value: ""},
 			method: "GET",
-			host:   "your.service.com",
-			path:   "/foo/bar/baz",
+			host:   "our.service.com",
+			path:   "/foo/baz",
 			setupMocks: func(sc *MockSessionCache, jh *MockOIDCHandler) {
 				sc.On("LoadSession", mock.Anything, "").
 					Return(session.Session{
@@ -158,7 +158,7 @@ func TestCheckSession(t *testing.T) {
 			name:   "Policy allow",
 			cookie: &http.Cookie{Name: "session", Value: ""},
 			method: "GET",
-			host:   "my.service.com",
+			host:   "our.service.com",
 			path:   "/foo/bar",
 			setupMocks: func(sc *MockSessionCache, jh *MockOIDCHandler) {
 				sc.On("LoadSession", mock.Anything, "").
