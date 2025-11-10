@@ -10,7 +10,7 @@ require (
 	github.com/gogo/googleapis v1.4.1
 	github.com/golang-jwt/jwt/v5 v5.3.0
 	github.com/google/uuid v1.6.0
-	github.com/openkcm/api-sdk v0.11.0
+	github.com/openkcm/api-sdk v0.12.0
 	github.com/openkcm/common-sdk v1.5.3-0.20251105072938-48c91f8fe690
 	github.com/openkcm/session-manager v0.6.1-0.20251105072936-3acf92ede3d3
 	github.com/patrickmn/go-cache v2.1.0+incompatible
