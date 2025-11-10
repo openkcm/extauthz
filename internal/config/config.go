@@ -76,7 +76,7 @@ type JWT struct {
 	Providers []Provider `yaml:"providers"`
 
 	// An optional gRPC source to dynamically lookup JWT providers
-	ProviderSource commoncfg.GRPCClient `yaml:"providerSource"`
+	RemoteProvider commoncfg.GRPCClient `yaml:"remoteProvider"`
 
 	// Define providers as k8s custom resources
 	K8SProviderRef *K8SProviderRef `yaml:"k8sProviderRef"`

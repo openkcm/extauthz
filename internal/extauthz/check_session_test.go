@@ -90,17 +90,17 @@ func TestCheckSession(t *testing.T) {
 			setupMocks: func(sc *MockSessionCache, jh *MockOIDCHandler) {
 				sc.On("LoadSession", mock.Anything, "").
 					Return(session.Session{}, nil)
-				jh.On("Introspect", mock.Anything, "", "", "", false).
+				jh.On("IntrospectToken", mock.Anything, "", "", "", false).
 					Return(oidc.Introspection{}, errors.New("introspect error"))
 			},
 			expectedResult: checkResult{is: UNAUTHENTICATED},
 		}, {
-			name:   "IntrospectToken inactive",
+			name:   "Introspect inactive",
 			cookie: &http.Cookie{Name: "session", Value: ""},
 			setupMocks: func(sc *MockSessionCache, jh *MockOIDCHandler) {
 				sc.On("LoadSession", mock.Anything, "").
 					Return(session.Session{}, nil)
-				jh.On("Introspect", mock.Anything, "", "", "", false).
+				jh.On("IntrospectToken", mock.Anything, "", "", "", false).
 					Return(oidc.Introspection{Active: false}, nil)
 			},
 			expectedResult: checkResult{is: UNAUTHENTICATED},
@@ -110,7 +110,7 @@ func TestCheckSession(t *testing.T) {
 			setupMocks: func(sc *MockSessionCache, jh *MockOIDCHandler) {
 				sc.On("LoadSession", mock.Anything, "").
 					Return(session.Session{}, nil)
-				jh.On("Introspect", mock.Anything, "", "", "", false).
+				jh.On("IntrospectToken", mock.Anything, "", "", "", false).
 					Return(oidc.Introspection{Active: true}, nil)
 			},
 			expectedResult: checkResult{is: DENIED},
@@ -126,7 +126,7 @@ func TestCheckSession(t *testing.T) {
 						Issuer: "https://127.0.0.1:8443",
 						Claims: session.Claims{Subject: "me"},
 					}, nil)
-				jh.On("Introspect", mock.Anything, "https://127.0.0.1:8443", "", "", false).
+				jh.On("IntrospectToken", mock.Anything, "https://127.0.0.1:8443", "", "", false).
 					Return(oidc.Introspection{Active: true}, nil)
 			},
 			expectedResult: checkResult{is: DENIED},
@@ -142,7 +142,7 @@ func TestCheckSession(t *testing.T) {
 						Issuer: "https://127.0.0.1:8443",
 						Claims: session.Claims{Subject: "me"},
 					}, nil)
-				jh.On("Introspect", mock.Anything, "https://127.0.0.1:8443", "", "", true).
+				jh.On("IntrospectToken", mock.Anything, "https://127.0.0.1:8443", "", "", true).
 					Return(oidc.Introspection{Active: true}, nil)
 			},
 			expectedResult: checkResult{is: DENIED},
@@ -158,7 +158,7 @@ func TestCheckSession(t *testing.T) {
 						Issuer: "https://127.0.0.1:8443",
 						Claims: session.Claims{Subject: "me"},
 					}, nil)
-				jh.On("Introspect", mock.Anything, "https://127.0.0.1:8443", "", "", true).
+				jh.On("IntrospectToken", mock.Anything, "https://127.0.0.1:8443", "", "", true).
 					Return(oidc.Introspection{Active: true}, nil)
 			},
 			expectedResult: checkResult{is: DENIED},
@@ -174,7 +174,7 @@ func TestCheckSession(t *testing.T) {
 						Issuer: "https://127.0.0.1:8443",
 						Claims: session.Claims{Subject: "me"},
 					}, nil)
-				jh.On("Introspect", mock.Anything, "https://127.0.0.1:8443", "", "", true).
+				jh.On("IntrospectToken", mock.Anything, "https://127.0.0.1:8443", "", "", true).
 					Return(oidc.Introspection{Active: true}, nil)
 			},
 			expectedResult: checkResult{is: ALLOWED},

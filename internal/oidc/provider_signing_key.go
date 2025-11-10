@@ -1,9 +1,67 @@
 package oidc
 
 import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http"
+
 	"github.com/go-jose/go-jose/v4"
 	"github.com/patrickmn/go-cache"
+	slogctx "github.com/veqryn/slog-context"
 )
+
+// lookupSigningKey returns the key for the given key.
+func (p *Provider) lookupSigningKey(ctx context.Context, keyID string) (*jose.JSONWebKey, error) {
+	// check the cache first
+	key, found := getSigningKey(p.cacheSignKeys, keyID)
+	if found {
+		return key, nil
+	}
+
+	slogctx.Debug(ctx, "Signing key cache miss", "keyID", keyID)
+
+	// otherwise fetch the key using the JWKS URI and cache it if found
+	if p.jwksURL == nil {
+		return nil, errors.New("JWKS endpoint must not be empty")
+	}
+
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, p.jwksURL.String(), nil)
+	if err != nil {
+		return nil, fmt.Errorf("could not build request to get JWKS: %w", err)
+	}
+
+	response, err := p.client.Do(request)
+	if err != nil {
+		return nil, err
+	}
+
+	defer func() {
+		err := response.Body.Close()
+		if err != nil {
+			slogctx.Error(ctx, "could not close response body", "error", err)
+		}
+	}()
+
+	// decode the jwks
+	var jwks jose.JSONWebKeySet
+
+	err = json.NewDecoder(response.Body).Decode(&jwks)
+	if err != nil {
+		return nil, fmt.Errorf("could not decode jwks: %w", err)
+	}
+
+	// find the key for the given key ID, cache it and return it
+	checkedKey, found := lookupValidSigningKey(keyID, &jwks)
+	if found {
+		storeSigningKey(p.cacheSignKeys, keyID, checkedKey)
+		return checkedKey, nil
+	}
+
+	// return an error if the key was not found
+	return nil, fmt.Errorf("could not find key for key ID %s", keyID)
+}
 
 // getSigningKey retrieves a signing key from the provided in-memory cache.
 //

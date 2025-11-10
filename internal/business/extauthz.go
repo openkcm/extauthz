@@ -6,7 +6,6 @@ import (
 	"net/url"
 
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
-	"github.com/openkcm/common-sdk/pkg/commongrpc"
 	"github.com/valkey-io/valkey-go"
 
 	sessrepo "github.com/openkcm/session-manager/pkg/session/valkey"
@@ -110,12 +109,12 @@ func createOIDCHandler(ctx context.Context, cfg *config.JWT, fg *commoncfg.Featu
 	opts = append(opts, oidc.WithK8SJWTProviderRef(cfg.K8SProviderRef))
 
 	// add provider source (if any)
-	if cfg.ProviderSource.Enabled {
-		providerSource, err := createOIDCProviderSource(ctx, &cfg.ProviderSource)
+	if cfg.RemoteProvider.Enabled {
+		providerSource, err := createOIDCRemoteProvider(ctx, &cfg.RemoteProvider)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create OIDC provider source: %w", err)
 		}
-		opts = append(opts, oidc.WithProviderClient(providerSource))
+		opts = append(opts, oidc.WithRemoteProvider(providerSource))
 	}
 
 	// create the handler
@@ -155,16 +154,9 @@ func createOIDCProvider(ctx context.Context, cfg *config.Provider) (*oidc.Provid
 	return oidcProvider, nil
 }
 
-func createOIDCProviderSource(ctx context.Context, cfg *commoncfg.GRPCClient) (*oidc.ProviderSource, error) {
+func createOIDCRemoteProvider(ctx context.Context, cfg *commoncfg.GRPCClient) (oidc.RemoteProvider, error) {
 	slogctx.Info(ctx, "Using OIDC provider source", "address", cfg.Address)
-
-	// create the gRPC connection to the provider source
-	grpcConn, err := commongrpc.NewClient(cfg)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create gRPC connection to OIDC provider source: %w", err)
-	}
-
-	pc, err := oidc.NewProviderSource(oidc.WithGRPCConn(grpcConn))
+	pc, err := oidc.NewExternalProvider(oidc.WithGRPCClientConfiguration(cfg))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create OIDC provider source client: %w", err)
 	}
