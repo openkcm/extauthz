@@ -2,7 +2,6 @@ package extauthz
 
 import (
 	"context"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"net/http"
@@ -49,21 +48,15 @@ func (srv *Server) checkJWTToken(ctx context.Context, bearerToken, method, host,
 			info: fmt.Sprintf("Error from JWT validation: %v", err)}
 	}
 
-	rawClaims, err := jwtPayload(bearerToken)
-	if err != nil {
-		slogctx.Error(ctx, "Extracting JSON payload from JWT failed", "error", err)
-		return checkResult{is: UNAUTHENTICATED,
-			info: "Invalid authorization header"}
-	}
-
 	// prepare the result
 	res := checkResult{
-		is:        UNKNOWN,
-		subject:   claims.Subject,
-		email:     claims.EMail,
-		groups:    claims.Groups,
-		issuer:    claims.Issuer,
-		rawClaims: rawClaims,
+		is:      UNKNOWN,
+		subject: claims.Subject,
+		email:   claims.EMail,
+		groups:  claims.Groups,
+		authContext: map[string]string{
+			"issuer": claims.Issuer,
+		},
 	}
 
 	// check the policies
@@ -100,17 +93,4 @@ func (srv *Server) checkJWTToken(ctx context.Context, bearerToken, method, host,
 
 	res.is = ALLOWED
 	return res
-}
-
-// jwtPayload returns the raw JSON payload from a JWT token
-func jwtPayload(tokenString string) (string, error) {
-	parts := strings.Split(tokenString, ".")
-	if len(parts) != 3 {
-		return "", errors.New("invalid JWT token")
-	}
-	payloadBytes, err := base64.RawURLEncoding.DecodeString(parts[1])
-	if err != nil {
-		return "", errors.New("could not decode JWT payload")
-	}
-	return string(payloadBytes), nil
 }

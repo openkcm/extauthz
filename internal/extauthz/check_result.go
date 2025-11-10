@@ -15,14 +15,16 @@ const (
 )
 
 type checkResult struct {
-	is        checkResultCode
-	info      string
-	subject   string
-	email     string
-	region    string
-	issuer    string
-	groups    []string
-	rawClaims string
+	is         checkResultCode
+	info       string
+	subject    string
+	givenname  string
+	familyname string
+	email      string
+	region     string
+	groups     []string
+
+	authContext map[string]string
 
 	withXFCCHeader bool
 }
@@ -38,13 +40,17 @@ func (r *checkResult) toClientDataOptions() []clientdata.Option {
 	}
 
 	return []clientdata.Option{
-		clientdata.WithSubject(r.subject),
-		clientdata.WithClientType(clientType),
+		// Mandatory user attributes
+		clientdata.WithIdentifier(r.subject),
 		clientdata.WithEmail(r.email),
-		clientdata.WithRegion(r.region),
+		clientdata.WithGivenName(r.givenname),
+		clientdata.WithFamilyName(r.familyname),
 		clientdata.WithGroups(r.groups),
-		clientdata.WithIssuer(r.issuer),
-		clientdata.WithRawClaims(r.rawClaims),
+		// Optional user attributes
+		clientdata.WithClientType(clientType),
+		clientdata.WithRegion(r.region),
+		// Authentication context
+		clientdata.WithAuthContext(r.authContext),
 	}
 }
 
@@ -58,6 +64,6 @@ func (cr *checkResult) merge(other checkResult) {
 		cr.email = other.email
 		cr.region = other.region
 		cr.groups = other.groups
-		cr.issuer = other.issuer
+		cr.authContext = other.authContext
 	}
 }

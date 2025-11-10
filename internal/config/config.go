@@ -81,7 +81,7 @@ type JWT struct {
 	Providers []Provider `yaml:"providers"`
 
 	// An optional gRPC source to dynamically lookup JWT providers
-	ProviderSource *ProviderSource `yaml:"providerSource"`
+	ProviderSource commoncfg.GRPCClient `yaml:"providerSource"`
 }
 
 // Deprecated: use Providers and ProviderSource instead
@@ -91,13 +91,6 @@ type K8sProviders struct {
 	APIVersion string `yaml:"apoVersion" default:"v1alpha1"`
 	Name       string `yaml:"name" default:"jwtproviders"`
 	Namespace  string `yaml:"namespace" default:"default"`
-}
-
-type ProviderSource struct {
-	commoncfg.GRPCClient `mapstructure:",squash"`
-
-	// Only MTLS and Insecure are supported
-	SecretRef commoncfg.SecretRef `yaml:"secretRef"`
 }
 
 type Provider struct {
