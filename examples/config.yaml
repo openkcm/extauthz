@@ -57,7 +57,7 @@ clientData:
 sessionCache:
   enabled: true
   valkey:
-    host:
+    address:
       source: embedded
       value: localhost:6379 # integration tests replace this value, be careful when changing
     user:
@@ -67,3 +67,5 @@ sessionCache:
       source: embedded
       value: secret
     prefix: session-manager
+    secretRef:
+      type: insecure
