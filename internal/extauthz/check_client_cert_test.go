@@ -171,7 +171,7 @@ func TestCheckClientCert(t *testing.T) {
 			}
 
 			// Act
-			result := srv.checkClientCert(t.Context(), tc.certHeader, "GET", "my.service.com", "/foo/bar")
+			result := srv.checkClientCert(t.Context(), tc.certHeader, "GET", "our.service.com", "/foo/bar")
 
 			// Assert
 			if tc.wantSubject != "" && result.subject != tc.wantSubject {
