@@ -84,7 +84,7 @@ func TestNewProvider(t *testing.T) {
 			issuerURL: issuerURL,
 			audiences: []string{"aud1", "aud2"},
 			opts: []ProviderOption{
-				WithCustomJWKSURI(nil),
+				WithJWKSURI(nil),
 			},
 			wantError: true,
 		}, {
@@ -92,7 +92,7 @@ func TestNewProvider(t *testing.T) {
 			issuerURL: issuerURL,
 			audiences: []string{"aud1", "aud2"},
 			opts: []ProviderOption{
-				WithCustomJWKSURI(customJWKSURI),
+				WithJWKSURI(customJWKSURI),
 			},
 		},
 	}
@@ -257,6 +257,10 @@ func TestSigningKeyFor(t *testing.T) {
 	if err != nil {
 		t.Fatalf("could not create provider: %s", err)
 	}
+	err = p.RefreshConfiguration(t.Context())
+	if err != nil {
+		t.Fatalf("could not update provider configuration: %s", err)
+	}
 
 	// run the tests
 	for _, tc := range tests {
@@ -272,7 +276,7 @@ func TestSigningKeyFor(t *testing.T) {
 			responses.Store("jwks", string(jwksResponse))
 
 			// Act
-			key, err := p.SigningKeyFor(t.Context(), tc.keyID)
+			key, err := p.lookupSigningKey(t.Context(), tc.keyID)
 
 			// Assert
 			if tc.wantError {
@@ -320,6 +324,9 @@ func TestProvider_introspect(t *testing.T) {
 	rawToken, err := token.SignedString(priv)
 	require.NoError(t, err)
 
+	introspectionURL, err := url.Parse("https://example.com/oauth2/introspection")
+	require.NoError(t, err)
+
 	tests := []struct {
 		name      string
 		issuerURL *url.URL
@@ -331,7 +338,7 @@ func TestProvider_introspect(t *testing.T) {
 		wantErr   assert.ErrorAssertionFunc
 	}{
 		{
-			name:      "Introspect active token",
+			name:      "IntrospectToken active token",
 			issuerURL: issuerURL,
 			audiences: []string{"aud1", "aud2"},
 			opts:      []ProviderOption{WithSigningKeyCacheExpiration(30*time.Second, 10*time.Minute)},
@@ -357,16 +364,19 @@ func TestProvider_introspect(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tt.opts = append(tt.opts, WithClient(&http.Client{
-				Transport: localRoundTripper{
-					http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-						err := json.NewEncoder(w).Encode(Introspection{Active: tt.active})
-						if err != nil {
-							w.WriteHeader(http.StatusInternalServerError)
-						}
-					}),
-				},
-			}))
+			tt.opts = append(tt.opts,
+				WithClient(&http.Client{
+					Transport: localRoundTripper{
+						http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+							err := json.NewEncoder(w).Encode(Introspection{Active: tt.active})
+							if err != nil {
+								w.WriteHeader(http.StatusInternalServerError)
+							}
+						}),
+					},
+				}),
+				WithIntrospectTokenURL(introspectionURL),
+			)
 
 			if err != nil {
 				t.Fatalf("failed to parse URL: %s", err)

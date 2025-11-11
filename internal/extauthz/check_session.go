@@ -36,7 +36,7 @@ func (srv *Server) checkSession(ctx context.Context, sessionCookie *http.Cookie,
 	useCache := method == http.MethodGet
 
 	// Verify if token is not revoked
-	intr, err := srv.oidcHandler.Introspect(ctx, session.Issuer, session.AccessToken, session.AccessToken, useCache)
+	intr, err := srv.oidcHandler.IntrospectToken(ctx, session.Issuer, session.AccessToken, session.AccessToken, useCache)
 	if err != nil {
 		slogctx.Debug(ctx, "Failed to introspect token", "error", err)
 		return checkResult{is: UNAUTHENTICATED,

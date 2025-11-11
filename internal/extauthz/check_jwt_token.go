@@ -26,7 +26,7 @@ func (srv *Server) checkJWTToken(ctx context.Context, bearerToken, method, host,
 
 	useCache := method == http.MethodGet // Allow using cache for token introspection for GET requests
 
-	err := srv.oidcHandler.ParseAndValidate(ctx, bearerToken, &claims, useCache)
+	err := srv.oidcHandler.ValidateToken(ctx, bearerToken, &claims, useCache)
 	if err != nil {
 		slogctx.Debug(ctx, "JWT validation failed", "error", err)
 		// Log the header and payload of the token

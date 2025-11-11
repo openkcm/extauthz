@@ -174,7 +174,7 @@ func TestCheckAuthHeader(t *testing.T) {
 
 			p, err := oidc.NewProvider(issuerURL, []string{},
 				oidc.WithClient(cl),
-				oidc.WithCustomJWKSURI(jwksURI),
+				oidc.WithJWKSURI(jwksURI),
 			)
 			if err != nil {
 				t.Fatalf("could not create provider: %s", err)

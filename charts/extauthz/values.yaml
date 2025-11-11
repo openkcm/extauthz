@@ -262,7 +262,7 @@ config:
       - issuer: https://my.oidc.jwt.provider.com/
         audiences:
           - my-audience
-    providerSource:
+    remoteProvider:
       address: localhost:5555
       secretRef:
         type: insecure

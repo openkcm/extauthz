@@ -70,7 +70,7 @@ func TestNewHandler(t *testing.T) {
 				}),
 			},
 			checkFunc: func(h *Handler) error {
-				if _, found := h.staticProviders[providerUrl.Host]; !found {
+				if _, found := h.providers[providerUrl.Host]; !found {
 					return errors.New("expected providers to be initialized")
 				}
 				return nil
@@ -360,7 +360,7 @@ func TestParseAndValidate(t *testing.T) {
 			cl := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: certpool}}}
 			opts := append([]ProviderOption{
 				WithClient(cl),
-				WithCustomJWKSURI(jwksURI),
+				WithJWKSURI(jwksURI),
 			}, tc.providerOptions...)
 
 			p, err := NewProvider(providerURL, []string{"aud1"}, opts...)
@@ -396,7 +396,7 @@ func TestParseAndValidate(t *testing.T) {
 			}
 
 			// Act
-			err = hdl.ParseAndValidate(t.Context(), tokenString, &claims, false)
+			err = hdl.ValidateToken(t.Context(), tokenString, &claims, false)
 
 			// Assert
 			if tc.wantError {
