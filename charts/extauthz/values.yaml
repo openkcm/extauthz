@@ -274,7 +274,7 @@ config:
   sessionCache:
     enabled: true
     valkey:
-      host:
+      address:
         source: embedded
         value: valkey:6379
       user:
@@ -284,3 +284,5 @@ config:
         source: embedded
         value: secret
       prefix: session-manager
+      secretRef:
+        type: insecure

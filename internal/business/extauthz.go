@@ -172,9 +172,9 @@ func createOIDCProviderSource(ctx context.Context, cfg *config.ProviderSource) (
 }
 
 func createValkeySessionCache(ctx context.Context, cfg *config.Valkey) (*sessrepo.Repository, error) {
-	valkeyHost, err := commoncfg.LoadValueFromSourceRef(cfg.Host)
+	valkeyAddress, err := commoncfg.LoadValueFromSourceRef(cfg.Address)
 	if err != nil {
-		return nil, fmt.Errorf("loading valkey host: %w", err)
+		return nil, fmt.Errorf("loading valkey address: %w", err)
 	}
 	valkeyUsername, err := commoncfg.LoadValueFromSourceRef(cfg.User)
 	if err != nil {
@@ -184,12 +184,20 @@ func createValkeySessionCache(ctx context.Context, cfg *config.Valkey) (*sessrep
 	if err != nil {
 		return nil, fmt.Errorf("loading valkey password: %w", err)
 	}
-	slogctx.Info(ctx, "Using Valkey for session cache", "address", string(valkeyHost), "user", string(valkeyUsername))
-	valkeyClient, err := valkey.NewClient(valkey.ClientOption{
-		InitAddress: []string{string(valkeyHost)},
+	valkeyOpts := valkey.ClientOption{
+		InitAddress: []string{string(valkeyAddress)},
 		Username:    string(valkeyUsername),
 		Password:    string(valkeyPassword),
-	})
+	}
+	if cfg.SecretRef.Type == commoncfg.MTLSSecretType {
+		tlsConfig, err := commoncfg.LoadMTLSConfig(&cfg.SecretRef.MTLS)
+		if err != nil {
+			return nil, fmt.Errorf("loading valkey mTLS config from secret ref: %w", err)
+		}
+		valkeyOpts.TLSConfig = tlsConfig
+	}
+	slogctx.Info(ctx, "Using Valkey for session cache", "address", string(valkeyAddress), "user", string(valkeyUsername))
+	valkeyClient, err := valkey.NewClient(valkeyOpts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create the Valkey client: %w", err)
 	}

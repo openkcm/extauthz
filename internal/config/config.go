@@ -33,10 +33,11 @@ type SessionCache struct {
 }
 
 type Valkey struct {
-	Host     commoncfg.SourceRef `yaml:"host"`
-	User     commoncfg.SourceRef `yaml:"user"`
-	Password commoncfg.SourceRef `yaml:"password"`
-	Prefix   string              `yaml:"prefix"`
+	Address   commoncfg.SourceRef `yaml:"address"`
+	User      commoncfg.SourceRef `yaml:"user"`
+	Password  commoncfg.SourceRef `yaml:"password"`
+	Prefix    string              `yaml:"prefix"`
+	SecretRef commoncfg.SecretRef `yaml:"secretRef"`
 }
 
 // ClientData configuration
