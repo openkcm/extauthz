@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.0](https://github.com/openkcm/extauthz/compare/v0.7.0...v0.8.0) (2025-11-12)
+
+
+### Features
+
+* add mTLS support for valkey ([#151](https://github.com/openkcm/extauthz/issues/151)) ([e14f841](https://github.com/openkcm/extauthz/commit/e14f84106c123ccdf69fb162a06efab158960871))
+
 ## [0.7.0](https://github.com/openkcm/extauthz/compare/v0.6.1...v0.7.0) (2025-11-07)
 
 
