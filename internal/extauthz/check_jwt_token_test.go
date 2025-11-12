@@ -31,7 +31,7 @@ import (
 	"github.com/openkcm/extauthz/internal/policies/cedarpolicy"
 )
 
-func TestCheckAuthHeader(t *testing.T) {
+func TestCheckJWTToken(t *testing.T) {
 	// create a JWKS test server
 	var jwksResponse []byte
 
@@ -142,7 +142,6 @@ func TestCheckAuthHeader(t *testing.T) {
 		wantEmail           string
 		wantIssuer          string
 		wantGroups          []string
-		wantRawClaims       string
 	}{
 		{
 			name:                "zero values",
@@ -159,7 +158,6 @@ func TestCheckAuthHeader(t *testing.T) {
 			wantEmail:           "me@my.world",
 			wantIssuer:          issuerURL.String(),
 			wantGroups:          []string{"groupA", "groupB"},
-			wantRawClaims:       fmt.Sprintf(`{"exp":%d,"groups":["groupA","groupB"],"iss":"%s","mail":"me@my.world","sub":"me"}`, exp, issuerURL.String()),
 		},
 	}
 
@@ -224,10 +222,6 @@ func TestCheckAuthHeader(t *testing.T) {
 				t.Errorf("expected: %v, got: %v", tc.wantCheckResultCode, result.is)
 			}
 
-			if result.rawClaims != tc.wantRawClaims {
-				t.Errorf("expected: %v, got: %v", tc.wantRawClaims, result.rawClaims)
-			}
-
 			if result.subject != tc.wantSubject {
 				t.Errorf("expected: %v, got: %v", tc.wantSubject, result.subject)
 			}
@@ -236,8 +230,15 @@ func TestCheckAuthHeader(t *testing.T) {
 				t.Errorf("expected: %v, got: %v", tc.wantEmail, result.email)
 			}
 
-			if result.issuer != tc.wantIssuer {
-				t.Errorf("expected: %v, got: %v", tc.wantIssuer, result.issuer)
+			if tc.wantIssuer != "" {
+				issuer, ok := result.authContext["issuer"]
+				if !ok {
+					t.Errorf("missing issuer")
+				} else {
+					if issuer != tc.wantIssuer {
+						t.Errorf("expected: %v, got: %v", tc.wantIssuer, issuer)
+					}
+				}
 			}
 
 			if !reflect.DeepEqual(result.groups, tc.wantGroups) {

@@ -122,8 +122,8 @@ func createOIDCHandler(ctx context.Context, cfg *config.JWT, fg *commoncfg.Featu
 		opts = append(opts, oidc.WithStaticProvider(oidcProvider))
 	}
 	// add provider source (if any)
-	if cfg.ProviderSource != nil {
-		providerSource, err := createOIDCProviderSource(ctx, cfg.ProviderSource)
+	if cfg.ProviderSource.Enabled {
+		providerSource, err := createOIDCProviderSource(ctx, &cfg.ProviderSource)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create OIDC provider source: %w", err)
 		}
@@ -151,16 +151,14 @@ func createOIDCProvider(ctx context.Context, cfg *config.Provider) (*oidc.Provid
 	return oidcProvider, nil
 }
 
-func createOIDCProviderSource(ctx context.Context, cfg *config.ProviderSource) (*oidc.ProviderSource, error) {
+func createOIDCProviderSource(ctx context.Context, cfg *commoncfg.GRPCClient) (*oidc.ProviderSource, error) {
 	slogctx.Info(ctx, "Using OIDC provider source", "address", cfg.Address)
-	creds, err := transportCredentialsFromSecretRef(&cfg.SecretRef)
+	creds, err := transportCredentialsFromSecretRef(cfg.SecretRef)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create transport credentials: %w", err)
 	}
 	// create the gRPC connection to the provider source
-	grpcConn, err := commongrpc.NewClient(&cfg.GRPCClient,
-		grpc.WithTransportCredentials(creds),
-	)
+	grpcConn, err := commongrpc.NewClient(cfg, grpc.WithTransportCredentials(creds))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create gRPC connection: %w", err)
 	}
