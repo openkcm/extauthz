@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.0](https://github.com/openkcm/extauthz/compare/v0.8.1...v0.9.0) (2025-11-13)
+
+
+### Features
+
+* add feature gate `enable-http-issuer-scheme` ([#155](https://github.com/openkcm/extauthz/issues/155)) ([5581c52](https://github.com/openkcm/extauthz/commit/5581c52460230cc571768654f75f907b59a9b57c))
+
 ## [0.8.1](https://github.com/openkcm/extauthz/compare/v0.8.0...v0.8.1) (2025-11-13)
 
 
