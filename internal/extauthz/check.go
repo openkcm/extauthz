@@ -82,7 +82,8 @@ func (srv *Server) Check(ctx context.Context, req *envoy_auth.CheckRequest) (*en
 	// TODO: Remove this hacking code when session support is added and tested
 	if !skipClientCertificates {
 		// 1. Client certificates (if any)
-		if clientCerts, found := extractClientCertificates(headers); found {
+		slogctx.Debug(ctx, "Checking if client certificates are present")
+		if clientCerts, found := extractClientCertificates(ctx, headers); found {
 			slogctx.Debug(ctx, "Checking client certificate")
 			for nr, part := range clientCerts {
 				slogctx.Debug(ctx, "Checking client certificate", "part", nr)
@@ -95,7 +96,8 @@ func (srv *Server) Check(ctx context.Context, req *envoy_auth.CheckRequest) (*en
 	// TODO: Remove this hacking code when session support is added and tested
 	if !skipBearerToken {
 		// 2. Bearer token in the authorization header (if any)
-		if bearerToken, found := extractBearerToken(headers); found {
+		slogctx.Debug(ctx, "Checking if bearer token is present in authorization header")
+		if bearerToken, found := extractBearerToken(ctx, headers); found {
 			slogctx.Debug(ctx, "Checking bearer token from authorization header")
 			result.merge(srv.checkJWTToken(ctx, bearerToken, method, host, path))
 		}
@@ -103,7 +105,8 @@ func (srv *Server) Check(ctx context.Context, req *envoy_auth.CheckRequest) (*en
 
 	// 3. Session cookie (if any and only if session cache is configured)
 	if srv.sessionCache != nil {
-		if sessionCookie, tenantID, found := srv.extractSessionCookieAndTenantID(headers, path); found {
+		slogctx.Debug(ctx, "Checking if session cookie is present")
+		if sessionCookie, tenantID, found := srv.extractSessionCookieAndTenantID(ctx, headers, path); found {
 			slogctx.Debug(ctx, "Checking session cookie")
 			result.merge(srv.checkSession(ctx, sessionCookie, tenantID, method, host, path))
 		}
@@ -149,36 +152,42 @@ func (srv *Server) Check(ctx context.Context, req *envoy_auth.CheckRequest) (*en
 	return respondPermissionDenied(), nil
 }
 
-func extractClientCertificates(headers map[string]string) ([]string, bool) {
+func extractClientCertificates(ctx context.Context, headers map[string]string) ([]string, bool) {
 	certHeader, found := headers[HeaderForwardedClientCert]
 	if !found {
+		slogctx.Debug(ctx, "No XFCC header found", "headers", getMapKeys(headers))
 		return nil, false
 	}
 	// there can be multiple certificates in the XFCC header
 	certHeaderParts, err := splitCertHeader(certHeader)
 	if err != nil {
+		slogctx.Debug(ctx, "Failed to split XFCC header", "error", err)
 		return nil, false
 	}
 
 	return certHeaderParts, true
 }
 
-func extractBearerToken(headers map[string]string) (string, bool) {
+func extractBearerToken(ctx context.Context, headers map[string]string) (string, bool) {
 	authHeader, found := headers[HeaderAuthorization]
 	if !found {
+		slogctx.Debug(ctx, "No authorization header found", "headers", getMapKeys(headers))
 		return "", false
 	}
 
 	prefix, bearerToken, found := strings.Cut(authHeader, " ")
 	if !found || prefix != "Bearer" {
+		slogctx.Debug(ctx, "Authorization header does not contain Bearer token")
 		return "", false
 	}
 
 	return bearerToken, true
 }
 
-func (srv *Server) extractSessionCookieAndTenantID(headers map[string]string, path string) (*http.Cookie, string, bool) {
+func (srv *Server) extractSessionCookieAndTenantID(ctx context.Context, headers map[string]string, path string) (*http.Cookie, string, bool) {
+	ctx = slogctx.With(ctx, "path", path)
 	// extract tenant ID from the path
+	slogctx.Debug(ctx, "Extracting tenant ID from path", "cmkPathPrefix", srv.cmkPathPrefix)
 	var tenantID string
 	switch {
 	case strings.HasPrefix(path, srv.cmkPathPrefix): // /cmk/v1/{tenantID}/...
@@ -188,24 +197,29 @@ func (srv *Server) extractSessionCookieAndTenantID(headers map[string]string, pa
 		}
 		tenantID = parts[3]
 	default:
+		slogctx.Debug(ctx, "Path does not match any known prefix for tenant ID extraction")
 		return nil, "", false
 	}
 
 	// extract the session cookie
 	cookieHeader, found := headers[HeaderCookie]
 	if !found {
+		slogctx.Debug(ctx, "No cookie header found", "headers", getMapKeys(headers))
 		return nil, "", false
 	}
 	cookies, err := http.ParseCookie(cookieHeader)
 	if err != nil {
+		slogctx.Debug(ctx, "Failed to parse cookie header", "error", err)
 		return nil, "", false
 	}
 	for _, cookie := range cookies {
+		slogctx.Debug(ctx, "Found cookie", "name", cookie.Name)
 		if cookie.Name == SessionCookieName {
 			return cookie, tenantID, true
 		}
 	}
 
+	slogctx.Debug(ctx, "Session cookie not found", "sessionCookieName", SessionCookieName)
 	return nil, "", false
 }
 
@@ -224,4 +238,13 @@ func splitCertHeader(certHeader string) ([]string, error) {
 	}
 
 	return fields, nil
+}
+
+// Helper function to get map keys for debugging
+func getMapKeys[K comparable, V any](m map[K]V) []K {
+	keys := make([]K, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return keys
 }
