@@ -147,9 +147,18 @@ func (handler *Handler) ParseAndValidate(ctx context.Context, rawToken string, u
 		return errors.Join(ErrInvalidToken, err)
 	}
 
-	if issuerURL.Scheme != "https" {
-		slogctx.Error(ctx, "Invalid issuer scheme", "scheme", issuerURL.Scheme)
-		return errors.Join(ErrInvalidToken, fmt.Errorf("invalid issuer scheme %s", issuerURL.Scheme))
+	switch issuerURL.Scheme {
+	case "https":
+		// secure scheme, all good
+	case "http":
+		// insecure scheme, allowed if the feature gate is enabled
+		if !handler.featureGates.IsFeatureEnabled(flags.EnableHttpIssuerScheme) {
+			slogctx.Error(ctx, "Invalid issuer scheme", "issuer", issuer)
+			return errors.Join(ErrInvalidToken, fmt.Errorf("invalid issuer scheme: %s", issuer))
+		}
+	default:
+		slogctx.Error(ctx, "Invalid issuer scheme", "issuer", issuer)
+		return errors.Join(ErrInvalidToken, fmt.Errorf("invalid issuer scheme: %s", issuer))
 	}
 
 	// let the handler lookup the identity provider for the issuer host

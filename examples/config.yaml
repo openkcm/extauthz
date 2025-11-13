@@ -12,6 +12,7 @@ featureGates:
   disable-jwt-token-computation: false
   disable-jwt-token-introspection: false
   disable-client-data-computation: false
+  enable-http-issuer-scheme: false
 
 logger:
   level: debug # one of: debug, info, warn, error

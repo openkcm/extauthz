@@ -22,6 +22,9 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
+	"github.com/openkcm/common-sdk/pkg/commoncfg"
+
+	"github.com/openkcm/extauthz/internal/flags"
 )
 
 func TestNewHandler(t *testing.T) {
@@ -146,6 +149,8 @@ func TestParseAndValidate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("could not parse issuer URL: %s", err)
 	}
+	providerURLhttp := *providerURL
+	providerURLhttp.Scheme = "http"
 
 	jwksURI, err := url.Parse(ts.URL + "/jwks")
 	if err != nil {
@@ -204,6 +209,7 @@ func TestParseAndValidate(t *testing.T) {
 		issuerClaimKeys []string
 		token           *jwt.Token
 		providerOptions []ProviderOption
+		featureGates    *commoncfg.FeatureGates
 		wantError       bool
 	}{
 		{
@@ -230,6 +236,16 @@ func TestParseAndValidate(t *testing.T) {
 				"iss":  "https://invalid.issuer",
 				"exp":  time.Now().Add(48 * time.Hour).Unix(),
 				"aud":  []string{"aud1"},
+			}),
+			wantError: true,
+		}, {
+			name:            "invalid token: wrong issuer scheme",
+			issuerClaimKeys: DefaultIssuerClaims,
+			token: jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
+				"sub":  "me",
+				"mail": "me@my.world",
+				"iss":  providerURLhttp.String(),
+				"exp":  time.Now().Add(48 * time.Hour).Unix(),
 			}),
 			wantError: true,
 		}, {
@@ -298,6 +314,18 @@ func TestParseAndValidate(t *testing.T) {
 			}),
 			wantError: false,
 		}, {
+			name:            "valid token with http issuer",
+			featureGates:    &commoncfg.FeatureGates{flags.EnableHttpIssuerScheme: true},
+			issuerClaimKeys: DefaultIssuerClaims,
+			token: jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
+				"sub":  "me",
+				"mail": "me@my.world",
+				"iss":  providerURLhttp.String(),
+				"exp":  time.Now().Add(48 * time.Hour).Unix(),
+				"aud":  []string{"aud1", "aud2"},
+			}),
+			wantError: false,
+		}, {
 			name:            "valid IAS token with ias_iss",
 			issuerClaimKeys: []string{"ias_iss"},
 			token: jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
@@ -358,20 +386,24 @@ func TestParseAndValidate(t *testing.T) {
 			certpool := x509.NewCertPool()
 			certpool.AddCert(ts.Certificate())
 			cl := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: certpool}}}
-			opts := append([]ProviderOption{
+			providerOpts := append([]ProviderOption{
 				WithClient(cl),
 				WithCustomJWKSURI(jwksURI),
 			}, tc.providerOptions...)
 
-			p, err := NewProvider(providerURL, []string{"aud1"}, opts...)
+			p, err := NewProvider(providerURL, []string{"aud1"}, providerOpts...)
 			if err != nil {
 				t.Fatalf("could not create provider: %s", err)
 			}
 
-			hdl, err := NewHandler(
+			handlerOpts := []HandlerOption{
 				WithIssuerClaimKeys(tc.issuerClaimKeys...),
 				WithStaticProvider(p),
-			)
+			}
+			if tc.featureGates != nil {
+				handlerOpts = append(handlerOpts, WithFeatureGates(tc.featureGates))
+			}
+			hdl, err := NewHandler(handlerOpts...)
 			if err != nil {
 				t.Fatalf("could not create handler: %s", err)
 			}
