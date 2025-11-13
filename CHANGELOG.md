@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.1](https://github.com/openkcm/extauthz/compare/v0.8.0...v0.8.1) (2025-11-13)
+
+
+### Bug Fixes
+
+* add missing debug logs ([#153](https://github.com/openkcm/extauthz/issues/153)) ([d772cbd](https://github.com/openkcm/extauthz/commit/d772cbd00790c93a44c0644b7b0ebf343515ba1f))
+
 ## [0.8.0](https://github.com/openkcm/extauthz/compare/v0.7.0...v0.8.0) (2025-11-12)
 
 
