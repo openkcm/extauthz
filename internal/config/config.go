@@ -95,6 +95,6 @@ type K8sProviders struct {
 
 type Provider struct {
 	Issuer    string   `yaml:"issuer"`
+	JwksURI   string   `yaml:"jwksURI"`
 	Audiences []string `yaml:"audiences"`
-	JwksURIs  []string `yaml:"jwksURIs"`
 }

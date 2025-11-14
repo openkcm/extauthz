@@ -41,11 +41,12 @@ func TestNewProvider(t *testing.T) {
 
 	// create the test cases
 	tests := []struct {
-		name      string
-		issuerURL *url.URL
-		audiences []string
-		opts      []ProviderOption
-		wantError bool
+		name        string
+		issuerURL   *url.URL
+		audiences   []string
+		opts        []ProviderOption
+		wantError   bool
+		wantJwksURI string
 	}{
 		{
 			name: "zero values",
@@ -94,6 +95,7 @@ func TestNewProvider(t *testing.T) {
 			opts: []ProviderOption{
 				WithCustomJWKSURI(customJWKSURI),
 			},
+			wantJwksURI: customJWKSURI.String(),
 		},
 	}
 
@@ -117,6 +119,10 @@ func TestNewProvider(t *testing.T) {
 			} else {
 				if err != nil {
 					t.Errorf("unexpected error: %s", err)
+				} else {
+					if tc.wantJwksURI != "" && p.jwksURI.String() != tc.wantJwksURI {
+						t.Errorf("expected JWKS URI %q, but got %q", tc.wantJwksURI, p.jwksURI.String())
+					}
 				}
 			}
 		})

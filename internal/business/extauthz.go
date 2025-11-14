@@ -138,12 +138,19 @@ func createOIDCHandler(ctx context.Context, cfg *config.JWT, fg *commoncfg.Featu
 }
 
 func createOIDCProvider(ctx context.Context, cfg *config.Provider) (*oidc.Provider, error) {
-	slogctx.Info(ctx, "Using static OIDC provider", "issuer", cfg.Issuer, "audiences", cfg.Audiences, "jwksURIs", cfg.JwksURIs)
+	slogctx.Info(ctx, "Using static OIDC provider", "issuer", cfg.Issuer, "audiences", cfg.Audiences, "jwksURI", cfg.JwksURI)
 	issuerURL, err := url.Parse(cfg.Issuer)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse issuer URL %q: %w", cfg.Issuer, err)
 	}
 	var popts []oidc.ProviderOption
+	if cfg.JwksURI != "" {
+		jwksURI, err := url.Parse(cfg.JwksURI)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse JWKS URI %q: %w", cfg.JwksURI, err)
+		}
+		popts = append(popts, oidc.WithCustomJWKSURI(jwksURI))
+	}
 	oidcProvider, err := oidc.NewProvider(issuerURL, cfg.Audiences, popts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create static OIDC provider: %w", err)
