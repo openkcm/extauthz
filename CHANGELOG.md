@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.1](https://github.com/openkcm/extauthz/compare/v0.9.0...v0.9.1) (2025-11-14)
+
+
+### Bug Fixes
+
+* custom URI handling ([#158](https://github.com/openkcm/extauthz/issues/158)) ([41d8d1b](https://github.com/openkcm/extauthz/commit/41d8d1ba169eb878314db1af6a9e52b5cb8a81d2))
+
 ## [0.9.0](https://github.com/openkcm/extauthz/compare/v0.8.1...v0.9.0) (2025-11-13)
 
 
