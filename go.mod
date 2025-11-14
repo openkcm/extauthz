@@ -14,7 +14,7 @@ require (
 	github.com/openkcm/common-sdk v1.6.0
 	github.com/openkcm/session-manager v0.9.0
 	github.com/patrickmn/go-cache v2.1.0+incompatible
-	github.com/samber/oops v1.19.3
+	github.com/samber/oops v1.19.4
 	github.com/stretchr/testify v1.11.1
 	github.com/testcontainers/testcontainers-go v0.40.0
 	github.com/testcontainers/testcontainers-go/modules/valkey v0.40.0
@@ -89,7 +89,7 @@ require (
 	github.com/prometheus/otlptranslator v0.0.2 // indirect
 	github.com/prometheus/procfs v0.17.0 // indirect
 	github.com/sagikazarmark/locafero v0.12.0 // indirect
-	github.com/samber/lo v1.51.0 // indirect
+	github.com/samber/lo v1.52.0 // indirect
 	github.com/samber/slog-common v0.19.0 // indirect
 	github.com/samber/slog-formatter v1.2.0 // indirect
 	github.com/samber/slog-multi v1.5.0 // indirect
