@@ -73,7 +73,7 @@ func TestNewHandler(t *testing.T) {
 				}),
 			},
 			checkFunc: func(h *Handler) error {
-				if _, found := h.staticProviders[providerUrl.Host]; !found {
+				if _, found := h.staticProviders[providerUrl.String()]; !found {
 					return errors.New("expected providers to be initialized")
 				}
 				return nil
@@ -142,19 +142,20 @@ func TestParseAndValidate(t *testing.T) {
 		}
 	})
 
-	ts := httptest.NewTLSServer(mux)
-	defer ts.Close()
-
-	providerURL, err := url.Parse(ts.URL)
+	httpsTestServer := httptest.NewTLSServer(mux)
+	defer httpsTestServer.Close()
+	httpsProviderURL, err := url.Parse(httpsTestServer.URL)
 	if err != nil {
 		t.Fatalf("could not parse issuer URL: %s", err)
 	}
-	providerURLhttp := *providerURL
-	providerURLhttp.Scheme = "http"
-
-	jwksURI, err := url.Parse(ts.URL + "/jwks")
+	httpsJwksURI, err := url.Parse(httpsTestServer.URL + "/jwks")
 	if err != nil {
 		t.Fatalf("could not parse JWKS URI: %s", err)
+	}
+
+	httpProviderURL, err := url.Parse(httpsTestServer.URL)
+	if err != nil {
+		t.Fatalf("could not parse issuer URL: %s", err)
 	}
 
 	// create an RSA key pair
@@ -244,7 +245,7 @@ func TestParseAndValidate(t *testing.T) {
 			token: jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
 				"sub":  "me",
 				"mail": "me@my.world",
-				"iss":  providerURLhttp.String(),
+				"iss":  httpsProviderURL.String(),
 				"exp":  time.Now().Add(48 * time.Hour).Unix(),
 			}),
 			wantError: true,
@@ -254,7 +255,7 @@ func TestParseAndValidate(t *testing.T) {
 			token: jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
 				"sub":  "me",
 				"mail": "me@my.world",
-				"iss":  providerURL.String(),
+				"iss":  httpsProviderURL.String(),
 				"exp":  time.Now().Add(48 * time.Hour).Unix(),
 			}),
 			wantError: true,
@@ -264,7 +265,7 @@ func TestParseAndValidate(t *testing.T) {
 			token: jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
 				"sub":  "me",
 				"mail": "me@my.world",
-				"iss":  providerURL.String(),
+				"iss":  httpsProviderURL.String(),
 				"exp":  time.Now().Add(48 * time.Hour).Unix(),
 				"aud":  []string{"vip"},
 			}),
@@ -275,7 +276,7 @@ func TestParseAndValidate(t *testing.T) {
 			token: jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
 				"sub":  "me",
 				"mail": "me@my.world",
-				"iss":  providerURL.String(),
+				"iss":  httpsProviderURL.String(),
 				"nbf":  time.Now().Add(24 * time.Hour).Unix(),
 				"exp":  time.Now().Add(48 * time.Hour).Unix(),
 				"aud":  []string{"aud1", "aud2"},
@@ -287,7 +288,7 @@ func TestParseAndValidate(t *testing.T) {
 			token: jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
 				"sub":  "me",
 				"mail": "me@my.world",
-				"iss":  providerURL.String(),
+				"iss":  httpsProviderURL.String(),
 				"exp":  time.Now().Add(-48 * time.Hour).Unix(),
 				"aud":  []string{"aud1", "aud2"},
 			}),
@@ -298,7 +299,7 @@ func TestParseAndValidate(t *testing.T) {
 			token: jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
 				"sub":  "me",
 				"mail": "me@my.world",
-				"iss":  providerURL.String(),
+				"iss":  httpsProviderURL.String(),
 				"aud":  []string{"aud1", "aud2"},
 			}),
 			wantError: true,
@@ -308,7 +309,7 @@ func TestParseAndValidate(t *testing.T) {
 			token: jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
 				"sub":  "me",
 				"mail": "me@my.world",
-				"iss":  providerURL.String(),
+				"iss":  httpsProviderURL.String(),
 				"exp":  time.Now().Add(48 * time.Hour).Unix(),
 				"aud":  []string{"aud1", "aud2"},
 			}),
@@ -320,7 +321,7 @@ func TestParseAndValidate(t *testing.T) {
 			token: jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
 				"sub":  "me",
 				"mail": "me@my.world",
-				"iss":  providerURLhttp.String(),
+				"iss":  httpProviderURL.String(),
 				"exp":  time.Now().Add(48 * time.Hour).Unix(),
 				"aud":  []string{"aud1", "aud2"},
 			}),
@@ -331,7 +332,7 @@ func TestParseAndValidate(t *testing.T) {
 			token: jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
 				"sub":     "me",
 				"mail":    "me@my.world",
-				"ias_iss": providerURL.String(),
+				"ias_iss": httpsProviderURL.String(),
 				"exp":     time.Now().Add(48 * time.Hour).Unix(),
 				"aud":     []string{"aud1", "aud2"},
 			}),
@@ -342,7 +343,7 @@ func TestParseAndValidate(t *testing.T) {
 			token: jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
 				"sub":  "me",
 				"mail": "me@my.world",
-				"iss":  providerURL.String(),
+				"iss":  httpsProviderURL.String(),
 				"exp":  time.Now().Add(48 * time.Hour).Unix(),
 				"aud":  []string{"aud1", "aud2"},
 			}),
@@ -353,12 +354,12 @@ func TestParseAndValidate(t *testing.T) {
 			token: jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
 				"sub":  "me",
 				"mail": "me@my.world",
-				"iss":  providerURL.String(),
+				"iss":  httpsProviderURL.String(),
 				"exp":  time.Now().Add(48 * time.Hour).Unix(),
 				"aud":  []string{"aud1", "aud2"},
 			}),
 			providerOptions: []ProviderOption{
-				WithIntrospectTokenURL(providerURL.JoinPath("oauth2", "introspect", "fail")),
+				WithIntrospectTokenURL(httpsProviderURL.JoinPath("oauth2", "introspect", "fail")),
 			},
 			wantError: true,
 		}, {
@@ -367,12 +368,12 @@ func TestParseAndValidate(t *testing.T) {
 			token: jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
 				"sub":  "me",
 				"mail": "me@my.world",
-				"iss":  providerURL.String(),
+				"iss":  httpsProviderURL.String(),
 				"exp":  time.Now().Add(48 * time.Hour).Unix(),
 				"aud":  []string{"aud1", "aud2"},
 			}),
 			providerOptions: []ProviderOption{
-				WithIntrospectTokenURL(providerURL.JoinPath("oauth2", "introspect", "success")),
+				WithIntrospectTokenURL(httpsProviderURL.JoinPath("oauth2", "introspect", "success")),
 			},
 			wantError: false,
 		},
@@ -382,23 +383,33 @@ func TestParseAndValidate(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			// Arrange
-			// create a provider, which trusts the http test server certificate
-			certpool := x509.NewCertPool()
-			certpool.AddCert(ts.Certificate())
-			cl := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: certpool}}}
-			providerOpts := append([]ProviderOption{
-				WithClient(cl),
-				WithCustomJWKSURI(jwksURI),
-			}, tc.providerOptions...)
 
-			p, err := NewProvider(providerURL, []string{"aud1"}, providerOpts...)
+			// create an http provider
+			httpProviderOpts := append([]ProviderOption{
+				WithCustomJWKSURI(httpsJwksURI),
+			}, tc.providerOptions...)
+			httpProvider, err := NewProvider(httpProviderURL, []string{"aud1"}, httpProviderOpts...)
+			if err != nil {
+				t.Fatalf("could not create provider: %s", err)
+			}
+
+			// create an https provider, which trusts the http test server certificate
+			certpool := x509.NewCertPool()
+			certpool.AddCert(httpsTestServer.Certificate())
+			cl := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: certpool}}}
+			httpsProviderOpts := append([]ProviderOption{
+				WithClient(cl),
+				WithCustomJWKSURI(httpsJwksURI),
+			}, tc.providerOptions...)
+			httpsProvider, err := NewProvider(httpsProviderURL, []string{"aud1"}, httpsProviderOpts...)
 			if err != nil {
 				t.Fatalf("could not create provider: %s", err)
 			}
 
 			handlerOpts := []HandlerOption{
 				WithIssuerClaimKeys(tc.issuerClaimKeys...),
-				WithStaticProvider(p),
+				WithStaticProvider(httpProvider),
+				WithStaticProvider(httpsProvider),
 			}
 			if tc.featureGates != nil {
 				handlerOpts = append(handlerOpts, WithFeatureGates(tc.featureGates))
@@ -419,7 +430,7 @@ func TestParseAndValidate(t *testing.T) {
 			if tc.token != nil {
 				token := tc.token
 				token.Header["kid"] = rsaKeyID
-				token.Header["jku"] = jwksURI.String()
+				token.Header["jku"] = httpsJwksURI.String()
 
 				tokenString, err = token.SignedString(rsaPrivateKey)
 				if err != nil {
