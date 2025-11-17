@@ -114,7 +114,7 @@ func NewHandler(opts ...HandlerOption) (*Handler, error) {
 
 // RegisterStaticProvider registers a provider with the handler.
 func (handler *Handler) RegisterStaticProvider(provider *Provider) {
-	handler.staticProviders[provider.issuerURL.Host] = provider
+	handler.staticProviders[provider.issuerURL.String()] = provider
 }
 
 func (handler *Handler) ParseAndValidate(ctx context.Context, rawToken string, userclaims any, useCache bool) error {
@@ -162,9 +162,9 @@ func (handler *Handler) ParseAndValidate(ctx context.Context, rawToken string, u
 	}
 
 	// let the handler lookup the identity provider for the issuer host
-	provider, err := handler.ProviderFor(ctx, issuerURL.Host)
+	provider, err := handler.ProviderFor(ctx, issuer)
 	if err != nil {
-		slogctx.Error(ctx, "Failed to get provider for issuer", "error", err, "issuer", issuerURL.Host)
+		slogctx.Error(ctx, "Failed to get provider for issuer", "error", err, "issuer", issuer)
 		return errors.Join(ErrNoProvider, err)
 	}
 
@@ -291,8 +291,8 @@ func (handler *Handler) Introspect(ctx context.Context, issuer, bearerToken, int
 		return Introspection{}, fmt.Errorf("invalid issuer scheme %s", issuerURL.Scheme)
 	}
 
-	// let the handler lookup the identity provider for the issuer host
-	provider, err := handler.ProviderFor(ctx, issuerURL.Host)
+	// let the handler lookup the identity provider for the issuer
+	provider, err := handler.ProviderFor(ctx, issuer)
 	if err != nil {
 		return Introspection{}, err
 	}
