@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.2](https://github.com/openkcm/extauthz/compare/v0.9.1...v0.9.2) (2025-11-17)
+
+
+### Bug Fixes
+
+* store issuers as full URL ([#160](https://github.com/openkcm/extauthz/issues/160)) ([577ca34](https://github.com/openkcm/extauthz/commit/577ca3440b82cb8269d2fe23dfe026a4fd012ac8))
+
 ## [0.9.1](https://github.com/openkcm/extauthz/compare/v0.9.0...v0.9.1) (2025-11-14)
 
 
