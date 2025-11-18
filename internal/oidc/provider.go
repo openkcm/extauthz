@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"time"
@@ -254,10 +255,15 @@ func (provider *Provider) introspect(ctx context.Context, bearerToken, introspec
 	}
 	defer resp.Body.Close()
 
-	var intr Introspection
-
-	err = json.NewDecoder(resp.Body).Decode(&intr)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
+		return Introspection{}, fmt.Errorf("reading introspection response body: %w", err)
+	}
+
+	var intr Introspection
+	err = json.Unmarshal(body, &intr)
+	if err != nil {
+		slogctx.Error(ctx, "Failed to unmarshal introspection response", "body", string(body), "error", err)
 		return Introspection{}, fmt.Errorf("decoding introspection response: %w", err)
 	}
 
