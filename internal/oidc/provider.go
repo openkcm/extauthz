@@ -93,6 +93,9 @@ func NewProvider(issuerURL *url.URL, audiences []string, opts ...ProviderOption)
 	}
 
 	for _, opt := range opts {
+		if opt == nil {
+			continue
+		}
 		err := opt(provider)
 		if err != nil {
 			return nil, err

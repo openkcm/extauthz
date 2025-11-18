@@ -31,6 +31,9 @@ func WithGRPCConn(grpcConn *grpc.ClientConn) ProviderSourceOption {
 func NewProviderSource(opts ...ProviderSourceOption) (*ProviderSource, error) {
 	oidcProvider := &ProviderSource{}
 	for _, opt := range opts {
+		if opt == nil {
+			continue
+		}
 		err := opt(oidcProvider)
 		if err != nil {
 			return nil, err
@@ -57,5 +60,5 @@ func (c *ProviderSource) Get(ctx context.Context, issuer string) (*Provider, err
 	if err != nil {
 		return nil, err
 	}
-	return NewProvider(issuerURL, resp.GetAudiences(), nil)
+	return NewProvider(issuerURL, resp.GetAudiences())
 }

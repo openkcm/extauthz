@@ -103,6 +103,9 @@ func NewHandler(opts ...HandlerOption) (*Handler, error) {
 		featureGates:    &commoncfg.FeatureGates{},
 	}
 	for _, opt := range opts {
+		if opt == nil {
+			continue
+		}
 		err := opt(handler)
 		if err != nil {
 			return nil, err

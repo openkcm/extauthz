@@ -74,6 +74,9 @@ func (e *cedarPolicyEngine) Check(opts ...policies.CheckOption) (bool, string, e
 		request: cedar.Request{},
 	}
 	for _, opt := range opts {
+		if opt == nil {
+			continue
+		}
 		err := opt(cpe)
 		if err != nil {
 			return false, "", err

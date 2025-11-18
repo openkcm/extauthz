@@ -34,6 +34,13 @@ func TestNewProvider(t *testing.T) {
 		t.Fatalf("failed to parse URL: %s", err)
 	}
 
+	t.Run("no panic with nil options", func(t *testing.T) {
+		assert.NotPanics(t, func() {
+			//nolint:errcheck
+			NewProvider(issuerURL, []string{}, nil)
+		})
+	})
+
 	customJWKSURI, err := url.Parse("https://example.com/jwks")
 	if err != nil {
 		t.Fatalf("failed to parse URL: %s", err)

@@ -151,6 +151,9 @@ func (c *Signer) create(opts ...Option) (*auth.ClientData, error) {
 	}
 
 	for _, opt := range opts {
+		if opt == nil {
+			continue
+		}
 		err := opt(builder)
 		if err != nil {
 			return nil, err

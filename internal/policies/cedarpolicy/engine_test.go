@@ -5,10 +5,19 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/openkcm/extauthz/internal/policies/cedarpolicy"
 )
 
 func TestWithFile(t *testing.T) {
+	t.Run("no panic with nil options", func(t *testing.T) {
+		assert.NotPanics(t, func() {
+			//nolint:errcheck
+			cedarpolicy.NewEngine(nil)
+		})
+	})
+
 	// Arrange
 	tmpdir := t.TempDir()
 	path := filepath.Join(tmpdir, policy1)
