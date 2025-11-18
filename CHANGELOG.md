@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.4](https://github.com/openkcm/extauthz/compare/v0.9.3...v0.9.4) (2025-11-18)
+
+
+### Bug Fixes
+
+* on error log the introspection result ([#165](https://github.com/openkcm/extauthz/issues/165)) ([6cf605f](https://github.com/openkcm/extauthz/commit/6cf605f3232f7f310bbb72124e0e93890da6ba37))
+
 ## [0.9.3](https://github.com/openkcm/extauthz/compare/v0.9.2...v0.9.3) (2025-11-18)
 
 
