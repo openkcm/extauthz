@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.3](https://github.com/openkcm/extauthz/compare/v0.9.2...v0.9.3) (2025-11-18)
+
+
+### Bug Fixes
+
+* ignore nil options ([#163](https://github.com/openkcm/extauthz/issues/163)) ([bf34983](https://github.com/openkcm/extauthz/commit/bf34983875a62a6db901a9f2a127ab47a9b3fcf4))
+
 ## [0.9.2](https://github.com/openkcm/extauthz/compare/v0.9.1...v0.9.2) (2025-11-17)
 
 
