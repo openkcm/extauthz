@@ -134,6 +134,9 @@ func NewServer(opts ...ServerOption) (*Server, error) {
 	}
 
 	for _, opt := range opts {
+		if opt == nil {
+			continue
+		}
 		err := opt(server)
 		if err != nil {
 			return nil, err

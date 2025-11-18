@@ -22,6 +22,9 @@ func NewEngine(opts ...Option) (*cedarPolicyEngine, error) {
 		policySet: cedar.NewPolicySet(),
 	}
 	for _, opt := range opts {
+		if opt == nil {
+			continue
+		}
 		err := opt(engine)
 		if err != nil {
 			return nil, err

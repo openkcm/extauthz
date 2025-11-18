@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
 )
 
 var (
@@ -106,4 +107,13 @@ func TestMain(m *testing.M) {
 
 	// run the tests
 	os.Exit(m.Run())
+}
+
+func TestNewServer(t *testing.T) {
+	t.Run("no panic with nil options", func(t *testing.T) {
+		assert.NotPanics(t, func() {
+			//nolint:errcheck
+			NewServer(nil)
+		})
+	})
 }
