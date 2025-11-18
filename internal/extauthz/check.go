@@ -213,8 +213,8 @@ func (srv *Server) extractSessionCookieAndTenantID(ctx context.Context, headers 
 		return nil, "", false
 	}
 	for _, cookie := range cookies {
-		slogctx.Debug(ctx, "Found cookie", "name", cookie.Name)
 		if cookie.Name == SessionCookieName {
+			slogctx.Debug(ctx, "Found session cookie", "name", cookie.Name)
 			return cookie, tenantID, true
 		}
 	}
