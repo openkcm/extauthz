@@ -406,7 +406,7 @@ func TestParseAndValidate(t *testing.T) {
 			certpool.AddCert(httpsTestServer.Certificate())
 			cl := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: certpool}}}
 			httpsProviderOpts := append([]ProviderOption{
-				WithClient(cl),
+				WithProviderHTTPClient(cl),
 				WithCustomJWKSURI(httpsJwksURI),
 			}, tc.providerOptions...)
 			httpsProvider, err := NewProvider(httpsProviderURL, []string{"aud1"}, httpsProviderOpts...)

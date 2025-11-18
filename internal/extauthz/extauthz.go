@@ -29,7 +29,7 @@ type sessionLoaderInterface interface {
 // We don't use oidc.Handler directly to make testing easier.
 type oidcHandlerInterface interface {
 	ParseAndValidate(ctx context.Context, rawToken string, userclaims any, useCache bool) error
-	Introspect(ctx context.Context, issuer, bearerToken, introspectToken string, useCache bool) (oidc.Introspection, error)
+	Introspect(ctx context.Context, issuer, introspectToken string, useCache bool) (oidc.Introspection, error)
 }
 
 type Server struct {

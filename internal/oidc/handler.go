@@ -230,7 +230,7 @@ func (handler *Handler) ParseAndValidate(ctx context.Context, rawToken string, u
 
 	if !handler.featureGates.IsFeatureEnabled(flags.DisableJWTTokenIntrospection) {
 		// Verify if token is not revoked
-		intr, err := handler.introspect(ctx, provider, rawToken, rawToken, useCache)
+		intr, err := handler.introspect(ctx, provider, rawToken, useCache)
 		if err != nil {
 			slogctx.Error(ctx, "Failed to introspect token", "error", err)
 			return fmt.Errorf("introspecting token: %w", err)
@@ -283,7 +283,7 @@ func (handler *Handler) ProviderFor(ctx context.Context, issuer string) (*Provid
 }
 
 // Introspect an access or refresh token with the given issuer.
-func (handler *Handler) Introspect(ctx context.Context, issuer, bearerToken, introspectToken string, useCache bool) (Introspection, error) {
+func (handler *Handler) Introspect(ctx context.Context, issuer, introspectToken string, useCache bool) (Introspection, error) {
 	// parse the issuer URL
 	issuerURL, err := url.Parse(issuer)
 	if err != nil {
@@ -301,11 +301,11 @@ func (handler *Handler) Introspect(ctx context.Context, issuer, bearerToken, int
 	}
 
 	// let the handler introspect the token
-	return handler.introspect(ctx, provider, bearerToken, introspectToken, useCache)
+	return handler.introspect(ctx, provider, introspectToken, useCache)
 }
 
 // introspect an access or refresh token.
-func (handler *Handler) introspect(ctx context.Context, provider *Provider, bearerToken, introspectToken string, useCache bool) (Introspection, error) {
+func (handler *Handler) introspect(ctx context.Context, provider *Provider, introspectToken string, useCache bool) (Introspection, error) {
 	cacheKey := "introspect_" + introspectToken
 	if useCache {
 		cache, ok := handler.cache.Get(cacheKey)
@@ -315,7 +315,7 @@ func (handler *Handler) introspect(ctx context.Context, provider *Provider, bear
 		}
 	}
 
-	intr, err := provider.introspect(ctx, bearerToken, introspectToken)
+	intr, err := provider.introspect(ctx, introspectToken)
 	if err != nil {
 		return intr, fmt.Errorf("introspecting token: %w", err)
 	}

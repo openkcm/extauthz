@@ -82,6 +82,9 @@ type JWT struct {
 
 	// An optional gRPC source to dynamically lookup JWT providers
 	ProviderSource commoncfg.GRPCClient `yaml:"providerSource"`
+
+	// HTTP client configuration for interacting with OIDC providers
+	HTTPClient commoncfg.HTTPClient `yaml:"httpClient"`
 }
 
 // Deprecated: use Providers and ProviderSource instead

@@ -77,7 +77,7 @@ func TestNewProvider(t *testing.T) {
 			issuerURL: issuerURL,
 			audiences: []string{"aud1", "aud2"},
 			opts: []ProviderOption{
-				WithClient(nil),
+				WithProviderHTTPClient(nil),
 			},
 			wantError: true,
 		}, {
@@ -85,7 +85,7 @@ func TestNewProvider(t *testing.T) {
 			issuerURL: issuerURL,
 			audiences: []string{"aud1", "aud2"},
 			opts: []ProviderOption{
-				WithClient(http.DefaultClient),
+				WithProviderHTTPClient(http.DefaultClient),
 			},
 		}, {
 			name:      "with nil JWKS URI",
@@ -264,7 +264,7 @@ func TestSigningKeyFor(t *testing.T) {
 	cl := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: certpool}}}
 
 	p, err := NewProvider(providerURL, []string{"aud1"},
-		WithClient(cl),
+		WithProviderHTTPClient(cl),
 		WithoutCache(),
 	)
 	if err != nil {
@@ -370,7 +370,7 @@ func TestProvider_introspect(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tt.opts = append(tt.opts, WithClient(&http.Client{
+			tt.opts = append(tt.opts, WithProviderHTTPClient(&http.Client{
 				Transport: localRoundTripper{
 					http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 						err := json.NewEncoder(w).Encode(Introspection{Active: tt.active})
@@ -388,7 +388,7 @@ func TestProvider_introspect(t *testing.T) {
 			provider, err := NewProvider(tt.issuerURL, tt.audiences, tt.opts...)
 			require.NoError(t, err)
 
-			got, err := provider.introspect(t.Context(), tt.rawToken, tt.rawToken)
+			got, err := provider.introspect(t.Context(), tt.rawToken)
 			if !tt.wantErr(t, err, fmt.Sprintf("introspect(ctx, %v)", tt.rawToken)) {
 				return
 			}
