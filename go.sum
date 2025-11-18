@@ -159,8 +159,8 @@ github.com/openkcm/api-sdk v0.12.0 h1:MRbanocNPoqdd8XVO4BGonQPg+OTJNY1j9boA427+A
 github.com/openkcm/api-sdk v0.12.0/go.mod h1:I15YnS0cB7PiZwPFg3a/j+MuAngxeJSLZu+axE4Qf1I=
 github.com/openkcm/common-sdk v1.6.0 h1:ummrcM9btFBgc25o/SuEIcFVvgSSdtN1GBUFwftL+B0=
 github.com/openkcm/common-sdk v1.6.0/go.mod h1:WD5vq3//B/LqnB7xtzfLVrwszMKvYAIPzar2H+gw4v0=
-github.com/openkcm/session-manager v0.9.0 h1:4bYW9sCaP5AQypSMchqD6juSoxymGRMaw0fD6kmbldo=
-github.com/openkcm/session-manager v0.9.0/go.mod h1:X8d4HqiU2cF8cnjpQTAHK9GzL2cSraM8anPpdsUrMxk=
+github.com/openkcm/session-manager v0.9.4 h1:uLxPV/PKi0VS3ISAQMOn/f5Tv/C+bKBzBEiDGNusgUc=
+github.com/openkcm/session-manager v0.9.4/go.mod h1:7HRcvw2nq3avbThTRFaNO4tAo5b6J7cW9IvPzvzSPIA=
 github.com/patrickmn/go-cache v2.1.0+incompatible h1:HRMgzkcYKYpi3C8ajMPV8OFXaaRUnok+kx1WdO15EQc=
 github.com/patrickmn/go-cache v2.1.0+incompatible/go.mod h1:3Qf8kWWT7OJRJbdiICTKqZju1ZixQ/KpMGzzAfe6+WQ=
 github.com/pborman/getopt v0.0.0-20170112200414-7148bc3a4c30/go.mod h1:85jBQOZwpVEaDAr341tbn15RS4fCAsIst0qp7i8ex1o=
