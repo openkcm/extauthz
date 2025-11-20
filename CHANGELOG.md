@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.6](https://github.com/openkcm/extauthz/compare/v0.9.5...v0.9.6) (2025-11-20)
+
+
+### Bug Fixes
+
+* token introspection feature flag ([#171](https://github.com/openkcm/extauthz/issues/171)) ([131881f](https://github.com/openkcm/extauthz/commit/131881f1f6e82c6a45c48a5a10c8a11c4b1fb59f))
+
 ## [0.9.5](https://github.com/openkcm/extauthz/compare/v0.9.4...v0.9.5) (2025-11-20)
 
 
