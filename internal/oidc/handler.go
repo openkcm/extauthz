@@ -228,18 +228,16 @@ func (handler *Handler) ParseAndValidate(ctx context.Context, rawToken string, u
 		}
 	}
 
-	if !handler.featureGates.IsFeatureEnabled(flags.DisableJWTTokenIntrospection) {
-		// Verify if token is not revoked
-		intr, err := handler.introspect(ctx, provider, rawToken, useCache)
-		if err != nil {
-			slogctx.Error(ctx, "Failed to introspect token", "error", err)
-			return fmt.Errorf("introspecting token: %w", err)
-		}
+	// Verify if token is not revoked
+	intr, err := handler.introspect(ctx, provider, rawToken, useCache)
+	if err != nil {
+		slogctx.Error(ctx, "Failed to introspect token", "error", err)
+		return fmt.Errorf("introspecting token: %w", err)
+	}
 
-		if !intr.Active {
-			slogctx.Error(ctx, "Token is not active")
-			return ErrInvalidToken
-		}
+	if !intr.Active {
+		slogctx.Error(ctx, "Token is not active")
+		return ErrInvalidToken
 	}
 
 	return nil
@@ -306,6 +304,11 @@ func (handler *Handler) Introspect(ctx context.Context, issuer, introspectToken 
 
 // introspect an access or refresh token.
 func (handler *Handler) introspect(ctx context.Context, provider *Provider, introspectToken string, useCache bool) (Introspection, error) {
+	if handler.featureGates.IsFeatureEnabled(flags.DisableJWTTokenIntrospection) {
+		slogctx.Debug(ctx, "Introspection disabled via feature gate")
+		return Introspection{Active: true}, nil
+	}
+
 	cacheKey := "introspect_" + introspectToken
 	if useCache {
 		cache, ok := handler.cache.Get(cacheKey)
