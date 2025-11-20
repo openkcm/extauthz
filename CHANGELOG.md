@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.5](https://github.com/openkcm/extauthz/compare/v0.9.4...v0.9.5) (2025-11-20)
+
+
+### Bug Fixes
+
+* add missing http client config for mTLS based token inspection ([#167](https://github.com/openkcm/extauthz/issues/167)) ([5c3f12c](https://github.com/openkcm/extauthz/commit/5c3f12cc2530afc5b0f9ed5278c4503bf49b1b30))
+
 ## [0.9.4](https://github.com/openkcm/extauthz/compare/v0.9.3...v0.9.4) (2025-11-18)
 
 
