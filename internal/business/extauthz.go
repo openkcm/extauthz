@@ -7,6 +7,7 @@ import (
 
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
 	"github.com/openkcm/common-sdk/pkg/commongrpc"
+	"github.com/openkcm/common-sdk/pkg/commonhttp"
 	"github.com/valkey-io/valkey-go"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -115,7 +116,7 @@ func createOIDCHandler(ctx context.Context, cfg *config.JWT, fg *commoncfg.Featu
 	opts = append(opts, oidc.WithIssuerClaimKeys(cfg.IssuerClaimKeys...))
 	// add static providers (if any)
 	for _, p := range cfg.Providers {
-		oidcProvider, err := createOIDCProvider(ctx, &p)
+		oidcProvider, err := createOIDCProvider(ctx, &cfg.HTTPClient, &p)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create OIDC provider: %w", err)
 		}
@@ -123,7 +124,7 @@ func createOIDCHandler(ctx context.Context, cfg *config.JWT, fg *commoncfg.Featu
 	}
 	// add provider source (if any)
 	if cfg.ProviderSource.Enabled {
-		providerSource, err := createOIDCProviderSource(ctx, &cfg.ProviderSource)
+		providerSource, err := createOIDCProviderSource(ctx, &cfg.HTTPClient, &cfg.ProviderSource)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create OIDC provider source: %w", err)
 		}
@@ -137,39 +138,53 @@ func createOIDCHandler(ctx context.Context, cfg *config.JWT, fg *commoncfg.Featu
 	return hdl, nil
 }
 
-func createOIDCProvider(ctx context.Context, cfg *config.Provider) (*oidc.Provider, error) {
+func createOIDCProvider(ctx context.Context, httpClientCfg *commoncfg.HTTPClient, cfg *config.Provider) (*oidc.Provider, error) {
 	slogctx.Info(ctx, "Using static OIDC provider", "issuer", cfg.Issuer, "audiences", cfg.Audiences, "jwksURI", cfg.JwksURI)
 	issuerURL, err := url.Parse(cfg.Issuer)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse issuer URL %q: %w", cfg.Issuer, err)
 	}
-	var popts []oidc.ProviderOption
+	httpClient, err := commonhttp.NewClient(httpClientCfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create HTTP client for OIDC provider: %w", err)
+	}
+	opts := []oidc.ProviderOption{
+		oidc.WithProviderHTTPClient(httpClient),
+	}
 	if cfg.JwksURI != "" {
 		jwksURI, err := url.Parse(cfg.JwksURI)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse JWKS URI %q: %w", cfg.JwksURI, err)
 		}
-		popts = append(popts, oidc.WithCustomJWKSURI(jwksURI))
+		opts = append(opts, oidc.WithCustomJWKSURI(jwksURI))
 	}
-	oidcProvider, err := oidc.NewProvider(issuerURL, cfg.Audiences, popts...)
+	oidcProvider, err := oidc.NewProvider(issuerURL, cfg.Audiences, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create static OIDC provider: %w", err)
 	}
 	return oidcProvider, nil
 }
 
-func createOIDCProviderSource(ctx context.Context, cfg *commoncfg.GRPCClient) (*oidc.ProviderSource, error) {
+func createOIDCProviderSource(ctx context.Context, httpClientCfg *commoncfg.HTTPClient, cfg *commoncfg.GRPCClient) (*oidc.ProviderSource, error) {
 	slogctx.Info(ctx, "Using OIDC provider source", "address", cfg.Address)
 	creds, err := transportCredentialsFromSecretRef(cfg.SecretRef)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create transport credentials: %w", err)
+	}
+	httpClient, err := commonhttp.NewClient(httpClientCfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create HTTP client for OIDC provider: %w", err)
+	}
+	opts := []oidc.ProviderSourceOption{
+		oidc.WithProviderSourceHTTPClient(httpClient),
 	}
 	// create the gRPC connection to the provider source
 	grpcConn, err := commongrpc.NewClient(cfg, grpc.WithTransportCredentials(creds))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create gRPC connection: %w", err)
 	}
-	pc, err := oidc.NewProviderSource(oidc.WithGRPCConn(grpcConn))
+	opts = append(opts, oidc.WithGRPCConn(grpcConn))
+	pc, err := oidc.NewProviderSource(opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create OIDC provider client: %w", err)
 	}

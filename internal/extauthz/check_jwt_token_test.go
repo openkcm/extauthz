@@ -171,7 +171,7 @@ func TestCheckJWTToken(t *testing.T) {
 			cl := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: certpool}}}
 
 			p, err := oidc.NewProvider(issuerURL, []string{},
-				oidc.WithClient(cl),
+				oidc.WithProviderHTTPClient(cl),
 				oidc.WithCustomJWKSURI(jwksURI),
 			)
 			if err != nil {

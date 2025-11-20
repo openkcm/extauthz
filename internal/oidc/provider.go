@@ -22,7 +22,7 @@ type Provider struct {
 	jwksURI       *url.URL
 	introspectURL *url.URL
 	audiences     []string
-	client        *http.Client
+	httpClient    *http.Client
 
 	// cache the signing keys by key ID
 	signkeys *cache.Cache
@@ -47,14 +47,14 @@ func WithoutCache() ProviderOption {
 	}
 }
 
-// WithClient configures a dedicated http client.
-func WithClient(c *http.Client) ProviderOption {
+// WithProviderHTTPClient configures a dedicated http client.
+func WithProviderHTTPClient(c *http.Client) ProviderOption {
 	return func(provider *Provider) error {
 		if c == nil {
 			return errors.New("client must not be nil")
 		}
 
-		provider.client = c
+		provider.httpClient = c
 
 		return nil
 	}
@@ -84,10 +84,10 @@ func WithIntrospectTokenURL(introspectURL *url.URL) ProviderOption {
 // NewProvider creates a new provider and applies the given options.
 func NewProvider(issuerURL *url.URL, audiences []string, opts ...ProviderOption) (*Provider, error) {
 	provider := &Provider{
-		issuerURL: issuerURL,
-		audiences: audiences,
-		client:    http.DefaultClient,
-		signkeys:  cache.New(30*time.Second, 10*time.Minute),
+		issuerURL:  issuerURL,
+		audiences:  audiences,
+		httpClient: http.DefaultClient,
+		signkeys:   cache.New(30*time.Second, 10*time.Minute),
 	}
 	if issuerURL != nil {
 		provider.introspectURL = makeDefaultIntrospectURL(issuerURL)
@@ -132,7 +132,7 @@ func (provider *Provider) SigningKeyFor(ctx context.Context, keyID string) (*jos
 		return nil, fmt.Errorf("could not build request to get JWKS: %w", err)
 	}
 
-	response, err := provider.client.Do(request)
+	response, err := provider.httpClient.Do(request)
 	if err != nil {
 		return nil, err
 	}
@@ -186,7 +186,7 @@ func (provider *Provider) getWellKnownOpenIDConfiguraton(ctx context.Context) er
 		return fmt.Errorf("could not build request to get well known OpenID configuration: %w", err)
 	}
 
-	response, err := provider.client.Do(request)
+	response, err := provider.httpClient.Do(request)
 	if err != nil {
 		return fmt.Errorf("could not get well known OpenID configuration: %w", err)
 	}
@@ -235,21 +235,25 @@ type Introspection struct {
 	// Exp       int64  `json:"exp,omitemtpy"`        // Optional. Integer timestamp, measured in the number of seconds since January 1 1970 UTC, indicating when this token will expire, as defined in JWT [RFC7519].
 	// Iat       int64  `json:"iat,omitempty"`        // Optional. Integer timestamp, measured in the number of seconds since January 1 1970 UTC, indicating when this token was originally issued, as defined in JWT [RFC7519].
 	// Nbf       int64  `json:"nbf,omitempty"`        // Optional. Integer timestamp, measured in the number of seconds since January 1 1970 UTC, indicating when this token is not to be used before, as defined in JWT [RFC7519].
+
+	// Error response fields e.g. bad credentials
+	Error            string `json:"error,omitempty"`
+	ErrorDescription string `json:"error_description,omitempty"`
 }
 
-func (provider *Provider) introspect(ctx context.Context, bearerToken, introspectToken string) (Introspection, error) {
+func (provider *Provider) introspect(ctx context.Context, introspectToken string) (Introspection, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, provider.introspectURL.String(), nil)
 	if err != nil {
 		return Introspection{}, fmt.Errorf("creating new http request: %w", err)
 	}
 
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("Authorization", "Bearer "+bearerToken)
+	req.Header.Set("Accept", "application/json")
 	q := req.URL.Query()
 	q.Set("token", introspectToken)
 	req.URL.RawQuery = q.Encode()
 
-	resp, err := provider.client.Do(req)
+	resp, err := provider.httpClient.Do(req)
 	if err != nil {
 		return Introspection{}, fmt.Errorf("executing http request: %w", err)
 	}

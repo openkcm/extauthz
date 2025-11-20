@@ -91,7 +91,7 @@ func (s *handlerTestSuite) SetupSuite() {
 	certpool := x509.NewCertPool()
 	certpool.AddCert(s.ts.Certificate())
 	cl := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: certpool}}}
-	s.provider, err = NewProvider(providerURL, []string{"aud1"}, WithClient(cl), WithCustomJWKSURI(jwksURI))
+	s.provider, err = NewProvider(providerURL, []string{"aud1"}, WithProviderHTTPClient(cl), WithCustomJWKSURI(jwksURI))
 	s.Require().NoError(err)
 	s.hdl, err = NewHandler(WithIssuerClaimKeys(DefaultIssuerClaims...), WithStaticProvider(s.provider))
 	s.Require().NoError(err)

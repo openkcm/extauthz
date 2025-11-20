@@ -3,6 +3,7 @@ package oidc
 import (
 	"context"
 	"errors"
+	"net/http"
 	"net/url"
 
 	"google.golang.org/grpc"
@@ -11,8 +12,9 @@ import (
 )
 
 type ProviderSource struct {
-	grpcConn *grpc.ClientConn
-	pclient  oidcproviderv1.ServiceClient
+	grpcConn   *grpc.ClientConn
+	pclient    oidcproviderv1.ServiceClient
+	httpClient *http.Client
 }
 
 var _ ProviderClient = &ProviderSource{}
@@ -23,6 +25,19 @@ type ProviderSourceOption func(*ProviderSource) error
 func WithGRPCConn(grpcConn *grpc.ClientConn) ProviderSourceOption {
 	return func(client *ProviderSource) error {
 		client.grpcConn = grpcConn
+		return nil
+	}
+}
+
+// WithProviderSourceHTTPClient configures a dedicated http client.
+func WithProviderSourceHTTPClient(c *http.Client) ProviderSourceOption {
+	return func(providerSource *ProviderSource) error {
+		if c == nil {
+			return errors.New("client must not be nil")
+		}
+
+		providerSource.httpClient = c
+
 		return nil
 	}
 }
@@ -60,5 +75,5 @@ func (c *ProviderSource) Get(ctx context.Context, issuer string) (*Provider, err
 	if err != nil {
 		return nil, err
 	}
-	return NewProvider(issuerURL, resp.GetAudiences())
+	return NewProvider(issuerURL, resp.GetAudiences(), WithProviderHTTPClient(c.httpClient))
 }
