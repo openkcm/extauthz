@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.7](https://github.com/openkcm/extauthz/compare/v0.9.6...v0.9.7) (2025-11-25)
+
+
+### Bug Fixes
+
+* include missing claims ([#173](https://github.com/openkcm/extauthz/issues/173)) ([bdc39ff](https://github.com/openkcm/extauthz/commit/bdc39ff37f83e723e4094c9617fc46301a456675))
+
 ## [0.9.6](https://github.com/openkcm/extauthz/compare/v0.9.5...v0.9.6) (2025-11-20)
 
 
