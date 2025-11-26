@@ -81,7 +81,8 @@ func TestNewHandler(t *testing.T) {
 				}),
 			},
 			checkFunc: func(h *Handler) error {
-				if _, found := h.staticProviders[providerUrl.String()]; !found {
+				key := IssuerPrefix + providerUrl.String()
+				if _, found := h.staticProviders[key]; !found {
 					return errors.New("expected providers to be initialized")
 				}
 				return nil

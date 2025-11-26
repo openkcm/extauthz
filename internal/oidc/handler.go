@@ -21,6 +21,11 @@ import (
 	"github.com/openkcm/extauthz/internal/flags"
 )
 
+const (
+	IssuerPrefix     = "issuer_"
+	IntrospectPrefix = "introspect_"
+)
+
 var (
 	DefaultIssuerClaims = []string{"iss"}
 )
@@ -70,8 +75,6 @@ func WithStaticProvider(provider *Provider) HandlerOption {
 func WithProviderClient(providerClient ProviderClient) HandlerOption {
 	return func(handler *Handler) error {
 		handler.providerClient = providerClient
-		handler.cache = cache.New(handler.expiration, handler.cleanupInterval)
-
 		return nil
 	}
 }
@@ -117,7 +120,8 @@ func NewHandler(opts ...HandlerOption) (*Handler, error) {
 
 // RegisterStaticProvider registers a provider with the handler.
 func (handler *Handler) RegisterStaticProvider(provider *Provider) {
-	handler.staticProviders[provider.issuerURL.String()] = provider
+	key := IssuerPrefix + provider.issuerURL.String()
+	handler.staticProviders[key] = provider
 }
 
 func (handler *Handler) ParseAndValidate(ctx context.Context, rawToken string, userclaims any, useCache bool) error {
@@ -247,14 +251,15 @@ func (handler *Handler) ParseAndValidate(ctx context.Context, rawToken string, u
 // provider in the internal cache or queries the provider client.
 func (handler *Handler) ProviderFor(ctx context.Context, issuer string) (*Provider, error) {
 	// check the static providers first
-	if provider, ok := handler.staticProviders[issuer]; ok {
+	if provider, ok := handler.staticProviders[IssuerPrefix+issuer]; ok {
 		return provider, nil
 	}
 
 	slogctx.Info(ctx, "Issuer not found in the static provider list", "issuer", issuer)
 
 	// check the cache then
-	if providerInterface, found := handler.cache.Get(issuer); found {
+	cacheKey := IssuerPrefix + issuer
+	if providerInterface, found := handler.cache.Get(cacheKey); found {
 		if key, ok := providerInterface.(*Provider); ok {
 			return key, nil
 		}
@@ -272,7 +277,7 @@ func (handler *Handler) ProviderFor(ctx context.Context, issuer string) (*Provid
 		// that this item does not have a custom expiration, but uses
 		// the configured expiration of the cache.
 		// https://pkg.go.dev/github.com/patrickmn/go-cache#Cache.Set
-		handler.cache.Set(issuer, p, cache.DefaultExpiration)
+		handler.cache.Set(cacheKey, p, cache.DefaultExpiration)
 
 		return p, nil
 	}
@@ -309,7 +314,7 @@ func (handler *Handler) introspect(ctx context.Context, provider *Provider, intr
 		return Introspection{Active: true}, nil
 	}
 
-	cacheKey := "introspect_" + introspectToken
+	cacheKey := IntrospectPrefix + introspectToken
 	if useCache {
 		cache, ok := handler.cache.Get(cacheKey)
 		if ok {
