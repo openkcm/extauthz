@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-andiamo/splitter"
 	"github.com/openkcm/common-sdk/pkg/auth"
+	"github.com/openkcm/session-manager/pkg/fingerprint"
 
 	envoy_core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	envoy_auth "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
@@ -103,12 +104,12 @@ func (srv *Server) Check(ctx context.Context, req *envoy_auth.CheckRequest) (*en
 		}
 	}
 
-	// 3. Session cookie (if any and only if session cache is configured)
-	if srv.sessionCache != nil {
+	// 3. Session cookie (if any and only if session manager is configured)
+	if srv.sessionManager != nil {
 		slogctx.Debug(ctx, "Checking if session cookie is present")
-		if sessionCookie, tenantID, found := srv.extractSessionCookieAndTenantID(ctx, headers, path); found {
+		if sessionCookie, tenantID, fingerPrint, found := srv.extractSessionDetails(ctx, httpreq, path); found {
 			slogctx.Debug(ctx, "Checking session cookie")
-			result.merge(srv.checkSession(ctx, sessionCookie, tenantID, method, host, path))
+			result.merge(srv.checkSession(ctx, sessionCookie, tenantID, fingerPrint, method, host, path))
 		}
 	}
 
@@ -137,6 +138,10 @@ func (srv *Server) Check(ctx context.Context, req *envoy_auth.CheckRequest) (*en
 			return respondInternalServerError(), nil
 		}
 
+		slogctx.Debug(ctx, "Client data",
+			auth.HeaderClientData, b64data,
+			auth.HeaderClientDataSignature, b64sig,
+		)
 		headersToAdd = []*envoy_core.HeaderValueOption{
 			headerValueOption(auth.HeaderClientData, b64data),
 			headerValueOption(auth.HeaderClientDataSignature, b64sig),
@@ -155,7 +160,7 @@ func (srv *Server) Check(ctx context.Context, req *envoy_auth.CheckRequest) (*en
 func extractClientCertificates(ctx context.Context, headers map[string]string) ([]string, bool) {
 	certHeader, found := headers[HeaderForwardedClientCert]
 	if !found {
-		slogctx.Debug(ctx, "No XFCC header found", "headers", getMapKeys(headers))
+		slogctx.Debug(ctx, "No XFCC header found", "headers", mapKeys(headers))
 		return nil, false
 	}
 	// there can be multiple certificates in the XFCC header
@@ -171,7 +176,7 @@ func extractClientCertificates(ctx context.Context, headers map[string]string) (
 func extractBearerToken(ctx context.Context, headers map[string]string) (string, bool) {
 	authHeader, found := headers[HeaderAuthorization]
 	if !found {
-		slogctx.Debug(ctx, "No authorization header found", "headers", getMapKeys(headers))
+		slogctx.Debug(ctx, "No authorization header found", "headers", mapKeys(headers))
 		return "", false
 	}
 
@@ -184,43 +189,52 @@ func extractBearerToken(ctx context.Context, headers map[string]string) (string,
 	return bearerToken, true
 }
 
-func (srv *Server) extractSessionCookieAndTenantID(ctx context.Context, headers map[string]string, path string) (*http.Cookie, string, bool) {
+func (srv *Server) extractSessionDetails(ctx context.Context, httpreq *envoy_auth.AttributeContext_HttpRequest, path string) (*http.Cookie, string, string, bool) {
 	ctx = slogctx.With(ctx, "path", path)
+	headers := httpreq.GetHeaders()
+
 	// extract tenant ID from the path
-	slogctx.Debug(ctx, "Extracting tenant ID from path", "cmkPathPrefix", srv.cmkPathPrefix)
 	var tenantID string
-	switch {
-	case strings.HasPrefix(path, srv.cmkPathPrefix): // /cmk/v1/{tenantID}/...
-		parts := strings.Split(path, "/")
-		if len(parts) < 4 {
-			return nil, "", false
+	for _, prefix := range srv.sessionPathPrefixes {
+		remainder, found := strings.CutPrefix(path, prefix)
+		if !found {
+			continue
 		}
-		tenantID = parts[3]
-	default:
-		slogctx.Debug(ctx, "Path does not match any known prefix for tenant ID extraction")
-		return nil, "", false
+		parts := strings.SplitN(remainder, "/", 2)
+		tenantID = parts[0]
+	}
+	if tenantID == "" {
+		slogctx.Debug(ctx, "Failed to extract tenant ID from path", "sessionPathPrefixes", srv.sessionPathPrefixes)
+		return nil, "", "", false
+	}
+
+	// Determine the fingerprint for this request.
+	fp, err := fingerprint.FromEnvoyHTTPRequest(httpreq)
+	if err != nil {
+		slogctx.Debug(ctx, "Failed to compute fingerprint from request", "error", err)
+		return nil, "", "", false
 	}
 
 	// extract the session cookie
 	cookieHeader, found := headers[HeaderCookie]
 	if !found {
-		slogctx.Debug(ctx, "No cookie header found", "headers", getMapKeys(headers))
-		return nil, "", false
+		slogctx.Debug(ctx, "No cookie header found", "headers", mapKeys(headers))
+		return nil, "", "", false
 	}
 	cookies, err := http.ParseCookie(cookieHeader)
 	if err != nil {
 		slogctx.Debug(ctx, "Failed to parse cookie header", "error", err)
-		return nil, "", false
+		return nil, "", "", false
 	}
 	for _, cookie := range cookies {
 		if cookie.Name == SessionCookieName {
 			slogctx.Debug(ctx, "Found session cookie", "name", cookie.Name)
-			return cookie, tenantID, true
+			return cookie, tenantID, fp, true
 		}
 	}
 
 	slogctx.Debug(ctx, "Session cookie not found", "sessionCookieName", SessionCookieName)
-	return nil, "", false
+	return nil, "", "", false
 }
 
 // splitCertHeader splits the XFCC header on , in case there are multiple certificates.
@@ -241,7 +255,7 @@ func splitCertHeader(certHeader string) ([]string, error) {
 }
 
 // Helper function to get map keys for debugging
-func getMapKeys[K comparable, V any](m map[K]V) []K {
+func mapKeys[K comparable, V any](m map[K]V) []K {
 	keys := make([]K, 0, len(m))
 	for k := range m {
 		keys = append(keys, k)
