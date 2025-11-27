@@ -4,5 +4,5 @@ metadata:
   name: extauthz-signing-keyid
 immutable: false
 data:
-  keyID.txt: |-
+  keyId: |-
     mykeyid1
