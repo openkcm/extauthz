@@ -157,8 +157,8 @@ github.com/opencontainers/image-spec v1.1.1 h1:y0fUlFfIZhPF1W537XOLg0/fcx6zcHCJw
 github.com/opencontainers/image-spec v1.1.1/go.mod h1:qpqAh3Dmcf36wStyyWU+kCeDgrGnAve2nCC8+7h8Q0M=
 github.com/openkcm/api-sdk v0.12.0 h1:MRbanocNPoqdd8XVO4BGonQPg+OTJNY1j9boA427+A4=
 github.com/openkcm/api-sdk v0.12.0/go.mod h1:I15YnS0cB7PiZwPFg3a/j+MuAngxeJSLZu+axE4Qf1I=
-github.com/openkcm/common-sdk v1.6.1 h1:Ac0LP1FRBAftBD/5N5lL4Y6u7f4zv7OEkosq4vAqem4=
-github.com/openkcm/common-sdk v1.6.1/go.mod h1:7IJzYLrQ/rReGD6SGMFjRVQLyMb1RypWYifhqkh1idY=
+github.com/openkcm/common-sdk v1.6.2 h1:RQeWGXWKQXNv6/popujjwco9tCEwqmqwuqi9Obq5pQ4=
+github.com/openkcm/common-sdk v1.6.2/go.mod h1:U4AbaqwRwcx8wwq1ucDi9Yb3+ejQu8kcTepGfybo5hE=
 github.com/openkcm/session-manager v0.9.10 h1:hKqSBGBVTtWR2A/M1sXMlUp08AsTKfHmeerWsTp9kTU=
 github.com/openkcm/session-manager v0.9.10/go.mod h1:BgvcpErhenCWrBa506+Ebgu94RfJmRG3Pa0SWeazhEo=
 github.com/patrickmn/go-cache v2.1.0+incompatible h1:HRMgzkcYKYpi3C8ajMPV8OFXaaRUnok+kx1WdO15EQc=
