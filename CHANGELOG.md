@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.9](https://github.com/openkcm/extauthz/compare/v0.9.8...v0.9.9) (2025-11-27)
+
+
+### Bug Fixes
+
+* keep deprecated configs ([#183](https://github.com/openkcm/extauthz/issues/183)) ([b63e4c6](https://github.com/openkcm/extauthz/commit/b63e4c6782ce56ad061835d725e771cae76edfe7))
+
 ## [0.9.8](https://github.com/openkcm/extauthz/compare/v0.9.7...v0.9.8) (2025-11-27)
 
 
