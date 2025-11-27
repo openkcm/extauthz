@@ -67,12 +67,17 @@ func NewSigner(featureGates *commoncfg.FeatureGates, cfg *config.ClientData) (*S
 	}, nil
 }
 
-func (c *Signer) SigningKeyID() string {
+func (c *Signer) SigningKeyID() (string, error) {
 	if c.IsDisabled() {
-		return ""
+		return "", nil
 	}
 
-	return c.keyIdFileName
+	// Load the signing key ID file, which points to the actual signing key file
+	keyIDBytes, exist := c.signingKeyLoader.Storage().Get(c.keyIdFileName)
+	if !exist {
+		return "", fmt.Errorf("signing key ID file %q not found in storage", c.keyIdFileName)
+	}
+	return string(bytes.TrimSpace(keyIDBytes)), nil
 }
 
 func (c *Signer) Enabled() bool {
@@ -84,16 +89,15 @@ func (c *Signer) IsDisabled() bool {
 }
 
 func (c *Signer) Sign(opts ...Option) (string, string, error) {
-	fbytes, exist := c.signingKeyLoader.Storage().Get(c.keyIdFileName)
-	if !exist {
-		return "", "", fmt.Errorf("signing key with ID %q not found in storage", c.keyIdFileName)
+	signingKeyID, err := c.SigningKeyID()
+	if err != nil {
+		return "", "", fmt.Errorf("failed to get signing key ID: %w", err)
 	}
 
-	keyIDName := string(bytes.TrimSpace(fbytes))
-
-	keyBytes, exist := c.lookupByKeys(keyIDName, keyIDName+".pem")
+	// Load the signing key based on the given ID
+	keyBytes, exist := c.lookupByKeys(signingKeyID, signingKeyID+".pem")
 	if !exist {
-		return "", "", fmt.Errorf("signing key with ID %q not found in storage", keyIDName)
+		return "", "", fmt.Errorf("signing key with ID %q not found in storage", signingKeyID)
 	}
 
 	// Parse the private key
@@ -142,10 +146,14 @@ func (c *Signer) create(opts ...Option) (*auth.ClientData, error) {
 		return nil, ErrComputationNotEnabled
 	}
 
+	signingKeyID, err := c.SigningKeyID()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get signing key ID: %w", err)
+	}
 	builder := &clientDataBuilder{
 		ClientData: auth.ClientData{
 			SignatureAlgorithm: auth.SignatureAlgorithmRS256,
-			KeyID:              c.SigningKeyID(),
+			KeyID:              signingKeyID,
 		},
 		signer: c,
 	}

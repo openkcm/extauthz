@@ -53,7 +53,7 @@ jwt:
 
 clientData:
   # Signing client data
-  signingKeyIDFilePath: ./keyId.txt
+  signingKeyIDFilePath: ./keyId
 
 sessionCache:
   enabled: true

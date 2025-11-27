@@ -99,7 +99,7 @@ func createClientDataSigner(ctx context.Context, cfg *config.Config) (*clientdat
 		return nil, fmt.Errorf("failed to create client data factory: %w", err)
 	}
 	if clientDataSigner.Enabled() {
-		slogctx.Info(ctx, "Using client data with signing key", "id", clientDataSigner.SigningKeyID())
+		slogctx.Info(ctx, "Using client data reading the signing key from", "signingKeyFile", cfg.ClientData.SigningKeyIDFilePath)
 	} else {
 		slogctx.Info(ctx, "Using client data has been disabled")
 	}

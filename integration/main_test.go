@@ -71,7 +71,7 @@ func writeFiles(config, trustedSubjects, policies, rsaPrivateKeyPEM string) (fun
 		"./config.yaml":          config,
 		"./trustedSubjects.yaml": trustedSubjects,
 		"./policies.cedar":       policies,
-		"./keyID.txt":            "key1",
+		"./keyId":                "key1",
 		"./key1.pem":             rsaPrivateKeyPEM,
 	}
 
