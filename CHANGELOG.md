@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.10](https://github.com/openkcm/extauthz/compare/v0.9.9...v0.9.10) (2025-11-27)
+
+
+### Bug Fixes
+
+* nil pointer dereference ([#185](https://github.com/openkcm/extauthz/issues/185)) ([c6cff47](https://github.com/openkcm/extauthz/commit/c6cff4739a00bb52875322d4aed7586e1ec061e1))
+
 ## [0.9.9](https://github.com/openkcm/extauthz/compare/v0.9.8...v0.9.9) (2025-11-27)
 
 
