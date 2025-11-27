@@ -70,6 +70,19 @@ type JWT struct {
 
 	// HTTP client configuration for interacting with OIDC providers
 	HTTPClient commoncfg.HTTPClient `yaml:"httpClient"`
+
+	// Define providers as k8s custom resources
+	// Deprecated: use Providers and ProviderSource instead
+	K8sProviders K8sProviders `yaml:"k8sProviders"`
+}
+
+// Deprecated: use Providers and ProviderSource instead
+type K8sProviders struct {
+	Enabled    bool   `yaml:"enabled" default:"true"`
+	APIGroup   string `yaml:"apiGroup" default:"gateway.extensions.envoyproxy.io"`
+	APIVersion string `yaml:"apoVersion" default:"v1alpha1"`
+	Name       string `yaml:"name" default:"jwtproviders"`
+	Namespace  string `yaml:"namespace" default:"default"`
 }
 
 type Provider struct {
