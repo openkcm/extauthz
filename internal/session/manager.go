@@ -17,7 +17,8 @@ type Manager struct {
 
 func NewManager(grpcConn *grpc.ClientConn, opts ...ManagerOption) (*Manager, error) {
 	m := &Manager{
-		grpcConn: grpcConn,
+		grpcConn:   grpcConn,
+		grpcClient: sessionv1.NewServiceClient(grpcConn),
 	}
 	for _, opt := range opts {
 		if opt != nil {
