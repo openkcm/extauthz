@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.9.8](https://github.com/openkcm/extauthz/compare/v0.9.7...v0.9.8) (2025-11-27)
+
+
+### Bug Fixes
+
+* replace oidcproviderv1 with sessionv1 ([#177](https://github.com/openkcm/extauthz/issues/177)) ([8275235](https://github.com/openkcm/extauthz/commit/827523518812c60cf7efd3fa2d9cf3b9df2431c2))
+* signing key handling ([#181](https://github.com/openkcm/extauthz/issues/181)) ([14b6a48](https://github.com/openkcm/extauthz/commit/14b6a48066cc9603db47995b3f096a1498825927))
+
 ## [0.9.7](https://github.com/openkcm/extauthz/compare/v0.9.6...v0.9.7) (2025-11-25)
 
 
