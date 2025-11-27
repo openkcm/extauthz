@@ -263,27 +263,14 @@ config:
       - issuer: https://my.oidc.jwt.provider.com/
         audiences:
           - my-audience
-    providerSource:
-      address: localhost:5555
-      secretRef:
-        type: insecure
+
+  sessionPathPrefixes: ["/cmk/v1/"]
+  sessionManager:
+    enabled: true
+    address: localhost:5555
+    secretRef:
+      type: insecure
 
   clientData:
     # Signing client data
     signingKeyIDFilePath: /etc/extauthz-signing/keyId
-
-  sessionCache:
-    enabled: true
-    valkey:
-      address:
-        source: embedded
-        value: valkey:6379
-      user:
-        source: embedded
-        value: ""
-      password:
-        source: embedded
-        value: secret
-      prefix: session-manager
-      secretRef:
-        type: insecure

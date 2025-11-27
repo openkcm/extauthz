@@ -22,22 +22,14 @@ type Config struct {
 	// ClientData configuration
 	ClientData ClientData `yaml:"clientData"`
 
-	// Session cache configuration (optional)
-	SessionCache SessionCache `yaml:"sessionCache"`
-}
+	// SessionPathPrefixes configures http path prefixes for which we expect
+	// sessions and which have the tenant ID as next path segment e.g.
+	// - /lvl1       will match paths like /lvl1/{tenantID}/...
+	// - /lvl1/lvl2  will match paths like /lvl1/lvl2{tenantID}/...
+	SessionPathPrefixes []string `yaml:"sessionPathPrefixes"`
 
-type SessionCache struct {
-	Enabled       bool   `yaml:"enabled"`
-	Valkey        Valkey `yaml:"valkey"`
-	CMKPathPrefix string `yaml:"cmkPathPrefix"`
-}
-
-type Valkey struct {
-	Address   commoncfg.SourceRef `yaml:"address"`
-	User      commoncfg.SourceRef `yaml:"user"`
-	Password  commoncfg.SourceRef `yaml:"password"`
-	Prefix    string              `yaml:"prefix"`
-	SecretRef commoncfg.SecretRef `yaml:"secretRef"`
+	// Session Manager configuration (optional)
+	SessionManager commoncfg.GRPCClient `yaml:"sessionManager"`
 }
 
 // ClientData configuration
@@ -73,27 +65,11 @@ type JWT struct {
 	// IssuerClaimKeys configures the JWT issuer keys
 	IssuerClaimKeys []string `yaml:"issuerClaimKeys" default:"['iss']"`
 
-	// Define providers as k8s custom resources
-	// Deprecated: use Providers and ProviderSource instead
-	K8sProviders K8sProviders `yaml:"k8sProviders"`
-
 	// A list of static JWT providers
 	Providers []Provider `yaml:"providers"`
 
-	// An optional gRPC source to dynamically lookup JWT providers
-	ProviderSource commoncfg.GRPCClient `yaml:"providerSource"`
-
 	// HTTP client configuration for interacting with OIDC providers
 	HTTPClient commoncfg.HTTPClient `yaml:"httpClient"`
-}
-
-// Deprecated: use Providers and ProviderSource instead
-type K8sProviders struct {
-	Enabled    bool   `yaml:"enabled" default:"true"`
-	APIGroup   string `yaml:"apiGroup" default:"gateway.extensions.envoyproxy.io"`
-	APIVersion string `yaml:"apoVersion" default:"v1alpha1"`
-	Name       string `yaml:"name" default:"jwtproviders"`
-	Namespace  string `yaml:"namespace" default:"default"`
 }
 
 type Provider struct {

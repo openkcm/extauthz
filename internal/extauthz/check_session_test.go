@@ -7,50 +7,27 @@ import (
 	"testing"
 
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
-	"github.com/openkcm/session-manager/pkg/session"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
 	"github.com/openkcm/extauthz/internal/clientdata"
 	"github.com/openkcm/extauthz/internal/config"
-	"github.com/openkcm/extauthz/internal/oidc"
 	"github.com/openkcm/extauthz/internal/policies/cedarpolicy"
+	"github.com/openkcm/extauthz/internal/session"
 )
 
-// MockSessionCache is a mock type for the SessionCache interface
-type MockSessionCache struct {
+// MockSessionManager is a mock type for the oidc handler interface
+type MockSessionManager struct {
 	mock.Mock
 }
 
-func (m *MockSessionCache) LoadSession(ctx context.Context, sessionID string) (session.Session, error) {
-	args := m.Called(ctx, sessionID)
+func (m *MockSessionManager) GetSession(ctx context.Context, sessionID, tenantID, fingerprint string) (*session.Session, error) {
+	args := m.Called(ctx, sessionID, tenantID, fingerprint)
 	if args.Get(0) == nil {
-		return session.Session{}, args.Error(1)
+		return &session.Session{}, args.Error(1)
 	}
 	//nolint:forcetypeassert
-	return args.Get(0).(session.Session), args.Error(1)
-}
-
-// MockOIDCHandler is a mock type for the oidc handler interface
-type MockOIDCHandler struct {
-	mock.Mock
-}
-
-func (m *MockOIDCHandler) Introspect(ctx context.Context, issuer, introspectToken string, useCache bool) (oidc.Introspection, error) {
-	args := m.Called(ctx, issuer, introspectToken, useCache)
-	if args.Get(0) == nil {
-		return oidc.Introspection{}, args.Error(1)
-	}
-	//nolint:forcetypeassert
-	return args.Get(0).(oidc.Introspection), args.Error(1)
-}
-
-func (m *MockOIDCHandler) ParseAndValidate(ctx context.Context, rawToken string, userclaims any, useCache bool) error {
-	args := m.Called(ctx, rawToken, userclaims, useCache)
-	if args.Get(0) == nil {
-		return args.Error(1)
-	}
-	return args.Error(0)
+	return args.Get(0).(*session.Session), args.Error(1)
 }
 
 func TestCheckSession(t *testing.T) {
@@ -59,51 +36,38 @@ func TestCheckSession(t *testing.T) {
 		name           string
 		cookie         *http.Cookie
 		tenantID       string
+		fingerprint    string
 		method         string
 		host           string
 		path           string
-		setupMocks     func(*MockSessionCache, *MockOIDCHandler)
+		setupMocks     func(*MockSessionManager)
 		expectedResult checkResult
 	}{
 		{
 			name:           "zero values",
 			expectedResult: checkResult{is: UNKNOWN},
 		}, {
-			name:   "LoadSession fails",
+			name:   "GetSession fails",
 			cookie: &http.Cookie{Name: "session", Value: ""},
-			setupMocks: func(sc *MockSessionCache, jh *MockOIDCHandler) {
-				sc.On("LoadSession", mock.Anything, "").
-					Return(nil, errors.New("session load error"))
+			setupMocks: func(sm *MockSessionManager) {
+				sm.On("GetSession", mock.Anything, "", "", "").
+					Return(nil, errors.New("get session error"))
 			},
 			expectedResult: checkResult{is: UNAUTHENTICATED},
 		}, {
-			name:   "Introspect fails",
+			name:   "Invalid session",
 			cookie: &http.Cookie{Name: "session", Value: ""},
-			setupMocks: func(sc *MockSessionCache, jh *MockOIDCHandler) {
-				sc.On("LoadSession", mock.Anything, "").
-					Return(session.Session{}, nil)
-				jh.On("Introspect", mock.Anything, "", "", false).
-					Return(oidc.Introspection{}, errors.New("introspect error"))
-			},
-			expectedResult: checkResult{is: UNAUTHENTICATED},
-		}, {
-			name:   "Introspect inactive",
-			cookie: &http.Cookie{Name: "session", Value: ""},
-			setupMocks: func(sc *MockSessionCache, jh *MockOIDCHandler) {
-				sc.On("LoadSession", mock.Anything, "").
-					Return(session.Session{}, nil)
-				jh.On("Introspect", mock.Anything, "", "", false).
-					Return(oidc.Introspection{Active: false}, nil)
+			setupMocks: func(sm *MockSessionManager) {
+				sm.On("GetSession", mock.Anything, "", "", "").
+					Return(&session.Session{Valid: false}, nil)
 			},
 			expectedResult: checkResult{is: UNAUTHENTICATED},
 		}, {
 			name:   "Policy deny",
 			cookie: &http.Cookie{Name: "session", Value: ""},
-			setupMocks: func(sc *MockSessionCache, jh *MockOIDCHandler) {
-				sc.On("LoadSession", mock.Anything, "").
-					Return(session.Session{}, nil)
-				jh.On("Introspect", mock.Anything, "", "", false).
-					Return(oidc.Introspection{Active: true}, nil)
+			setupMocks: func(sm *MockSessionManager) {
+				sm.On("GetSession", mock.Anything, "", "", "").
+					Return(&session.Session{Valid: true}, nil)
 			},
 			expectedResult: checkResult{is: DENIED},
 		}, {
@@ -112,14 +76,13 @@ func TestCheckSession(t *testing.T) {
 			method: "POST",
 			host:   "our.service.com",
 			path:   "/foo/bar",
-			setupMocks: func(sc *MockSessionCache, jh *MockOIDCHandler) {
-				sc.On("LoadSession", mock.Anything, "").
-					Return(session.Session{
-						Issuer: "https://127.0.0.1:8443",
-						Claims: session.Claims{Subject: "me"},
+			setupMocks: func(sm *MockSessionManager) {
+				sm.On("GetSession", mock.Anything, "", "", "").
+					Return(&session.Session{
+						Valid:   true,
+						Subject: "me",
+						Issuer:  "https://127.0.0.1:8443",
 					}, nil)
-				jh.On("Introspect", mock.Anything, "https://127.0.0.1:8443", "", false).
-					Return(oidc.Introspection{Active: true}, nil)
 			},
 			expectedResult: checkResult{is: DENIED},
 		}, {
@@ -128,14 +91,13 @@ func TestCheckSession(t *testing.T) {
 			method: "GET",
 			host:   "my.service.org",
 			path:   "/foo/bar",
-			setupMocks: func(sc *MockSessionCache, jh *MockOIDCHandler) {
-				sc.On("LoadSession", mock.Anything, "").
-					Return(session.Session{
-						Issuer: "https://127.0.0.1:8443",
-						Claims: session.Claims{Subject: "me"},
+			setupMocks: func(sm *MockSessionManager) {
+				sm.On("GetSession", mock.Anything, "", "", "").
+					Return(&session.Session{
+						Valid:   true,
+						Subject: "me",
+						Issuer:  "https://127.0.0.1:8443",
 					}, nil)
-				jh.On("Introspect", mock.Anything, "https://127.0.0.1:8443", "", true).
-					Return(oidc.Introspection{Active: true}, nil)
 			},
 			expectedResult: checkResult{is: DENIED},
 		}, {
@@ -144,14 +106,13 @@ func TestCheckSession(t *testing.T) {
 			method: "GET",
 			host:   "our.service.com",
 			path:   "/foo/baz",
-			setupMocks: func(sc *MockSessionCache, jh *MockOIDCHandler) {
-				sc.On("LoadSession", mock.Anything, "").
-					Return(session.Session{
-						Issuer: "https://127.0.0.1:8443",
-						Claims: session.Claims{Subject: "me"},
+			setupMocks: func(sm *MockSessionManager) {
+				sm.On("GetSession", mock.Anything, "", "", "").
+					Return(&session.Session{
+						Valid:   true,
+						Subject: "me",
+						Issuer:  "https://127.0.0.1:8443",
 					}, nil)
-				jh.On("Introspect", mock.Anything, "https://127.0.0.1:8443", "", true).
-					Return(oidc.Introspection{Active: true}, nil)
 			},
 			expectedResult: checkResult{is: DENIED},
 		}, {
@@ -160,14 +121,13 @@ func TestCheckSession(t *testing.T) {
 			method: "GET",
 			host:   "our.service.com",
 			path:   "/foo/bar",
-			setupMocks: func(sc *MockSessionCache, jh *MockOIDCHandler) {
-				sc.On("LoadSession", mock.Anything, "").
-					Return(session.Session{
-						Issuer: "https://127.0.0.1:8443",
-						Claims: session.Claims{Subject: "me"},
+			setupMocks: func(sm *MockSessionManager) {
+				sm.On("GetSession", mock.Anything, "", "", "").
+					Return(&session.Session{
+						Valid:   true,
+						Subject: "me",
+						Issuer:  "https://127.0.0.1:8443",
 					}, nil)
-				jh.On("Introspect", mock.Anything, "https://127.0.0.1:8443", "", true).
-					Return(oidc.Introspection{Active: true}, nil)
 			},
 			expectedResult: checkResult{is: ALLOWED},
 		},
@@ -179,10 +139,9 @@ func TestCheckSession(t *testing.T) {
 			// Arrange
 			ctx := t.Context()
 
-			mockSessionCache := new(MockSessionCache)
-			mockOIDCHandler := new(MockOIDCHandler)
+			mockSessionManager := new(MockSessionManager)
 			if tc.setupMocks != nil {
-				tc.setupMocks(mockSessionCache, mockOIDCHandler)
+				tc.setupMocks(mockSessionManager)
 			}
 
 			pe, err := cedarpolicy.NewEngine(cedarpolicy.WithBytes("my policies", []byte(cedarpolicies)))
@@ -198,8 +157,7 @@ func TestCheckSession(t *testing.T) {
 			}
 
 			srv, err := NewServer(
-				WithSessionCache(mockSessionCache),
-				WithOIDCHandler(mockOIDCHandler),
+				WithSessionManager(mockSessionManager),
 				WithPolicyEngine(pe),
 				WithClientDataSigner(signer),
 			)
@@ -208,12 +166,11 @@ func TestCheckSession(t *testing.T) {
 			}
 
 			// Act
-			result := srv.checkSession(ctx, tc.cookie, tc.tenantID, tc.method, tc.host, tc.path)
+			result := srv.checkSession(ctx, tc.cookie, tc.tenantID, tc.fingerprint, tc.method, tc.host, tc.path)
 
 			// Assert
 			assert.Equal(t, tc.expectedResult.is, result.is)
-			mockSessionCache.AssertExpectations(t)
-			mockOIDCHandler.AssertExpectations(t)
+			mockSessionManager.AssertExpectations(t)
 		})
 	}
 }

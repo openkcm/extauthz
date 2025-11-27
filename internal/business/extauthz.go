@@ -8,12 +8,10 @@ import (
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
 	"github.com/openkcm/common-sdk/pkg/commongrpc"
 	"github.com/openkcm/common-sdk/pkg/commonhttp"
-	"github.com/valkey-io/valkey-go"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 
-	sessrepo "github.com/openkcm/session-manager/pkg/session/valkey"
 	slogctx "github.com/veqryn/slog-context"
 
 	"github.com/openkcm/extauthz/internal/clientdata"
@@ -21,6 +19,7 @@ import (
 	"github.com/openkcm/extauthz/internal/extauthz"
 	"github.com/openkcm/extauthz/internal/oidc"
 	"github.com/openkcm/extauthz/internal/policies/cedarpolicy"
+	"github.com/openkcm/extauthz/internal/session"
 )
 
 func createExtAuthZServer(ctx context.Context, cfg *config.Config) (*extauthz.Server, error) {
@@ -58,17 +57,15 @@ func createExtAuthZServer(ctx context.Context, cfg *config.Config) (*extauthz.Se
 	}
 	opts = append(opts, extauthz.WithOIDCHandler(oidcHandler))
 
-	// Create the session cache
-	if cfg.SessionCache.Enabled {
-		sessionCache, err := createValkeySessionCache(ctx, &cfg.SessionCache.Valkey)
+	// Create the session manager (if configured)
+	if cfg.SessionManager.Enabled && len(cfg.SessionPathPrefixes) > 0 {
+		sessionManager, err := createSessionManager(ctx, &cfg.SessionManager)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create Valkey session cache: %w", err)
+			return nil, fmt.Errorf("failed to create session manager: %w", err)
 		}
-		opts = append(opts, extauthz.WithSessionCache(sessionCache))
-	}
-	if cfg.SessionCache.CMKPathPrefix != "" {
-		slogctx.Info(ctx, "Using CMK path prefix for session cache", "prefix", cfg.SessionCache.CMKPathPrefix)
-		opts = append(opts, extauthz.WithCMKPathPrefix(cfg.SessionCache.CMKPathPrefix))
+		opts = append(opts, extauthz.WithSessionManager(sessionManager))
+		slogctx.Info(ctx, "Using session paths", "paths", cfg.SessionPathPrefixes)
+		opts = append(opts, extauthz.WithSessionPathPrefixes(cfg.SessionPathPrefixes))
 	}
 
 	// Create the ExtAuthZ server
@@ -122,14 +119,6 @@ func createOIDCHandler(ctx context.Context, cfg *config.JWT, fg *commoncfg.Featu
 		}
 		opts = append(opts, oidc.WithStaticProvider(oidcProvider))
 	}
-	// add provider source (if any)
-	if cfg.ProviderSource.Enabled {
-		providerSource, err := createOIDCProviderSource(ctx, &cfg.HTTPClient, &cfg.ProviderSource)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create OIDC provider source: %w", err)
-		}
-		opts = append(opts, oidc.WithProviderClient(providerSource))
-	}
 	// create the handler
 	hdl, err := oidc.NewHandler(opts...)
 	if err != nil {
@@ -165,61 +154,20 @@ func createOIDCProvider(ctx context.Context, httpClientCfg *commoncfg.HTTPClient
 	return oidcProvider, nil
 }
 
-func createOIDCProviderSource(ctx context.Context, httpClientCfg *commoncfg.HTTPClient, cfg *commoncfg.GRPCClient) (*oidc.ProviderSource, error) {
-	slogctx.Info(ctx, "Using OIDC provider source", "address", cfg.Address)
+func createSessionManager(ctx context.Context, cfg *commoncfg.GRPCClient) (*session.Manager, error) {
+	slogctx.Info(ctx, "Using Session Manager", "address", cfg.Address)
 	creds, err := transportCredentialsFromSecretRef(cfg.SecretRef)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create transport credentials: %w", err)
 	}
-	httpClient, err := commonhttp.NewClient(httpClientCfg)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create HTTP client for OIDC provider: %w", err)
-	}
-	opts := []oidc.ProviderSourceOption{
-		oidc.WithProviderSourceHTTPClient(httpClient),
-	}
-	// create the gRPC connection to the provider source
+	// create the gRPC connection
 	grpcConn, err := commongrpc.NewClient(cfg, grpc.WithTransportCredentials(creds))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create gRPC connection: %w", err)
 	}
-	opts = append(opts, oidc.WithGRPCConn(grpcConn))
-	pc, err := oidc.NewProviderSource(opts...)
+	sm, err := session.NewManager(grpcConn)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create OIDC provider client: %w", err)
+		return nil, fmt.Errorf("failed to create session manager: %w", err)
 	}
-	return pc, nil
-}
-
-func createValkeySessionCache(ctx context.Context, cfg *config.Valkey) (*sessrepo.Repository, error) {
-	valkeyAddress, err := commoncfg.LoadValueFromSourceRef(cfg.Address)
-	if err != nil {
-		return nil, fmt.Errorf("loading valkey address: %w", err)
-	}
-	valkeyUsername, err := commoncfg.LoadValueFromSourceRef(cfg.User)
-	if err != nil {
-		return nil, fmt.Errorf("loading valkey username: %w", err)
-	}
-	valkeyPassword, err := commoncfg.LoadValueFromSourceRef(cfg.Password)
-	if err != nil {
-		return nil, fmt.Errorf("loading valkey password: %w", err)
-	}
-	valkeyOpts := valkey.ClientOption{
-		InitAddress: []string{string(valkeyAddress)},
-		Username:    string(valkeyUsername),
-		Password:    string(valkeyPassword),
-	}
-	if cfg.SecretRef.Type == commoncfg.MTLSSecretType {
-		tlsConfig, err := commoncfg.LoadMTLSConfig(&cfg.SecretRef.MTLS)
-		if err != nil {
-			return nil, fmt.Errorf("loading valkey mTLS config from secret ref: %w", err)
-		}
-		valkeyOpts.TLSConfig = tlsConfig
-	}
-	slogctx.Info(ctx, "Using Valkey for session cache", "address", string(valkeyAddress), "user", string(valkeyUsername))
-	valkeyClient, err := valkey.NewClient(valkeyOpts)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create the Valkey client: %w", err)
-	}
-	return sessrepo.NewRepository(valkeyClient, cfg.Prefix), nil
+	return sm, nil
 }

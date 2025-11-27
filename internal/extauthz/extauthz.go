@@ -3,33 +3,32 @@ package extauthz
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
-	"github.com/openkcm/session-manager/pkg/session"
 	"github.com/samber/oops"
 
 	"github.com/openkcm/extauthz/internal/clientdata"
 	"github.com/openkcm/extauthz/internal/oidc"
 	"github.com/openkcm/extauthz/internal/policies"
 	"github.com/openkcm/extauthz/internal/policies/cedarpolicy"
+	"github.com/openkcm/extauthz/internal/session"
 )
 
 const (
 	DefaultCMKPathPrefix = "/cmk/v1/"
 )
 
-// sessionLoaderInterface defines the interface for loading sessions.
-// We don't use session.Repository directly to avoid depending on
-// unnecessary methods and to make testing easier.
-type sessionLoaderInterface interface {
-	LoadSession(ctx context.Context, sessionID string) (session.Session, error)
+// sessionManagerInterface defines the interface for the session manager.
+// We don't use session.Manager directly to make testing easier.
+type sessionManagerInterface interface {
+	GetSession(ctx context.Context, sessionID, tenantID, fingerprint string) (*session.Session, error)
 }
 
 // oidcHandlerInterface defines the interface for OIDC handling.
 // We don't use oidc.Handler directly to make testing easier.
 type oidcHandlerInterface interface {
 	ParseAndValidate(ctx context.Context, rawToken string, userclaims any, useCache bool) error
-	Introspect(ctx context.Context, issuer, introspectToken string, useCache bool) (oidc.Introspection, error)
 }
 
 type Server struct {
@@ -38,8 +37,8 @@ type Server struct {
 	clientDataSigner       *clientdata.Signer
 	trustedSubjectToRegion map[string]string
 	featureGates           *commoncfg.FeatureGates
-	sessionCache           sessionLoaderInterface
-	cmkPathPrefix          string
+	sessionManager         sessionManagerInterface
+	sessionPathPrefixes    []string
 }
 
 // ServerOption is used to configure a server.
@@ -100,16 +99,24 @@ func WithFeatureGates(fg *commoncfg.FeatureGates) ServerOption {
 	}
 }
 
-func WithSessionCache(sessionCache sessionLoaderInterface) ServerOption {
+func WithSessionManager(sessionManager sessionManagerInterface) ServerOption {
 	return func(server *Server) error {
-		server.sessionCache = sessionCache
+		server.sessionManager = sessionManager
 		return nil
 	}
 }
 
-func WithCMKPathPrefix(cmkPathPrefix string) ServerOption {
+func WithSessionPathPrefixes(sessionPathPrefixes []string) ServerOption {
 	return func(server *Server) error {
-		server.cmkPathPrefix = cmkPathPrefix
+		// make sure they have a trailing /
+		sessionPathPrefixesCopy := make([]string, len(sessionPathPrefixes))
+		for i, p := range sessionPathPrefixes {
+			if !strings.HasSuffix(p, "/") {
+				p += "/"
+			}
+			sessionPathPrefixesCopy[i] = p
+		}
+		server.sessionPathPrefixes = sessionPathPrefixesCopy
 		return nil
 	}
 }
@@ -127,10 +134,10 @@ func NewServer(opts ...ServerOption) (*Server, error) {
 	}
 
 	server := &Server{
-		policyEngine:  policyEngine,
-		oidcHandler:   hdl,
-		cmkPathPrefix: DefaultCMKPathPrefix,
-		featureGates:  &commoncfg.FeatureGates{},
+		policyEngine:        policyEngine,
+		oidcHandler:         hdl,
+		sessionPathPrefixes: []string{},
+		featureGates:        &commoncfg.FeatureGates{},
 	}
 
 	for _, opt := range opts {

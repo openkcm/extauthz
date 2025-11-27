@@ -30,16 +30,10 @@ var (
 	DefaultIssuerClaims = []string{"iss"}
 )
 
-// ProviderClient is an interface for looking up providers for the issuer.
-type ProviderClient interface {
-	Get(ctx context.Context, issuer string) (*Provider, error)
-}
-
 // Handler tracks the set of identity providers to support multi tenancy.
 type Handler struct {
 	issuerClaimKeys []string
 	staticProviders map[string]*Provider
-	providerClient  ProviderClient
 	featureGates    *commoncfg.FeatureGates
 
 	// cache the providers by issuer
@@ -68,13 +62,6 @@ func WithStaticProvider(provider *Provider) HandlerOption {
 
 		handler.RegisterStaticProvider(provider)
 
-		return nil
-	}
-}
-
-func WithProviderClient(providerClient ProviderClient) HandlerOption {
-	return func(handler *Handler) error {
-		handler.providerClient = providerClient
 		return nil
 	}
 }
@@ -247,64 +234,14 @@ func (handler *Handler) ParseAndValidate(ctx context.Context, rawToken string, u
 	return nil
 }
 
-// ProviderFor returns the provider for the given issuer. It either looks up the
-// provider in the internal cache or queries the provider client.
-func (handler *Handler) ProviderFor(ctx context.Context, issuer string) (*Provider, error) {
-	// check the static providers first
+// ProviderFor returns the provider for the given issuer.
+func (handler *Handler) ProviderFor(_ context.Context, issuer string) (*Provider, error) {
+	// check the static providers map
 	if provider, ok := handler.staticProviders[IssuerPrefix+issuer]; ok {
 		return provider, nil
 	}
 
-	slogctx.Info(ctx, "Issuer not found in the static provider list", "issuer", issuer)
-
-	// check the cache then
-	cacheKey := IssuerPrefix + issuer
-	if providerInterface, found := handler.cache.Get(cacheKey); found {
-		if key, ok := providerInterface.(*Provider); ok {
-			return key, nil
-		}
-	}
-
-	slogctx.Info(ctx, "Issuer not found in the provider cache", "issuer", issuer)
-
-	// if we have a provider client, use it to get the provider
-	if handler.providerClient != nil {
-		p, err := handler.providerClient.Get(ctx, issuer)
-		if err != nil {
-			return nil, err
-		}
-		// Cache the item. Constant `cache.DefaultExpiration` means
-		// that this item does not have a custom expiration, but uses
-		// the configured expiration of the cache.
-		// https://pkg.go.dev/github.com/patrickmn/go-cache#Cache.Set
-		handler.cache.Set(cacheKey, p, cache.DefaultExpiration)
-
-		return p, nil
-	}
-
 	return nil, errors.Join(ErrNoProvider, fmt.Errorf("no provider found for issuer %s", issuer))
-}
-
-// Introspect an access or refresh token with the given issuer.
-func (handler *Handler) Introspect(ctx context.Context, issuer, introspectToken string, useCache bool) (Introspection, error) {
-	// parse the issuer URL
-	issuerURL, err := url.Parse(issuer)
-	if err != nil {
-		return Introspection{}, err
-	}
-
-	if issuerURL.Scheme != "https" {
-		return Introspection{}, fmt.Errorf("invalid issuer scheme %s", issuerURL.Scheme)
-	}
-
-	// let the handler lookup the identity provider for the issuer
-	provider, err := handler.ProviderFor(ctx, issuer)
-	if err != nil {
-		return Introspection{}, err
-	}
-
-	// let the handler introspect the token
-	return handler.introspect(ctx, provider, introspectToken, useCache)
 }
 
 // introspect an access or refresh token.
