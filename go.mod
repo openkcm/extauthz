@@ -12,7 +12,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/openkcm/api-sdk v0.13.0
 	github.com/openkcm/common-sdk v1.6.2
-	github.com/openkcm/session-manager v0.10.1
+	github.com/openkcm/session-manager v0.12.2
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/samber/oops v1.19.4
 	github.com/stretchr/testify v1.11.1
