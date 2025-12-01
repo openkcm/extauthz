@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.12](https://github.com/openkcm/extauthz/compare/v0.9.11...v0.9.12) (2025-12-01)
+
+
+### Bug Fixes
+
+* check result handling ([#192](https://github.com/openkcm/extauthz/issues/192)) ([937f7cd](https://github.com/openkcm/extauthz/commit/937f7cdd33c3ce1860531de2b607c3fbdb7e5449))
+
 ## [0.9.11](https://github.com/openkcm/extauthz/compare/v0.9.10...v0.9.11) (2025-12-01)
 
 
