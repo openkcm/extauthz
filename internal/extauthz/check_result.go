@@ -8,11 +8,26 @@ type checkResultCode uint
 
 const (
 	UNKNOWN checkResultCode = iota
-	ALWAYS_ALLOW
+	ALWAYS_ALLOWED
 	ALLOWED
 	DENIED
 	UNAUTHENTICATED
 )
+
+func (c checkResultCode) String() string {
+	switch c {
+	case ALWAYS_ALLOWED:
+		return "always allowed"
+	case ALLOWED:
+		return "allowed"
+	case DENIED:
+		return "denied"
+	case UNAUTHENTICATED:
+		return "unauthenticated"
+	default:
+		return "unknown"
+	}
+}
 
 type checkResult struct {
 	is         checkResultCode

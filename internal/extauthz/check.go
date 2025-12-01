@@ -66,7 +66,7 @@ func (srv *Server) Check(ctx context.Context, req *envoy_auth.CheckRequest) (*en
 	skipClientCertificates := false
 	if srv.featureGates.IsFeatureEnabled(flags.DisableClientCertificateComputation) {
 		slogctx.Error(ctx, "Check() processing of client certificate has been disabled through feature gates")
-		result.is = ALWAYS_ALLOW
+		result.is = ALWAYS_ALLOWED
 		skipClientCertificates = true
 	}
 
@@ -76,7 +76,7 @@ func (srv *Server) Check(ctx context.Context, req *envoy_auth.CheckRequest) (*en
 	skipBearerToken := false
 	if srv.featureGates.IsFeatureEnabled(flags.DisableJWTTokenComputation) {
 		slogctx.Error(ctx, "Check() processing of bearer token has been disabled through feature gates")
-		result.is = ALWAYS_ALLOW
+		result.is = ALWAYS_ALLOWED
 		skipBearerToken = true
 	}
 
@@ -115,7 +115,7 @@ func (srv *Server) Check(ctx context.Context, req *envoy_auth.CheckRequest) (*en
 
 	// Log the result for debugging
 	ctx = slogctx.WithGroup(ctx, "result")
-	slogctx.Debug(ctx, "Check() result",
+	slogctx.Debug(ctx, "Check() result: Access "+result.is.String(),
 		"is", result.is,
 		"info", result.info,
 		"subject", result.subject)
@@ -148,7 +148,7 @@ func (srv *Server) Check(ctx context.Context, req *envoy_auth.CheckRequest) (*en
 		}
 
 		return respondAllowed(headersToAdd, headersToRemove), nil
-	case ALWAYS_ALLOW:
+	case ALWAYS_ALLOWED:
 		return respondAllowed([]*envoy_core.HeaderValueOption{}, []string{}), nil
 	case UNKNOWN, UNAUTHENTICATED:
 		return respondUnauthenticated(result.info), nil
