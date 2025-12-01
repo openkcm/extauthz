@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.9.11](https://github.com/openkcm/extauthz/compare/v0.9.10...v0.9.11) (2025-12-01)
+
+
+### Bug Fixes
+
+* Fix test target ([#188](https://github.com/openkcm/extauthz/issues/188)) ([4f45b40](https://github.com/openkcm/extauthz/commit/4f45b40cad35c6c02ea0dad3a02f9479981a1ab0))
+* update session manager for more debug logs ([#187](https://github.com/openkcm/extauthz/issues/187)) ([a07e932](https://github.com/openkcm/extauthz/commit/a07e932b2e89c210f32336143190717c68a905a4))
+
 ## [0.9.10](https://github.com/openkcm/extauthz/compare/v0.9.9...v0.9.10) (2025-11-27)
 
 
