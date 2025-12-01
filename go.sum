@@ -134,10 +134,8 @@ github.com/opencontainers/image-spec v1.1.1 h1:y0fUlFfIZhPF1W537XOLg0/fcx6zcHCJw
 github.com/opencontainers/image-spec v1.1.1/go.mod h1:qpqAh3Dmcf36wStyyWU+kCeDgrGnAve2nCC8+7h8Q0M=
 github.com/openkcm/api-sdk v0.13.0 h1:34TEAiFe5xXyBVOZPMbFIvDBPrVNZj9kePPSWoaukb4=
 github.com/openkcm/api-sdk v0.13.0/go.mod h1:D6j5ntGP3so7ExG6wZunFOwglzw+ZTEdd/1gB5yqn3c=
-github.com/openkcm/common-sdk v1.6.2 h1:RQeWGXWKQXNv6/popujjwco9tCEwqmqwuqi9Obq5pQ4=
-github.com/openkcm/common-sdk v1.6.2/go.mod h1:U4AbaqwRwcx8wwq1ucDi9Yb3+ejQu8kcTepGfybo5hE=
-github.com/openkcm/session-manager v0.12.2 h1:sxOL9Pxqbi/9Xm1I0GigbybU6ebe1rXjRIeuaZSZWnQ=
-github.com/openkcm/session-manager v0.12.2/go.mod h1:LKnhk5DBKhwmXTg2AqqVnvmab4em5etku8ei85aPRmw=
+github.com/openkcm/common-sdk v1.6.3-0.20251201142447-371564f7495f h1:l3Zf9UTX2CvWUTzJItAhMceAYT1E1wzu9ks62yHmP4o=
+github.com/openkcm/common-sdk v1.6.3-0.20251201142447-371564f7495f/go.mod h1:tz3TSlWoBppdNvX9NwV59u0ccpfFaf2OainGzPWy6hg=
 github.com/patrickmn/go-cache v2.1.0+incompatible h1:HRMgzkcYKYpi3C8ajMPV8OFXaaRUnok+kx1WdO15EQc=
 github.com/patrickmn/go-cache v2.1.0+incompatible/go.mod h1:3Qf8kWWT7OJRJbdiICTKqZju1ZixQ/KpMGzzAfe6+WQ=
 github.com/pborman/getopt v0.0.0-20170112200414-7148bc3a4c30/go.mod h1:85jBQOZwpVEaDAr341tbn15RS4fCAsIst0qp7i8ex1o=
@@ -203,8 +201,8 @@ github.com/tklauser/go-sysconf v0.3.15 h1:VE89k0criAymJ/Os65CSn1IXaol+1wrsFHEB8O
 github.com/tklauser/go-sysconf v0.3.15/go.mod h1:Dmjwr6tYFIseJw7a3dRLJfsHAMXZ3nEnL/aZY+0IuI4=
 github.com/tklauser/numcpus v0.10.0 h1:18njr6LDBk1zuna922MgdjQuJFjrdppsZG60sHGfjso=
 github.com/tklauser/numcpus v0.10.0/go.mod h1:BiTKazU708GQTYF4mB+cmlpT2Is1gLk7XVuEeem8LsQ=
-github.com/valkey-io/valkey-go v1.0.68 h1:bTbfonp49b41DqrF30q+y2JL3gcbjd2IiacFAtO4JBA=
-github.com/valkey-io/valkey-go v1.0.68/go.mod h1:bHmwjIEOrGq/ubOJfh5uMRs7Xj6mV3mQ/ZXUbmqpjqY=
+github.com/valkey-io/valkey-go v1.0.59 h1:W67Z0UY+Qqk3k8NKkFCFlM3X4yQUniixl7dSJAch2Qo=
+github.com/valkey-io/valkey-go v1.0.59/go.mod h1:bHmwjIEOrGq/ubOJfh5uMRs7Xj6mV3mQ/ZXUbmqpjqY=
 github.com/veqryn/slog-context v0.8.0 h1:lDhwAgjwx52K5StqqQzi5d0Y/F4SNyGZbsXGd8MtucM=
 github.com/veqryn/slog-context v0.8.0/go.mod h1:8rsT72p0kzzN9lmkwtabIhxg7ZkpnKblt9x3Eix8Tc0=
 github.com/veqryn/slog-context/otel v0.8.0 h1:tuMAAb/aXImUBTXz+RmNkTu6eBdzZAde8cZM/UL0HdI=
