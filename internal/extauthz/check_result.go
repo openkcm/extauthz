@@ -76,6 +76,8 @@ func (cr *checkResult) merge(other checkResult) {
 		cr.is = other.is
 		cr.info = other.info
 		cr.subject = other.subject
+		cr.givenname = other.givenname
+		cr.familyname = other.familyname
 		cr.email = other.email
 		cr.region = other.region
 		cr.groups = other.groups
