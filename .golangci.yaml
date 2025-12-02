@@ -101,8 +101,3 @@ formatters:
       - third_party$
       - builtin$
       - examples$
-
-issues:
-  exclude-files:
-    - "zz_generated.*\\.go$"
-    - "tmp/.*"
