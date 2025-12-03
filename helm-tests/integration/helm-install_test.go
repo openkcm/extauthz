@@ -128,6 +128,7 @@ func TestHelmInstall(t *testing.T) {
 }
 
 func waitForPodCreation(ctx context.Context, t *testing.T, kubeOpts *k8s.KubectlOptions, labelSelector string) []corev1.Pod {
+	t.Helper()
 	for {
 		select {
 		case <-ctx.Done():
@@ -143,6 +144,7 @@ func waitForPodCreation(ctx context.Context, t *testing.T, kubeOpts *k8s.Kubectl
 }
 
 func waitForPodAvailability(ctx context.Context, t *testing.T, kubeOpts *k8s.KubectlOptions, podName string) {
+	t.Helper()
 	for {
 		select {
 		case <-ctx.Done():

@@ -28,6 +28,7 @@ func TestService(t *testing.T) {
 			opts:      &helm.Options{},
 			wantError: false,
 			testFunc: func(t *testing.T, resource *corev1.Service) {
+				t.Helper()
 				require.Equal(t, appName, resource.Name)
 				require.Equal(t, "default", resource.Namespace)
 				require.Equal(t, "ClusterIP", string(resource.Spec.Type))
@@ -50,6 +51,7 @@ func TestService(t *testing.T) {
 			},
 			wantError: false,
 			testFunc: func(t *testing.T, resource *corev1.Service) {
+				t.Helper()
 				require.Equal(t, appName, resource.Name)
 				require.Equal(t, "foo", resource.Namespace)
 				require.Equal(t, "NodePort", string(resource.Spec.Type))
@@ -63,8 +65,9 @@ func TestService(t *testing.T) {
 
 	// run the tests
 	for _, tc := range tests {
-		tc := tc // capture range variable for parallel tests
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			// Act
 			got, err := helm.RenderTemplateE(t, tc.opts, path, appName, []string{yamlFile})
 

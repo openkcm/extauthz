@@ -29,6 +29,7 @@ func TestDeployment(t *testing.T) {
 			},
 			wantError: false,
 			testFunc: func(t *testing.T, resource *corev1.Deployment) {
+				t.Helper()
 				require.Equal(t, appName, resource.Name)
 				require.Equal(t, "default", resource.Namespace)
 				require.Equal(t, "registry-access", resource.Spec.Template.Spec.ImagePullSecrets[0].Name)
@@ -46,6 +47,7 @@ func TestDeployment(t *testing.T) {
 			},
 			wantError: false,
 			testFunc: func(t *testing.T, resource *corev1.Deployment) {
+				t.Helper()
 				require.Equal(t, appName, resource.Name)
 				require.Equal(t, "default", resource.Namespace)
 				require.Equal(t, 3, int(*resource.Spec.Replicas))
@@ -57,8 +59,9 @@ func TestDeployment(t *testing.T) {
 
 	// run the tests
 	for _, tc := range tests {
-		tc := tc // capture range variable for parallel tests
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			// Act
 			got, err := helm.RenderTemplateE(t, tc.opts, path, appName, []string{yamlFile})
 
