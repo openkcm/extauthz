@@ -30,6 +30,9 @@ type Config struct {
 
 	// Session Manager configuration (optional)
 	SessionManager commoncfg.GRPCClient `yaml:"sessionManager"`
+
+	// CSRFSecret is a key using to generate the CSRF token.
+	CSRFSecret commoncfg.SourceRef `yaml:"csrfSecret"`
 }
 
 // ClientData configuration

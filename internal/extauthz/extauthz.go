@@ -39,6 +39,7 @@ type Server struct {
 	featureGates           *commoncfg.FeatureGates
 	sessionManager         sessionManagerInterface
 	sessionPathPrefixes    []string
+	csrfSecret             []byte
 }
 
 // ServerOption is used to configure a server.
@@ -117,6 +118,13 @@ func WithSessionPathPrefixes(sessionPathPrefixes []string) ServerOption {
 			sessionPathPrefixesCopy[i] = p
 		}
 		server.sessionPathPrefixes = sessionPathPrefixesCopy
+		return nil
+	}
+}
+
+func WithCSRFSecret(secret []byte) ServerOption {
+	return func(server *Server) error {
+		server.csrfSecret = secret
 		return nil
 	}
 }

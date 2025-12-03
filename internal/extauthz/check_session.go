@@ -5,13 +5,15 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/openkcm/common-sdk/pkg/csrf"
+
 	slogctx "github.com/veqryn/slog-context"
 
 	"github.com/openkcm/extauthz/internal/policies/cedarpolicy"
 )
 
 // checkSession checks the request using the session Cookie.
-func (srv *Server) checkSession(ctx context.Context, sessionCookie *http.Cookie, tenantID, fingerprint, method, host, path string) checkResult {
+func (srv *Server) checkSession(ctx context.Context, sessionCookie *http.Cookie, tenantID, fingerprint, method, host, path, csrfToken string) checkResult {
 	if sessionCookie == nil {
 		slogctx.Debug(ctx, "Session cookie is nil")
 		return checkResult{is: UNKNOWN}
@@ -34,6 +36,14 @@ func (srv *Server) checkSession(ctx context.Context, sessionCookie *http.Cookie,
 		slogctx.Debug(ctx, "Session is not valid")
 		return checkResult{is: UNAUTHENTICATED,
 			info: "session is not valid",
+		}
+	}
+
+	if !csrf.Validate(csrfToken, sessionCookie.Value, srv.csrfSecret) {
+		slogctx.Debug(ctx, "CSRF token is not valid")
+		return checkResult{
+			is:   UNAUTHENTICATED,
+			info: "CSRF token is not valid",
 		}
 	}
 
