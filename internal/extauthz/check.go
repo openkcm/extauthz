@@ -2,6 +2,7 @@ package extauthz
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -21,6 +22,10 @@ const (
 	HeaderAuthorization       = "authorization"
 	HeaderCookie              = "cookie"
 	SessionCookieName         = "__Host-Http-SESSION"
+	LogPrefixCheck            = "Check(): "
+	LogPrefixClientCert       = "Client Certs: "
+	LogPrefixBearerToken      = "Bearer Token: "
+	LogPrefixSessionCookie    = "Session cookie: "
 )
 
 // Ensure Server implements the AuthorizationServer interface
@@ -34,7 +39,7 @@ func (srv *Server) Check(ctx context.Context, req *envoy_auth.CheckRequest) (*en
 		req.GetAttributes().GetRequest() == nil ||
 		req.GetAttributes().GetRequest().GetHttp() == nil ||
 		req.GetAttributes().GetRequest().GetHttp().GetHeaders() == nil {
-		slogctx.Debug(ctx, "Check() called with nil request")
+		slogctx.Debug(ctx, LogPrefixCheck+"called with nil request")
 		return respondUnauthenticated("Invalid request"), nil
 	}
 
@@ -44,7 +49,7 @@ func (srv *Server) Check(ctx context.Context, req *envoy_auth.CheckRequest) (*en
 	method := httpreq.GetMethod()
 	host := httpreq.GetHost()
 	path := httpreq.GetPath()
-	slogctx.Debug(ctx, "Check() called",
+	ctx = slogctx.With(ctx,
 		"id", httpreq.GetId(),
 		"protocol", httpreq.GetProtocol(),
 		"method", method,
@@ -52,6 +57,7 @@ func (srv *Server) Check(ctx context.Context, req *envoy_auth.CheckRequest) (*en
 		"host", host,
 		"path", path,
 	)
+	slogctx.Debug(ctx, LogPrefixCheck+"called")
 
 	// Authenticate in the following order:
 	// 1. Client certificates
@@ -65,7 +71,7 @@ func (srv *Server) Check(ctx context.Context, req *envoy_auth.CheckRequest) (*en
 	// TODO: Remove this hacking code when session support is added and tested
 	skipClientCertificates := false
 	if srv.featureGates.IsFeatureEnabled(flags.DisableClientCertificateComputation) {
-		slogctx.Error(ctx, "Check() processing of client certificate has been disabled through feature gates")
+		slogctx.Error(ctx, LogPrefixCheck+"processing of client certificate has been disabled through feature gates")
 		result.is = ALWAYS_ALLOWED
 		skipClientCertificates = true
 	}
@@ -75,7 +81,7 @@ func (srv *Server) Check(ctx context.Context, req *envoy_auth.CheckRequest) (*en
 	// TODO: Remove this hacking code when session support is added and tested
 	skipBearerToken := false
 	if srv.featureGates.IsFeatureEnabled(flags.DisableJWTTokenComputation) {
-		slogctx.Error(ctx, "Check() processing of bearer token has been disabled through feature gates")
+		slogctx.Error(ctx, LogPrefixCheck+"processing of bearer token has been disabled through feature gates")
 		result.is = ALWAYS_ALLOWED
 		skipBearerToken = true
 	}
@@ -83,12 +89,16 @@ func (srv *Server) Check(ctx context.Context, req *envoy_auth.CheckRequest) (*en
 	// TODO: Remove this hacking code when session support is added and tested
 	if !skipClientCertificates {
 		// 1. Client certificates (if any)
-		slogctx.Debug(ctx, "Checking if client certificates are present")
-		if clientCerts, found := extractClientCertificates(ctx, headers); found {
-			slogctx.Debug(ctx, "Checking client certificate")
+		slogctx.Debug(ctx, LogPrefixClientCert+"checking for presence")
+		if clientCerts, found := extractClientCertificates(ctx, headers); !found {
+			slogctx.Debug(ctx, LogPrefixClientCert+"not found")
+		} else {
+			slogctx.Debug(ctx, LogPrefixClientCert+"found", "count", len(clientCerts))
 			for nr, part := range clientCerts {
-				slogctx.Debug(ctx, "Checking client certificate", "part", nr)
-				result.merge(srv.checkClientCert(ctx, part, method, host, path))
+				slogctx.Debug(ctx, fmt.Sprintf(LogPrefixClientCert+"checking number %d", nr))
+				r := srv.checkClientCert(ctx, part, method, host, path)
+				slogctx.Debug(ctx, LogPrefixClientCert+"access "+r.is.String(), "part", nr)
+				result.merge(r)
 				result.withXFCCHeader = true
 			}
 		}
@@ -97,28 +107,36 @@ func (srv *Server) Check(ctx context.Context, req *envoy_auth.CheckRequest) (*en
 	// TODO: Remove this hacking code when session support is added and tested
 	if !skipBearerToken {
 		// 2. Bearer token in the authorization header (if any)
-		slogctx.Debug(ctx, "Checking if bearer token is present in authorization header")
-		if bearerToken, found := extractBearerToken(ctx, headers); found {
-			slogctx.Debug(ctx, "Checking bearer token from authorization header")
-			result.merge(srv.checkJWTToken(ctx, bearerToken, method, host, path))
+		slogctx.Debug(ctx, LogPrefixBearerToken+"checking for presence")
+		if bearerToken, found := extractBearerToken(ctx, headers); !found {
+			slogctx.Debug(ctx, LogPrefixBearerToken+"not found")
+		} else {
+			slogctx.Debug(ctx, LogPrefixBearerToken+"found ... checking")
+			r := srv.checkJWTToken(ctx, bearerToken, method, host, path)
+			slogctx.Debug(ctx, LogPrefixBearerToken+"access "+r.is.String())
+			result.merge(r)
 		}
 	}
 
 	// 3. Session cookie (if any and only if session manager is configured)
 	if srv.sessionManager != nil {
-		slogctx.Debug(ctx, "Checking if session cookie is present")
-		if sessionCookie, tenantID, fingerPrint, found := srv.extractSessionDetails(ctx, httpreq, path); found {
-			slogctx.Debug(ctx, "Checking session cookie")
-			result.merge(srv.checkSession(ctx, sessionCookie, tenantID, fingerPrint, method, host, path))
+		slogctx.Debug(ctx, LogPrefixSessionCookie+"checking for presence")
+		if sessionCookie, tenantID, fingerPrint, found := srv.extractSessionDetails(ctx, httpreq, path); !found {
+			slogctx.Debug(ctx, LogPrefixSessionCookie+"not found")
+		} else {
+			slogctx.Debug(ctx, LogPrefixSessionCookie+"found ... checking")
+			r := srv.checkSession(ctx, sessionCookie, tenantID, fingerPrint, method, host, path)
+			slogctx.Debug(ctx, LogPrefixSessionCookie+"access "+r.is.String())
+			result.merge(r)
 		}
 	}
 
 	// Log the result for debugging
 	ctx = slogctx.WithGroup(ctx, "result")
-	slogctx.Debug(ctx, "Check() result: Access "+result.is.String(),
-		"is", result.is,
+	slogctx.Debug(ctx, LogPrefixCheck+"overall result: access "+result.is.String(),
 		"info", result.info,
-		"subject", result.subject)
+		"subject", result.subject,
+	)
 
 	// Prepare the response
 	switch result.is {
@@ -134,11 +152,11 @@ func (srv *Server) Check(ctx context.Context, req *envoy_auth.CheckRequest) (*en
 			result.toClientDataOptions()...,
 		)
 		if err != nil {
-			slogctx.Error(ctx, "Failed to encode client data", "error", err)
+			slogctx.Error(ctx, LogPrefixCheck+"failed to encode client data", "error", err)
 			return respondInternalServerError(), nil
 		}
 
-		slogctx.Debug(ctx, "Client data",
+		slogctx.Debug(ctx, LogPrefixCheck+"client data",
 			auth.HeaderClientData, b64data,
 			auth.HeaderClientDataSignature, b64sig,
 		)
@@ -160,13 +178,13 @@ func (srv *Server) Check(ctx context.Context, req *envoy_auth.CheckRequest) (*en
 func extractClientCertificates(ctx context.Context, headers map[string]string) ([]string, bool) {
 	certHeader, found := headers[HeaderForwardedClientCert]
 	if !found {
-		slogctx.Debug(ctx, "No XFCC header found", "headers", mapKeys(headers))
+		slogctx.Debug(ctx, LogPrefixClientCert+"no XFCC header found", "headers", mapKeys(headers))
 		return nil, false
 	}
 	// there can be multiple certificates in the XFCC header
 	certHeaderParts, err := splitCertHeader(certHeader)
 	if err != nil {
-		slogctx.Debug(ctx, "Failed to split XFCC header", "error", err)
+		slogctx.Debug(ctx, LogPrefixClientCert+"failed to split XFCC header", "error", err)
 		return nil, false
 	}
 
@@ -176,13 +194,13 @@ func extractClientCertificates(ctx context.Context, headers map[string]string) (
 func extractBearerToken(ctx context.Context, headers map[string]string) (string, bool) {
 	authHeader, found := headers[HeaderAuthorization]
 	if !found {
-		slogctx.Debug(ctx, "No authorization header found", "headers", mapKeys(headers))
+		slogctx.Debug(ctx, LogPrefixBearerToken+"no authorization header found", "headers", mapKeys(headers))
 		return "", false
 	}
 
 	prefix, bearerToken, found := strings.Cut(authHeader, " ")
 	if !found || prefix != "Bearer" {
-		slogctx.Debug(ctx, "Authorization header does not contain Bearer token")
+		slogctx.Debug(ctx, LogPrefixBearerToken+"authorization header does not contain Bearer token")
 		return "", false
 	}
 
@@ -190,7 +208,6 @@ func extractBearerToken(ctx context.Context, headers map[string]string) (string,
 }
 
 func (srv *Server) extractSessionDetails(ctx context.Context, httpreq *envoy_auth.AttributeContext_HttpRequest, path string) (*http.Cookie, string, string, bool) {
-	ctx = slogctx.With(ctx, "path", path)
 	headers := httpreq.GetHeaders()
 
 	// extract tenant ID from the path
@@ -204,36 +221,36 @@ func (srv *Server) extractSessionDetails(ctx context.Context, httpreq *envoy_aut
 		tenantID = parts[0]
 	}
 	if tenantID == "" {
-		slogctx.Debug(ctx, "Failed to extract tenant ID from path", "sessionPathPrefixes", srv.sessionPathPrefixes)
+		slogctx.Debug(ctx, LogPrefixSessionCookie+"failed to extract tenant ID from path", "sessionPathPrefixes", srv.sessionPathPrefixes)
 		return nil, "", "", false
 	}
 
 	// Determine the fingerprint for this request.
 	fp, err := fingerprint.NewBuilder().FromEnvoyHTTPRequest(httpreq)
 	if err != nil {
-		slogctx.Debug(ctx, "Failed to compute fingerprint from request", "error", err)
+		slogctx.Debug(ctx, LogPrefixSessionCookie+"failed to compute fingerprint from request", "error", err)
 		return nil, "", "", false
 	}
 
 	// extract the session cookie
 	cookieHeader, found := headers[HeaderCookie]
 	if !found {
-		slogctx.Debug(ctx, "No cookie header found", "headers", mapKeys(headers))
+		slogctx.Debug(ctx, LogPrefixSessionCookie+"no cookie header found", "headers", mapKeys(headers))
 		return nil, "", "", false
 	}
 	cookies, err := http.ParseCookie(cookieHeader)
 	if err != nil {
-		slogctx.Debug(ctx, "Failed to parse cookie header", "error", err)
+		slogctx.Debug(ctx, LogPrefixSessionCookie+"failed to parse cookie header", "error", err)
 		return nil, "", "", false
 	}
 	for _, cookie := range cookies {
 		if cookie.Name == SessionCookieName {
-			slogctx.Debug(ctx, "Found session cookie", "name", cookie.Name)
+			slogctx.Debug(ctx, LogPrefixSessionCookie+"found session cookie", "name", cookie.Name)
 			return cookie, tenantID, fp, true
 		}
 	}
 
-	slogctx.Debug(ctx, "Session cookie not found", "sessionCookieName", SessionCookieName)
+	slogctx.Debug(ctx, LogPrefixSessionCookie+"session cookie not found", "sessionCookieName", SessionCookieName)
 	return nil, "", "", false
 }
 
