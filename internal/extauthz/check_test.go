@@ -12,6 +12,7 @@ import (
 
 	"github.com/gogo/googleapis/google/rpc"
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
+	"github.com/openkcm/common-sdk/pkg/csrf"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
@@ -99,6 +100,10 @@ func createFileWithGeneratedKey(filepath string) error {
 }
 
 func TestCheck(t *testing.T) {
+	const csrfSecret = "secret"
+	const sessionID = "mySessionID"
+	csrfToken := csrf.NewToken(sessionID, []byte(csrfSecret))
+
 	// Arrange
 	defaultFeatureGates := &commoncfg.FeatureGates{
 		clientdata.EnrichHeaderWithClientRegion: true,
@@ -203,7 +208,7 @@ func TestCheck(t *testing.T) {
 							Method:  "GET",
 							Host:    "our.service.com",
 							Path:    "/cmk/v1/myTenantID/bar",
-							Headers: map[string]string{"cookie": "__Host-Http-SESSION=mySessionID"}}}}},
+							Headers: map[string]string{"cookie": "__Host-Http-SESSION=" + sessionID, HeaderCSRFToken: csrfToken}}}}},
 			setupMocks: func(msm *MockSessionManager) {
 				msm.On("GetSession", mock.Anything, "mySessionID", "myTenantID", mock.Anything).
 					Return(&session.Session{
@@ -216,6 +221,52 @@ func TestCheck(t *testing.T) {
 			},
 			wantError: false,
 			wantCode:  rpc.OK,
+		}, {
+			name:         "with malformed CSRF token",
+			featureGates: defaultFeatureGates,
+			request: &envoy_auth.CheckRequest{
+				Attributes: &envoy_auth.AttributeContext{
+					Request: &envoy_auth.AttributeContext_Request{
+						Http: &envoy_auth.AttributeContext_HttpRequest{
+							Method:  "GET",
+							Host:    "our.service.com",
+							Path:    "/cmk/v1/myTenantID/bar",
+							Headers: map[string]string{"cookie": "__Host-Http-SESSION=" + sessionID, HeaderCSRFToken: "malformed CSRF token"}}}}},
+			setupMocks: func(msm *MockSessionManager) {
+				msm.On("GetSession", mock.Anything, "mySessionID", "myTenantID", mock.Anything).
+					Return(&session.Session{
+						Valid:      true,
+						Subject:    "mySessionMe",
+						Issuer:     "https://127.0.0.1:8443",
+						GivenName:  "Chris",
+						FamilyName: "Burkert",
+					}, nil)
+			},
+			wantError: false,
+			wantCode:  rpc.UNAUTHENTICATED,
+		}, {
+			name:         "with malformed cookie",
+			featureGates: defaultFeatureGates,
+			request: &envoy_auth.CheckRequest{
+				Attributes: &envoy_auth.AttributeContext{
+					Request: &envoy_auth.AttributeContext_Request{
+						Http: &envoy_auth.AttributeContext_HttpRequest{
+							Method:  "GET",
+							Host:    "our.service.com",
+							Path:    "/cmk/v1/myTenantID/bar",
+							Headers: map[string]string{"cookie": "__Host-Http-SESSION=" + "malformedSessionID", HeaderCSRFToken: "malformed CSRF token"}}}}},
+			setupMocks: func(msm *MockSessionManager) {
+				msm.On("GetSession", mock.Anything, "malformedSessionID", "myTenantID", mock.Anything).
+					Return(&session.Session{
+						Valid:      true,
+						Subject:    "mySessionMe",
+						Issuer:     "https://127.0.0.1:8443",
+						GivenName:  "Chris",
+						FamilyName: "Burkert",
+					}, nil)
+			},
+			wantError: false,
+			wantCode:  rpc.UNAUTHENTICATED,
 		}, {
 			name:            "registry service - system",
 			featureGates:    defaultFeatureGates,
@@ -284,7 +335,8 @@ func TestCheck(t *testing.T) {
 				WithSessionManager(mockSessionManager),
 				WithClientDataSigner(signer),
 				WithPolicyEngine(pe),
-				WithFeatureGates(tc.featureGates))
+				WithFeatureGates(tc.featureGates),
+				WithCSRFSecret([]byte(csrfSecret)))
 			if err != nil {
 				t.Fatalf("could not create server: %s", err)
 			}

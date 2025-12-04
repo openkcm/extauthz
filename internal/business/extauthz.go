@@ -68,6 +68,13 @@ func createExtAuthZServer(ctx context.Context, cfg *config.Config) (*extauthz.Se
 		opts = append(opts, extauthz.WithSessionPathPrefixes(cfg.SessionPathPrefixes))
 	}
 
+	csrfSecret, err := commoncfg.LoadValueFromSourceRef(cfg.CSRFSecret)
+	if err != nil {
+		return nil, fmt.Errorf("loading csrf secret: %w", err)
+	}
+
+	opts = append(opts, extauthz.WithCSRFSecret(csrfSecret))
+
 	// Create the ExtAuthZ server
 	srv, err := extauthz.NewServer(opts...)
 	if err != nil {

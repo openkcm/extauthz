@@ -21,6 +21,7 @@ const (
 	HeaderForwardedClientCert = "x-forwarded-client-cert"
 	HeaderAuthorization       = "authorization"
 	HeaderCookie              = "cookie"
+	HeaderCSRFToken           = "X-CSRF-Token"
 	SessionCookieName         = "__Host-Http-SESSION"
 	LogPrefixCheck            = "Check(): "
 	LogPrefixClientCert       = "Client Certs: "
@@ -125,7 +126,8 @@ func (srv *Server) Check(ctx context.Context, req *envoy_auth.CheckRequest) (*en
 			slogctx.Debug(ctx, LogPrefixSessionCookie+"not found")
 		} else {
 			slogctx.Debug(ctx, LogPrefixSessionCookie+"found ... checking")
-			r := srv.checkSession(ctx, sessionCookie, tenantID, fingerPrint, method, host, path)
+			csrfToken := headers[HeaderCSRFToken]
+			r := srv.checkSession(ctx, sessionCookie, tenantID, fingerPrint, method, host, path, csrfToken)
 			slogctx.Debug(ctx, LogPrefixSessionCookie+"access "+r.is.String())
 			result.merge(r)
 		}
