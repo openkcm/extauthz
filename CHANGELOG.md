@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.10.0](https://github.com/openkcm/extauthz/compare/v0.9.12...v0.10.0) (2025-12-08)
+
+
+### Features
+
+* validate CSRF token ([#198](https://github.com/openkcm/extauthz/issues/198)) ([707b710](https://github.com/openkcm/extauthz/commit/707b71022c74657fb4a2ed6070e144e680c81bd4))
+
+
+### Bug Fixes
+
+* Fix linter error ([#195](https://github.com/openkcm/extauthz/issues/195)) ([ce57a6a](https://github.com/openkcm/extauthz/commit/ce57a6ac6aee02437a24b2c653a408c3932449a7))
+* improve debug logging ([#194](https://github.com/openkcm/extauthz/issues/194)) ([7497d15](https://github.com/openkcm/extauthz/commit/7497d1593133d7409abb0055900808ec32cfd3e1))
+* only log on failing CSRF validation ([#201](https://github.com/openkcm/extauthz/issues/201)) ([d572783](https://github.com/openkcm/extauthz/commit/d572783522218e5f6c872d9894df04a4f4f984d8))
+
 ## [0.9.12](https://github.com/openkcm/extauthz/compare/v0.9.11...v0.9.12) (2025-12-01)
 
 
