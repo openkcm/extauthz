@@ -77,3 +77,8 @@ data:
     sessionManager:
       {{- toYaml . | nindent 6 }}
     {{- end }}
+
+    {{- with .Values.config.csrfSecret }}
+    csrfSecret:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
