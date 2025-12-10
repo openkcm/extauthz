@@ -134,10 +134,6 @@ github.com/opencontainers/image-spec v1.1.1 h1:y0fUlFfIZhPF1W537XOLg0/fcx6zcHCJw
 github.com/opencontainers/image-spec v1.1.1/go.mod h1:qpqAh3Dmcf36wStyyWU+kCeDgrGnAve2nCC8+7h8Q0M=
 github.com/openkcm/api-sdk v0.13.0 h1:34TEAiFe5xXyBVOZPMbFIvDBPrVNZj9kePPSWoaukb4=
 github.com/openkcm/api-sdk v0.13.0/go.mod h1:D6j5ntGP3so7ExG6wZunFOwglzw+ZTEdd/1gB5yqn3c=
-github.com/openkcm/common-sdk v1.7.0 h1:cWHs6SozheYA6Y8/EwybciGQy1/K5elMcRsL1t7yHh4=
-github.com/openkcm/common-sdk v1.7.0/go.mod h1:K9B0cFYBNq+ORyi9IfXiuWQSuRBC1Jto/57vISnqCXY=
-github.com/openkcm/common-sdk v1.7.1-0.20251202131107-9c4ba9c80447 h1:oLs0rKOT1Ax8I7Nl2Qs6GX40O2s1iQYOagHE/D8A/t4=
-github.com/openkcm/common-sdk v1.7.1-0.20251202131107-9c4ba9c80447/go.mod h1:K9B0cFYBNq+ORyi9IfXiuWQSuRBC1Jto/57vISnqCXY=
 github.com/openkcm/common-sdk v1.8.0 h1:sagP8W7HBLShr9eaRQvHCKxqklwrpVD7+0Ka7c01hGA=
 github.com/openkcm/common-sdk v1.8.0/go.mod h1:K9B0cFYBNq+ORyi9IfXiuWQSuRBC1Jto/57vISnqCXY=
 github.com/patrickmn/go-cache v2.1.0+incompatible h1:HRMgzkcYKYpi3C8ajMPV8OFXaaRUnok+kx1WdO15EQc=
