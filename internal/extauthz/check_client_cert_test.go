@@ -145,9 +145,7 @@ func TestCheckClientCert(t *testing.T) {
 				t.Fatalf("could not create policy engine: %s", err)
 			}
 
-			signer, err := clientdata.NewSigner(&commoncfg.FeatureGates{
-				clientdata.DisableClientDataComputation: true,
-			}, &config.ClientData{
+			signer, err := clientdata.NewSigner(&commoncfg.FeatureGates{}, &config.ClientData{
 				SigningKeyIDFilePath: filepath.Join(dir, "keyId"),
 			})
 			require.NoError(t, err)

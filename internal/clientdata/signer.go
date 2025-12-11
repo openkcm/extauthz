@@ -2,7 +2,6 @@ package clientdata
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"path/filepath"
 
@@ -26,16 +25,9 @@ const (
 	EnrichHeaderWithClientRegion = "enrich-header-with-client-region"
 	// EnrichHeaderWithClientType if set on true is including the client type. information in the headers
 	EnrichHeaderWithClientType = "enrich-header-with-client-type"
-	// DisableClientDataComputation if set on true the client data is not generated on the headers
-	DisableClientDataComputation = "disable-client-data-computation"
-)
-
-var (
-	ErrComputationNotEnabled = errors.New("computation of client data not enabled")
 )
 
 type Signer struct {
-	enabled      bool
 	featureGates *commoncfg.FeatureGates
 
 	keyIdFileName    string
@@ -43,11 +35,6 @@ type Signer struct {
 }
 
 func NewSigner(featureGates *commoncfg.FeatureGates, cfg *config.ClientData) (*Signer, error) {
-	cdcDisabled := featureGates.IsFeatureEnabled(DisableClientDataComputation)
-	if cdcDisabled {
-		return &Signer{}, nil
-	}
-
 	path, keyIDFileName := filepath.Split(cfg.SigningKeyIDFilePath)
 
 	signingKeyLoader, err := loader.Create(
@@ -60,7 +47,6 @@ func NewSigner(featureGates *commoncfg.FeatureGates, cfg *config.ClientData) (*S
 	}
 
 	return &Signer{
-		enabled:          true,
 		keyIdFileName:    keyIDFileName,
 		signingKeyLoader: signingKeyLoader,
 		featureGates:     featureGates,
@@ -68,24 +54,12 @@ func NewSigner(featureGates *commoncfg.FeatureGates, cfg *config.ClientData) (*S
 }
 
 func (c *Signer) SigningKeyID() (string, error) {
-	if c.IsDisabled() {
-		return "", nil
-	}
-
 	// Load the signing key ID file, which points to the actual signing key file
 	keyIDBytes, exist := c.signingKeyLoader.Storage().Get(c.keyIdFileName)
 	if !exist {
 		return "", fmt.Errorf("signing key ID file %q not found in storage", c.keyIdFileName)
 	}
 	return string(bytes.TrimSpace(keyIDBytes)), nil
-}
-
-func (c *Signer) Enabled() bool {
-	return c.enabled
-}
-
-func (c *Signer) IsDisabled() bool {
-	return !c.enabled
 }
 
 func (c *Signer) Sign(opts ...Option) (string, string, error) {
@@ -115,18 +89,10 @@ func (c *Signer) Sign(opts ...Option) (string, string, error) {
 }
 
 func (c *Signer) Start() error {
-	if c.IsDisabled() {
-		return nil
-	}
-
 	return c.signingKeyLoader.Start()
 }
 
 func (c *Signer) Close() error {
-	if c.IsDisabled() {
-		return nil
-	}
-
 	return c.signingKeyLoader.Close()
 }
 
@@ -142,10 +108,6 @@ func (c *Signer) lookupByKeys(keys ...string) ([]byte, bool) {
 }
 
 func (c *Signer) create(opts ...Option) (*auth.ClientData, error) {
-	if c.IsDisabled() {
-		return nil, ErrComputationNotEnabled
-	}
-
 	signingKeyID, err := c.SigningKeyID()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get signing key ID: %w", err)

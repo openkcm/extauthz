@@ -146,7 +146,7 @@ func (srv *Server) Check(ctx context.Context, req *envoy_auth.CheckRequest) (*en
 		headersToAdd := []*envoy_core.HeaderValueOption{}
 		headersToRemove := []string{HeaderForwardedClientCert}
 
-		if srv.clientDataSigner == nil || srv.clientDataSigner.IsDisabled() {
+		if srv.clientDataSigner == nil {
 			return respondAllowed(headersToAdd, headersToRemove), nil
 		}
 
