@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.1](https://github.com/openkcm/extauthz/compare/v0.10.0...v0.10.1) (2025-12-17)
+
+
+### Bug Fixes
+
+* Fix linter error ([#204](https://github.com/openkcm/extauthz/issues/204)) ([ff40fac](https://github.com/openkcm/extauthz/commit/ff40fac5214e8b1e7258b487c35fb05213292140))
+
 ## [0.10.0](https://github.com/openkcm/extauthz/compare/v0.9.12...v0.10.0) (2025-12-08)
 
 
