@@ -2,6 +2,7 @@ package extauthz
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"net/http"
 
@@ -40,7 +41,11 @@ func (srv *Server) checkSession(ctx context.Context, sessionCookie *http.Cookie,
 	}
 
 	if !csrf.Validate(csrfToken, sessionCookie.Value, srv.csrfSecret) {
-		slogctx.Debug(ctx, "CSRF token is not valid")
+		tokenHash := sha256.New().Sum([]byte(csrfToken))
+		cookieHash := sha256.New().Sum([]byte(sessionCookie.Value))
+		csrfTokenHash := sha256.New().Sum(srv.csrfSecret)
+
+		slogctx.Debug(ctx, "CSRF token is not valid", "token_hash", tokenHash[:5], "cookie_hash", cookieHash[:5], "csrf_token_hash", csrfTokenHash[:5])
 		// TODO: remove comment when CSRF validation is well tested
 		// return checkResult{
 		// 	is:   UNAUTHENTICATED,
