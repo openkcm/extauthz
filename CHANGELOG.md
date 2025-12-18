@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.2](https://github.com/openkcm/extauthz/compare/v0.11.1...v0.11.2) (2025-12-18)
+
+
+### Bug Fixes
+
+* send 403 on permission denied ([#212](https://github.com/openkcm/extauthz/issues/212)) ([f25a9b0](https://github.com/openkcm/extauthz/commit/f25a9b0e788fbe6e085ad481e2cb1b0f9cb16475))
+
 ## [0.11.1](https://github.com/openkcm/extauthz/compare/v0.11.0...v0.11.1) (2025-12-18)
 
 
