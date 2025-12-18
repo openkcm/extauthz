@@ -208,7 +208,7 @@ func TestCheck(t *testing.T) {
 							Method:  "GET",
 							Host:    "our.service.com",
 							Path:    "/cmk/v1/myTenantID/bar",
-							Headers: map[string]string{"cookie": "__Host-Http-SESSION=" + sessionID, HeaderCSRFToken: csrfToken}}}}},
+							Headers: map[string]string{"cookie": "__Host-Http-SESSION-myTenantID=" + sessionID, HeaderCSRFToken: csrfToken}}}}},
 			setupMocks: func(msm *MockSessionManager) {
 				msm.On("GetSession", mock.Anything, "mySessionID", "myTenantID", mock.Anything).
 					Return(&session.Session{
