@@ -22,7 +22,7 @@ const (
 	HeaderAuthorization       = "authorization"
 	HeaderCookie              = "cookie"
 	HeaderCSRFToken           = "X-CSRF-Token"
-	SessionCookieName         = "__Host-Http-SESSION"
+	SessionCookiePrefix       = "__Host-Http-SESSION-"
 	LogPrefixCheck            = "Check(): "
 	LogPrefixClientCert       = "Client Certs: "
 	LogPrefixBearerToken      = "Bearer Token: "
@@ -227,14 +227,7 @@ func (srv *Server) extractSessionDetails(ctx context.Context, httpreq *envoy_aut
 		return nil, "", "", false
 	}
 
-	// Determine the fingerprint for this request.
-	fp, err := fingerprint.NewBuilder().FromEnvoyHTTPRequest(httpreq)
-	if err != nil {
-		slogctx.Debug(ctx, LogPrefixSessionCookie+"failed to compute fingerprint from request", "error", err)
-		return nil, "", "", false
-	}
-
-	// extract the session cookie
+	// extract the tenant specific session cookie
 	cookieHeader, found := headers[HeaderCookie]
 	if !found {
 		slogctx.Debug(ctx, LogPrefixSessionCookie+"no cookie header found", "headers", mapKeys(headers))
@@ -245,15 +238,30 @@ func (srv *Server) extractSessionDetails(ctx context.Context, httpreq *envoy_aut
 		slogctx.Debug(ctx, LogPrefixSessionCookie+"failed to parse cookie header", "error", err)
 		return nil, "", "", false
 	}
+	sessionCookieName := SessionCookiePrefix + tenantID
+	var sessionCookie *http.Cookie
 	for _, cookie := range cookies {
-		if cookie.Name == SessionCookieName {
-			slogctx.Debug(ctx, LogPrefixSessionCookie+"found session cookie", "name", cookie.Name)
-			return cookie, tenantID, fp, true
+		if cookie.Name == sessionCookieName {
+			slogctx.Debug(ctx, LogPrefixSessionCookie+"found tenant specific session cookie", "name", sessionCookieName)
+			sessionCookie = cookie
+			break
 		}
 	}
 
-	slogctx.Debug(ctx, LogPrefixSessionCookie+"session cookie not found", "sessionCookieName", SessionCookieName)
-	return nil, "", "", false
+	// return if no session cookie found
+	if sessionCookie == nil {
+		slogctx.Debug(ctx, LogPrefixSessionCookie+"tenant specific session cookie not found", "name", sessionCookieName)
+		return nil, "", "", false
+	}
+
+	// determine the fingerprint for the request
+	fp, err := fingerprint.NewBuilder().FromEnvoyHTTPRequest(httpreq)
+	if err != nil {
+		slogctx.Debug(ctx, LogPrefixSessionCookie+"failed to compute fingerprint from request", "error", err)
+		return nil, "", "", false
+	}
+
+	return sessionCookie, tenantID, fp, true
 }
 
 // splitCertHeader splits the XFCC header on , in case there are multiple certificates.
