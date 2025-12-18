@@ -21,7 +21,7 @@ const (
 	HeaderForwardedClientCert = "x-forwarded-client-cert"
 	HeaderAuthorization       = "authorization"
 	HeaderCookie              = "cookie"
-	HeaderCSRFToken           = "X-CSRF-Token"
+	HeaderCSRFToken           = "x-csrf-token"
 	SessionCookiePrefix       = "__Host-Http-SESSION-"
 	LogPrefixCheck            = "Check(): "
 	LogPrefixClientCert       = "Client Certs: "
