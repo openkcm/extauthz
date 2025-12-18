@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.1](https://github.com/openkcm/extauthz/compare/v0.11.0...v0.11.1) (2025-12-18)
+
+
+### Bug Fixes
+
+* use lowercased header name ([#210](https://github.com/openkcm/extauthz/issues/210)) ([54c831d](https://github.com/openkcm/extauthz/commit/54c831d525048e8c911904b66d446ecd9a007890))
+
 ## [0.11.0](https://github.com/openkcm/extauthz/compare/v0.10.1...v0.11.0) (2025-12-18)
 
 
