@@ -42,7 +42,7 @@ func respondPermissionDenied() *envoy_auth.CheckResponse {
 		HttpResponse: &envoy_auth.CheckResponse_DeniedResponse{
 			DeniedResponse: &envoy_auth.DeniedHttpResponse{
 				Status: &envoy_type.HttpStatus{
-					Code: envoy_type.StatusCode_Unauthorized,
+					Code: envoy_type.StatusCode_Forbidden,
 				},
 				Body: "Permission denied",
 			},
