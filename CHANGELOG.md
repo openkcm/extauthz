@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.0](https://github.com/openkcm/extauthz/compare/v0.10.1...v0.11.0) (2025-12-18)
+
+
+### Features
+
+* use the new tenant specific session cookie ([#208](https://github.com/openkcm/extauthz/issues/208)) ([f4385a0](https://github.com/openkcm/extauthz/commit/f4385a08dba05ea49d1a23e157b5649f4487affc))
+
 ## [0.10.1](https://github.com/openkcm/extauthz/compare/v0.10.0...v0.10.1) (2025-12-17)
 
 
