@@ -13,7 +13,7 @@ require (
 	github.com/openkcm/api-sdk v0.14.0
 	github.com/openkcm/common-sdk v1.9.0
 	github.com/patrickmn/go-cache v2.1.0+incompatible
-	github.com/samber/oops v1.19.4
+	github.com/samber/oops v1.20.0
 	github.com/stretchr/testify v1.11.1
 	github.com/testcontainers/testcontainers-go v0.40.0
 	github.com/testcontainers/testcontainers-go/modules/valkey v0.40.0
