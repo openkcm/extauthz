@@ -16,7 +16,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	envoy_auth "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
+	envoyauth "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
 
 	"github.com/openkcm/extauthz/internal/clientdata"
 	"github.com/openkcm/extauthz/internal/config"
@@ -115,11 +115,11 @@ func TestCheck(t *testing.T) {
 		name            string
 		featureGates    *commoncfg.FeatureGates
 		trustedSubjects map[string]string
-		request         *envoy_auth.CheckRequest
+		request         *envoyauth.CheckRequest
 		setupMocks      func(*MockSessionManager)
 		wantError       bool
 		wantCode        rpc.Code
-		want            *envoy_auth.CheckResponse
+		want            *envoyauth.CheckResponse
 	}{
 		{
 			name:         "zero values",
@@ -129,20 +129,20 @@ func TestCheck(t *testing.T) {
 		}, {
 			name:         "missing client certificate and authorization header",
 			featureGates: defaultFeatureGates,
-			request: &envoy_auth.CheckRequest{
-				Attributes: &envoy_auth.AttributeContext{
-					Request: &envoy_auth.AttributeContext_Request{
-						Http: &envoy_auth.AttributeContext_HttpRequest{
+			request: &envoyauth.CheckRequest{
+				Attributes: &envoyauth.AttributeContext{
+					Request: &envoyauth.AttributeContext_Request{
+						Http: &envoyauth.AttributeContext_HttpRequest{
 							Path: "/foo/bar"}}}},
 			wantError: false,
 			wantCode:  rpc.UNAUTHENTICATED,
 		}, {
 			name:         "with invalid client certificate",
 			featureGates: defaultFeatureGates,
-			request: &envoy_auth.CheckRequest{
-				Attributes: &envoy_auth.AttributeContext{
-					Request: &envoy_auth.AttributeContext_Request{
-						Http: &envoy_auth.AttributeContext_HttpRequest{
+			request: &envoyauth.CheckRequest{
+				Attributes: &envoyauth.AttributeContext{
+					Request: &envoyauth.AttributeContext_Request{
+						Http: &envoyauth.AttributeContext_HttpRequest{
 							Path:    "/foo/bar",
 							Headers: map[string]string{HeaderForwardedClientCert: "client-cert"}}}}},
 			wantError: false,
@@ -151,10 +151,10 @@ func TestCheck(t *testing.T) {
 			name:            "with valid client certificate",
 			featureGates:    defaultFeatureGates,
 			trustedSubjects: map[string]string{"CN=minime": "minime-region"},
-			request: &envoy_auth.CheckRequest{
-				Attributes: &envoy_auth.AttributeContext{
-					Request: &envoy_auth.AttributeContext_Request{
-						Http: &envoy_auth.AttributeContext_HttpRequest{
+			request: &envoyauth.CheckRequest{
+				Attributes: &envoyauth.AttributeContext{
+					Request: &envoyauth.AttributeContext_Request{
+						Http: &envoyauth.AttributeContext_HttpRequest{
 							Method:  "GET",
 							Host:    "our.service.com",
 							Path:    "/foo/bar",
@@ -165,10 +165,10 @@ func TestCheck(t *testing.T) {
 			name:            "with valid client certificate - different subject",
 			featureGates:    defaultFeatureGates,
 			trustedSubjects: map[string]string{"CN=minime": "minime-region"},
-			request: &envoy_auth.CheckRequest{
-				Attributes: &envoy_auth.AttributeContext{
-					Request: &envoy_auth.AttributeContext_Request{
-						Http: &envoy_auth.AttributeContext_HttpRequest{
+			request: &envoyauth.CheckRequest{
+				Attributes: &envoyauth.AttributeContext{
+					Request: &envoyauth.AttributeContext_Request{
+						Http: &envoyauth.AttributeContext_HttpRequest{
 							Method:  "GET",
 							Host:    "our.service.com",
 							Path:    "/foo/bar",
@@ -179,10 +179,10 @@ func TestCheck(t *testing.T) {
 			name:            "with disallowed client certificate",
 			featureGates:    defaultFeatureGates,
 			trustedSubjects: map[string]string{"CN=minime": "minime-region"},
-			request: &envoy_auth.CheckRequest{
-				Attributes: &envoy_auth.AttributeContext{
-					Request: &envoy_auth.AttributeContext_Request{
-						Http: &envoy_auth.AttributeContext_HttpRequest{
+			request: &envoyauth.CheckRequest{
+				Attributes: &envoyauth.AttributeContext{
+					Request: &envoyauth.AttributeContext_Request{
+						Http: &envoyauth.AttributeContext_HttpRequest{
 							Path:    "/foo/bar",
 							Headers: map[string]string{HeaderForwardedClientCert: "Hash=123;Subject=\"CN=austin\";Cert=" + x509CertPEMURLEncoded}}}}},
 			wantError: false,
@@ -190,10 +190,10 @@ func TestCheck(t *testing.T) {
 		}, {
 			name:         "with authorization header",
 			featureGates: defaultFeatureGates,
-			request: &envoy_auth.CheckRequest{
-				Attributes: &envoy_auth.AttributeContext{
-					Request: &envoy_auth.AttributeContext_Request{
-						Http: &envoy_auth.AttributeContext_HttpRequest{
+			request: &envoyauth.CheckRequest{
+				Attributes: &envoyauth.AttributeContext{
+					Request: &envoyauth.AttributeContext_Request{
+						Http: &envoyauth.AttributeContext_HttpRequest{
 							Path:    "/foo/bar",
 							Headers: map[string]string{"authorization": "Bearer token"}}}}},
 			wantError: false,
@@ -201,10 +201,10 @@ func TestCheck(t *testing.T) {
 		}, {
 			name:         "with session cookie",
 			featureGates: defaultFeatureGates,
-			request: &envoy_auth.CheckRequest{
-				Attributes: &envoy_auth.AttributeContext{
-					Request: &envoy_auth.AttributeContext_Request{
-						Http: &envoy_auth.AttributeContext_HttpRequest{
+			request: &envoyauth.CheckRequest{
+				Attributes: &envoyauth.AttributeContext{
+					Request: &envoyauth.AttributeContext_Request{
+						Http: &envoyauth.AttributeContext_HttpRequest{
 							Method:  "GET",
 							Host:    "our.service.com",
 							Path:    "/cmk/v1/myTenantID/bar",
@@ -272,10 +272,10 @@ func TestCheck(t *testing.T) {
 			name:            "registry service - system",
 			featureGates:    defaultFeatureGates,
 			trustedSubjects: map[string]string{"CN=minime": "minime-region"},
-			request: &envoy_auth.CheckRequest{
-				Attributes: &envoy_auth.AttributeContext{
-					Request: &envoy_auth.AttributeContext_Request{
-						Http: &envoy_auth.AttributeContext_HttpRequest{
+			request: &envoyauth.CheckRequest{
+				Attributes: &envoyauth.AttributeContext{
+					Request: &envoyauth.AttributeContext_Request{
+						Http: &envoyauth.AttributeContext_HttpRequest{
 							Method:  "POST",
 							Host:    "our.service.com",
 							Path:    "/kms.api.cmk.registry.system.v1.Service/RegisterSystem",
@@ -286,10 +286,10 @@ func TestCheck(t *testing.T) {
 			name:            "registry service - tenant",
 			featureGates:    defaultFeatureGates,
 			trustedSubjects: map[string]string{"CN=minime": "minime-region"},
-			request: &envoy_auth.CheckRequest{
-				Attributes: &envoy_auth.AttributeContext{
-					Request: &envoy_auth.AttributeContext_Request{
-						Http: &envoy_auth.AttributeContext_HttpRequest{
+			request: &envoyauth.CheckRequest{
+				Attributes: &envoyauth.AttributeContext{
+					Request: &envoyauth.AttributeContext_Request{
+						Http: &envoyauth.AttributeContext_HttpRequest{
 							Method:  "POST",
 							Host:    "our.service.com",
 							Path:    "/kms.api.cmk.registry.tenant.v1.Service/RegisterTenant",

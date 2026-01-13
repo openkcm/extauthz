@@ -10,8 +10,8 @@ import (
 	"github.com/openkcm/common-sdk/pkg/auth"
 	"github.com/openkcm/common-sdk/pkg/fingerprint"
 
-	envoy_core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
-	envoy_auth "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
+	envoycore "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	envoyauth "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
 	slogctx "github.com/veqryn/slog-context"
 
 	"github.com/openkcm/extauthz/internal/flags"
@@ -30,10 +30,10 @@ const (
 )
 
 // Ensure Server implements the AuthorizationServer interface
-var _ envoy_auth.AuthorizationServer = &Server{}
+var _ envoyauth.AuthorizationServer = &Server{}
 
 // Check authorizes the request based on either client certificate, bearer token or session cookie.
-func (srv *Server) Check(ctx context.Context, req *envoy_auth.CheckRequest) (*envoy_auth.CheckResponse, error) {
+func (srv *Server) Check(ctx context.Context, req *envoyauth.CheckRequest) (*envoyauth.CheckResponse, error) {
 	// check the header
 	if req == nil ||
 		req.GetAttributes() == nil ||
@@ -143,7 +143,7 @@ func (srv *Server) Check(ctx context.Context, req *envoy_auth.CheckRequest) (*en
 	// Prepare the response
 	switch result.is {
 	case ALLOWED:
-		headersToAdd := []*envoy_core.HeaderValueOption{}
+		headersToAdd := []*envoycore.HeaderValueOption{}
 		headersToRemove := []string{HeaderForwardedClientCert}
 
 		if srv.clientDataSigner == nil {
@@ -162,14 +162,14 @@ func (srv *Server) Check(ctx context.Context, req *envoy_auth.CheckRequest) (*en
 			auth.HeaderClientData, b64data,
 			auth.HeaderClientDataSignature, b64sig,
 		)
-		headersToAdd = []*envoy_core.HeaderValueOption{
+		headersToAdd = []*envoycore.HeaderValueOption{
 			headerValueOption(auth.HeaderClientData, b64data),
 			headerValueOption(auth.HeaderClientDataSignature, b64sig),
 		}
 
 		return respondAllowed(headersToAdd, headersToRemove), nil
 	case ALWAYS_ALLOWED:
-		return respondAllowed([]*envoy_core.HeaderValueOption{}, []string{}), nil
+		return respondAllowed([]*envoycore.HeaderValueOption{}, []string{}), nil
 	case UNKNOWN, UNAUTHENTICATED:
 		return respondUnauthenticated(result.info), nil
 	}
@@ -209,7 +209,7 @@ func extractBearerToken(ctx context.Context, headers map[string]string) (string,
 	return bearerToken, true
 }
 
-func (srv *Server) extractSessionDetails(ctx context.Context, httpreq *envoy_auth.AttributeContext_HttpRequest, path string) (*http.Cookie, string, string, bool) {
+func (srv *Server) extractSessionDetails(ctx context.Context, httpreq *envoyauth.AttributeContext_HttpRequest, path string) (*http.Cookie, string, string, bool) {
 	headers := httpreq.GetHeaders()
 
 	// extract tenant ID from the path
