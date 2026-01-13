@@ -8,7 +8,7 @@ import (
 	"github.com/openkcm/common-sdk/pkg/commongrpc"
 	"github.com/samber/oops"
 
-	envoy_auth "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
+	envoyauth "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
 	slogctx "github.com/veqryn/slog-context"
 
 	"github.com/openkcm/extauthz/internal/config"
@@ -34,7 +34,7 @@ func startGRPCServer(ctx context.Context, cfg *config.Config, extauthzSrv *extau
 	grpcServer := commongrpc.NewServer(ctx, &cfg.GRPCServer.GRPCServer)
 
 	// Register the ExtAuthZ server and the health server with the gRPC server
-	envoy_auth.RegisterAuthorizationServer(grpcServer, extauthzSrv)
+	envoyauth.RegisterAuthorizationServer(grpcServer, extauthzSrv)
 
 	// Start the gRPC listener and server
 	var lc net.ListenConfig
