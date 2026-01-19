@@ -16,15 +16,15 @@ lint:
 	golangci-lint run -v --fix ./...
 
 .PHONY: test
-test: clean
+test: clean install-gotestsum
 	mkdir -p cover/integration cover/unit
 	go clean -testcache
 
 	# unit tests
-	go test -count=1 -race -cover ./... -args -test.gocoverdir="${CURDIR}/cover/unit"
+	gotestsum --junitfile="${CURDIR}/junit-unit.xml" --format=testname -- -count=1 -race -cover ./... -args -test.gocoverdir="${CURDIR}/cover/unit"
 
 	# integration tests
-	GOCOVERDIR="${CURDIR}/cover/integration" go test -count=1 -race --tags=integration ./integration
+	GOCOVERDIR="${CURDIR}/cover/integration" gotestsum --junitfile="${CURDIR}/junit-integration.xml" --format=testname -- -count=1 -race --tags=integration ./integration
 
 	# merge coverage
 	go tool covdata textfmt -i=./cover/unit,./cover/integration -o cover.out
@@ -32,6 +32,10 @@ test: clean
 
 	# On a Mac, you can use the following command to open the coverage report in the browser
 	# go tool cover -html=cover.out -o cover.html && open cover.html
+
+.PHONY: install-gotestsum
+install-gotestsum:
+	(cd /tmp && go install gotest.tools/gotestsum@latest)
 
 .PHONY: helm-test
 helm-test: helm-unit-test helm-integration-test
