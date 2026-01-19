@@ -19,6 +19,7 @@
 /cover.out
 /cover.html
 /cover
+*.xml
 
 # Go vendor directory
 /vendor
