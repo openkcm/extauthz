@@ -11,7 +11,7 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.3.0
 	github.com/google/uuid v1.6.0
 	github.com/openkcm/api-sdk v0.14.0
-	github.com/openkcm/common-sdk v1.10.0
+	github.com/openkcm/common-sdk v1.11.0
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/samber/oops v1.21.0
 	github.com/stretchr/testify v1.11.1
