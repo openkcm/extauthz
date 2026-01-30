@@ -54,6 +54,19 @@ func TestDeployment(t *testing.T) {
 				require.Equal(t, "my-registry-access", resource.Spec.Template.Spec.ImagePullSecrets[0].Name)
 				require.Equal(t, "my-extauthz", resource.Spec.Template.Spec.ServiceAccountName)
 			},
+		}, {
+			name: "extraContainers",
+			opts: &helm.Options{
+				SetValues: map[string]string{
+					"extraContainers[0].name":  "foo",
+					"extraContainers[0].image": "bar",
+				},
+			},
+			wantError: false,
+			testFunc: func(t *testing.T, resource *corev1.Deployment) {
+				require.Equal(t, "foo", resource.Spec.Template.Spec.Containers[0].Name)
+				require.Equal(t, "bar", resource.Spec.Template.Spec.Containers[0].Image)
+			},
 		},
 	}
 

@@ -35,7 +35,7 @@ spec:
       {{- end }}
       containers:
         {{- with .Values.extraContainers }}
-          {{- toYaml . | nindent 10 }}
+          {{- toYaml . | nindent 8 }}
         {{- end }}
         - name: {{ include "extauthz.name" . }}
           {{- with .Values.securityContext }}
