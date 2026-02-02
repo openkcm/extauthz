@@ -3,12 +3,12 @@ module github.com/openkcm/extauthz
 go 1.25.1
 
 require (
-	github.com/cedar-policy/cedar-go v1.4.0
+	github.com/cedar-policy/cedar-go v1.4.1
 	github.com/envoyproxy/go-control-plane/envoy v1.36.0
 	github.com/go-andiamo/splitter v1.2.5
 	github.com/go-jose/go-jose/v4 v4.1.3
 	github.com/gogo/googleapis v1.4.1
-	github.com/golang-jwt/jwt/v5 v5.3.0
+	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/uuid v1.6.0
 	github.com/openkcm/api-sdk v0.14.0
 	github.com/openkcm/common-sdk v1.11.0
@@ -17,7 +17,7 @@ require (
 	github.com/stretchr/testify v1.11.1
 	github.com/testcontainers/testcontainers-go v0.40.0
 	github.com/testcontainers/testcontainers-go/modules/valkey v0.40.0
-	github.com/veqryn/slog-context v0.8.0
+	github.com/veqryn/slog-context v0.9.0
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260114163908-3f89685c29c3
 	google.golang.org/grpc v1.78.0
 	gopkg.in/yaml.v3 v3.0.1
