@@ -1,8 +1,4 @@
-// Package oidc implements OIDC token handling in a multi-tenant environment.
-// For this a Handler is created, which holds the Providers for validating tokens.
-// You can either register providers in a static manner, or inject a client to
-// query providers during runtime.
-package oidc
+package handler
 
 import (
 	"context"
@@ -19,22 +15,21 @@ import (
 	slogctx "github.com/veqryn/slog-context"
 
 	"github.com/openkcm/extauthz/internal/flags"
+	"github.com/openkcm/extauthz/internal/oidc"
+	"github.com/openkcm/extauthz/internal/session"
 )
 
 const (
-	IssuerPrefix     = "issuer_"
-	IntrospectPrefix = "introspect_"
+	issuerPrefix     = "issuer_"
+	introspectPrefix = "introspect_"
 )
 
-var (
-	DefaultIssuerClaims = []string{"iss"}
-)
-
-// Handler tracks the set of identity providers to support multi tenancy.
-type Handler struct {
+// OIDC tracks the set of identity providers to support multi tenancy.
+type OIDC struct {
 	issuerClaimKeys []string
-	staticProviders map[string]*Provider
+	staticProviders map[string]*oidc.Provider
 	featureGates    *commoncfg.FeatureGates
+	sessionManager  *session.Manager
 
 	// cache the providers by issuer
 	cache           *cache.Cache // map[string]*Provider or introspection
@@ -42,20 +37,27 @@ type Handler struct {
 	cleanupInterval time.Duration
 }
 
-// HandlerOption is used to configure a handler.
-type HandlerOption func(*Handler) error
+// OIDCOption is used to configure a handler.
+type OIDCOption func(*OIDC) error
+
+func WithSessionManager(sm *session.Manager) OIDCOption {
+	return func(handler *OIDC) error {
+		handler.sessionManager = sm
+		return nil
+	}
+}
 
 // WithIssuerClaimKeys configures the behavior of a certain provider.
-func WithIssuerClaimKeys(issuerClaimKeys ...string) HandlerOption {
-	return func(handler *Handler) error {
+func WithIssuerClaimKeys(issuerClaimKeys ...string) OIDCOption {
+	return func(handler *OIDC) error {
 		handler.issuerClaimKeys = issuerClaimKeys
 		return nil
 	}
 }
 
 // WithStaticProvider registers the given provider.
-func WithStaticProvider(provider *Provider) HandlerOption {
-	return func(handler *Handler) error {
+func WithStaticProvider(provider *oidc.Provider) OIDCOption {
+	return func(handler *OIDC) error {
 		if provider == nil {
 			return errors.New("provider must not be nil")
 		}
@@ -66,16 +68,16 @@ func WithStaticProvider(provider *Provider) HandlerOption {
 	}
 }
 
-func WithFeatureGates(fg *commoncfg.FeatureGates) HandlerOption {
-	return func(server *Handler) error {
+func WithFeatureGates(fg *commoncfg.FeatureGates) OIDCOption {
+	return func(server *OIDC) error {
 		server.featureGates = fg
 		return nil
 	}
 }
 
 // WithProviderCacheExpiration configures the expiration of cached providers.
-func WithProviderCacheExpiration(expiration, cleanup time.Duration) HandlerOption {
-	return func(handler *Handler) error {
+func WithProviderCacheExpiration(expiration, cleanup time.Duration) OIDCOption {
+	return func(handler *OIDC) error {
 		handler.expiration = expiration
 		handler.cleanupInterval = cleanup
 		handler.cache = cache.New(expiration, cleanup)
@@ -84,12 +86,12 @@ func WithProviderCacheExpiration(expiration, cleanup time.Duration) HandlerOptio
 	}
 }
 
-// NewHandler creates a new handler and applies the given options.
-func NewHandler(opts ...HandlerOption) (*Handler, error) {
-	handler := &Handler{
-		issuerClaimKeys: DefaultIssuerClaims,
+// NewOIDC creates a new handler and applies the given options.
+func NewOIDC(opts ...OIDCOption) (*OIDC, error) {
+	handler := &OIDC{
+		issuerClaimKeys: oidc.DefaultIssuerClaims,
 		cache:           cache.New(30*time.Second, 10*time.Minute),
-		staticProviders: make(map[string]*Provider),
+		staticProviders: make(map[string]*oidc.Provider),
 		featureGates:    &commoncfg.FeatureGates{},
 	}
 	for _, opt := range opts {
@@ -106,12 +108,12 @@ func NewHandler(opts ...HandlerOption) (*Handler, error) {
 }
 
 // RegisterStaticProvider registers a provider with the handler.
-func (handler *Handler) RegisterStaticProvider(provider *Provider) {
-	key := IssuerPrefix + provider.issuerURL.String()
+func (handler *OIDC) RegisterStaticProvider(provider *oidc.Provider) {
+	key := issuerPrefix + provider.IssuerURL.String()
 	handler.staticProviders[key] = provider
 }
 
-func (handler *Handler) ParseAndValidate(ctx context.Context, rawToken string, userclaims any, useCache bool) error {
+func (handler *OIDC) ParseAndValidate(ctx context.Context, rawToken, tenantID string, userclaims any, useCache bool) error {
 	// parse the token - at the moment we only support RS256
 	token, err := jwt.ParseSigned(rawToken, []jose.SignatureAlgorithm{jose.RS256})
 	if err != nil {
@@ -156,7 +158,7 @@ func (handler *Handler) ParseAndValidate(ctx context.Context, rawToken string, u
 	}
 
 	// let the handler lookup the identity provider for the issuer host
-	provider, err := handler.ProviderFor(ctx, issuer)
+	provider, err := handler.ProviderFor(ctx, issuer, tenantID)
 	if err != nil {
 		slogctx.Error(ctx, "Failed to get provider for issuer", "error", err, "issuer", issuer)
 		return errors.Join(ErrNoProvider, err)
@@ -209,9 +211,9 @@ func (handler *Handler) ParseAndValidate(ctx context.Context, rawToken string, u
 	}
 
 	// verify the audience if any
-	if len(provider.audiences) > 0 {
+	if len(provider.Audiences) > 0 {
 		err = standardClaims.Validate(jwt.Expected{
-			AnyAudience: provider.audiences,
+			AnyAudience: provider.Audiences,
 		})
 		if err != nil {
 			slogctx.Error(ctx, "Failed to validate token audience", "error", err)
@@ -235,32 +237,45 @@ func (handler *Handler) ParseAndValidate(ctx context.Context, rawToken string, u
 }
 
 // ProviderFor returns the provider for the given issuer.
-func (handler *Handler) ProviderFor(_ context.Context, issuer string) (*Provider, error) {
+func (handler *OIDC) ProviderFor(ctx context.Context, issuer, tenantID string) (*oidc.Provider, error) {
 	// check the static providers map
-	if provider, ok := handler.staticProviders[IssuerPrefix+issuer]; ok {
+	if provider, ok := handler.staticProviders[issuerPrefix+issuer]; ok {
 		return provider, nil
 	}
 
-	return nil, errors.Join(ErrNoProvider, fmt.Errorf("no provider found for issuer %s", issuer))
+	if handler.sessionManager == nil {
+		return nil, fmt.Errorf("%w: no provider found for the issuer %s", ErrNoProvider, issuer)
+	}
+
+	provider, err := handler.sessionManager.GetOIDCProvider(ctx, tenantID)
+	if err != nil {
+		if errors.Is(err, session.ErrNotFound) {
+			return nil, fmt.Errorf("%w: no provider found for the issuer %s", ErrNoProvider, issuer)
+		}
+
+		return nil, fmt.Errorf("getting provider by tenant id: %w", err)
+	}
+
+	return provider, nil
 }
 
 // introspect an access or refresh token.
-func (handler *Handler) introspect(ctx context.Context, provider *Provider, introspectToken string, useCache bool) (Introspection, error) {
+func (handler *OIDC) introspect(ctx context.Context, provider *oidc.Provider, introspectToken string, useCache bool) (oidc.Introspection, error) {
 	if handler.featureGates.IsFeatureEnabled(flags.DisableJWTTokenIntrospection) {
 		slogctx.Debug(ctx, "Introspection disabled via feature gate")
-		return Introspection{Active: true}, nil
+		return oidc.Introspection{Active: true}, nil
 	}
 
-	cacheKey := IntrospectPrefix + introspectToken
+	cacheKey := introspectPrefix + introspectToken
 	if useCache {
 		cache, ok := handler.cache.Get(cacheKey)
 		if ok {
 			//nolint:forcetypeassert
-			return cache.(Introspection), nil
+			return cache.(oidc.Introspection), nil
 		}
 	}
 
-	intr, err := provider.introspect(ctx, introspectToken)
+	intr, err := provider.Introspect(ctx, introspectToken)
 	if err != nil {
 		return intr, fmt.Errorf("introspecting token: %w", err)
 	}

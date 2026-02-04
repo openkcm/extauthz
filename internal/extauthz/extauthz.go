@@ -9,7 +9,7 @@ import (
 	"github.com/samber/oops"
 
 	"github.com/openkcm/extauthz/internal/clientdata"
-	"github.com/openkcm/extauthz/internal/oidc"
+	"github.com/openkcm/extauthz/internal/handler"
 	"github.com/openkcm/extauthz/internal/policies"
 	"github.com/openkcm/extauthz/internal/policies/cedarpolicy"
 	"github.com/openkcm/extauthz/internal/session"
@@ -26,9 +26,9 @@ type sessionManagerInterface interface {
 }
 
 // oidcHandlerInterface defines the interface for OIDC handling.
-// We don't use oidc.Handler directly to make testing easier.
+// We don't use handler.OIDC directly to make testing easier.
 type oidcHandlerInterface interface {
-	ParseAndValidate(ctx context.Context, rawToken string, userclaims any, useCache bool) error
+	ParseAndValidate(ctx context.Context, rawToken, tenantID string, userclaims any, useCache bool) error
 }
 
 type Server struct {
@@ -136,7 +136,7 @@ func NewServer(opts ...ServerOption) (*Server, error) {
 		return nil, oops.Hint("failed to create policy engine").Wrap(err)
 	}
 
-	hdl, err := oidc.NewHandler()
+	hdl, err := handler.NewOIDC()
 	if err != nil {
 		return nil, oops.Hint("failed to create OIDC handler").Wrap(err)
 	}

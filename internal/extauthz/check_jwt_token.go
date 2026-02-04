@@ -9,7 +9,7 @@ import (
 
 	slogctx "github.com/veqryn/slog-context"
 
-	"github.com/openkcm/extauthz/internal/oidc"
+	"github.com/openkcm/extauthz/internal/handler"
 	"github.com/openkcm/extauthz/internal/policies/cedarpolicy"
 )
 
@@ -25,7 +25,8 @@ func (srv *Server) checkJWTToken(ctx context.Context, bearerToken, method, host,
 
 	useCache := method == http.MethodGet // Allow using cache for token introspection for GET requests
 
-	err := srv.oidcHandler.ParseAndValidate(ctx, bearerToken, &claims, useCache)
+	tenantID := srv.extractTenantID(path)
+	err := srv.oidcHandler.ParseAndValidate(ctx, bearerToken, tenantID, &claims, useCache)
 	if err != nil {
 		slogctx.Debug(ctx, "JWT validation failed", "error", err)
 		// Log the header and payload of the token
@@ -36,10 +37,10 @@ func (srv *Server) checkJWTToken(ctx context.Context, bearerToken, method, host,
 		}
 
 		switch {
-		case errors.Is(err, oidc.ErrInvalidToken):
+		case errors.Is(err, handler.ErrInvalidToken):
 			return checkResult{is: UNAUTHENTICATED,
 				info: "Invalid authorization header"}
-		case errors.Is(err, oidc.ErrNoProvider):
+		case errors.Is(err, handler.ErrNoProvider):
 			return checkResult{is: DENIED,
 				info: "No provider found"}
 		}

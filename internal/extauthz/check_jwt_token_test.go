@@ -27,6 +27,7 @@ import (
 
 	"github.com/openkcm/extauthz/internal/clientdata"
 	"github.com/openkcm/extauthz/internal/config"
+	"github.com/openkcm/extauthz/internal/handler"
 	"github.com/openkcm/extauthz/internal/oidc"
 	"github.com/openkcm/extauthz/internal/policies/cedarpolicy"
 )
@@ -178,7 +179,7 @@ func TestCheckJWTToken(t *testing.T) {
 				t.Fatalf("could not create provider: %s", err)
 			}
 
-			hdl, err := oidc.NewHandler(oidc.WithStaticProvider(p))
+			hdl, err := handler.NewOIDC(handler.WithStaticProvider(p))
 			if err != nil {
 				t.Fatalf("could not create handler: %s", err)
 			}

@@ -17,6 +17,7 @@ import (
 	"github.com/openkcm/extauthz/internal/clientdata"
 	"github.com/openkcm/extauthz/internal/config"
 	"github.com/openkcm/extauthz/internal/extauthz"
+	"github.com/openkcm/extauthz/internal/handler"
 	"github.com/openkcm/extauthz/internal/oidc"
 	"github.com/openkcm/extauthz/internal/policies/cedarpolicy"
 	"github.com/openkcm/extauthz/internal/session"
@@ -50,16 +51,10 @@ func createExtAuthZServer(ctx context.Context, cfg *config.Config) (*extauthz.Se
 	}
 	opts = append(opts, extauthz.WithTrustedSubjects(subjects))
 
-	// Create the OIDC handler
-	oidcHandler, err := createOIDCHandler(ctx, &cfg.JWT, &cfg.FeatureGates)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create OIDC handler: %w", err)
-	}
-	opts = append(opts, extauthz.WithOIDCHandler(oidcHandler))
-
+	var sessionManager *session.Manager
 	// Create the session manager (if configured)
 	if cfg.SessionManager.Enabled && len(cfg.SessionPathPrefixes) > 0 {
-		sessionManager, err := createSessionManager(ctx, &cfg.SessionManager)
+		sessionManager, err = createSessionManager(ctx, &cfg.SessionManager)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create session manager: %w", err)
 		}
@@ -67,6 +62,13 @@ func createExtAuthZServer(ctx context.Context, cfg *config.Config) (*extauthz.Se
 		slogctx.Info(ctx, "Using session paths", "paths", cfg.SessionPathPrefixes)
 		opts = append(opts, extauthz.WithSessionPathPrefixes(cfg.SessionPathPrefixes))
 	}
+
+	// Create the OIDC handler
+	oidcHandler, err := createOIDCHandler(ctx, sessionManager, &cfg.JWT, &cfg.FeatureGates)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create OIDC handler: %w", err)
+	}
+	opts = append(opts, extauthz.WithOIDCHandler(oidcHandler))
 
 	csrfSecret, err := commoncfg.LoadValueFromSourceRef(cfg.CSRFSecret)
 	if err != nil {
@@ -106,24 +108,29 @@ func createClientDataSigner(ctx context.Context, cfg *config.Config) (*clientdat
 	return clientDataSigner, nil
 }
 
-func createOIDCHandler(ctx context.Context, cfg *config.JWT, fg *commoncfg.FeatureGates) (*oidc.Handler, error) {
-	opts := make([]oidc.HandlerOption, 0, 3+len(cfg.Providers))
-	opts = append(opts, oidc.WithFeatureGates(fg))
+func createOIDCHandler(ctx context.Context, sessionManager *session.Manager, cfg *config.JWT, fg *commoncfg.FeatureGates) (*handler.OIDC, error) {
+	opts := make([]handler.OIDCOption, 0, 3+len(cfg.Providers))
+	opts = append(opts, handler.WithFeatureGates(fg))
 	if len(cfg.IssuerClaimKeys) == 0 {
 		slogctx.Warn(ctx, "JWT configuration doesn't have the issuer claims keys; Use the default values: [iss].")
 		cfg.IssuerClaimKeys = oidc.DefaultIssuerClaims
 	}
-	opts = append(opts, oidc.WithIssuerClaimKeys(cfg.IssuerClaimKeys...))
+	opts = append(opts, handler.WithIssuerClaimKeys(cfg.IssuerClaimKeys...))
 	// add static providers (if any)
 	for _, p := range cfg.Providers {
 		oidcProvider, err := createOIDCProvider(ctx, &cfg.HTTPClient, &p)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create OIDC provider: %w", err)
 		}
-		opts = append(opts, oidc.WithStaticProvider(oidcProvider))
+		opts = append(opts, handler.WithStaticProvider(oidcProvider))
 	}
+
+	if sessionManager != nil {
+		opts = append(opts, handler.WithSessionManager(sessionManager))
+	}
+
 	// create the handler
-	hdl, err := oidc.NewHandler(opts...)
+	hdl, err := handler.NewOIDC(opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create the OIDC handler: %w", err)
 	}

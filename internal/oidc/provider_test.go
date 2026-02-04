@@ -127,8 +127,8 @@ func TestNewProvider(t *testing.T) {
 				if err != nil {
 					t.Errorf("unexpected error: %s", err)
 				} else {
-					if tc.wantJwksURI != "" && p.jwksURI.String() != tc.wantJwksURI {
-						t.Errorf("expected JWKS URI %q, but got %q", tc.wantJwksURI, p.jwksURI.String())
+					if tc.wantJwksURI != "" && p.JwksURI.String() != tc.wantJwksURI {
+						t.Errorf("expected JWKS URI %q, but got %q", tc.wantJwksURI, p.JwksURI.String())
 					}
 				}
 			}
@@ -388,7 +388,7 @@ func TestProvider_introspect(t *testing.T) {
 			provider, err := NewProvider(tt.issuerURL, tt.audiences, tt.opts...)
 			require.NoError(t, err)
 
-			got, err := provider.introspect(t.Context(), tt.rawToken)
+			got, err := provider.Introspect(t.Context(), tt.rawToken)
 			if !tt.wantErr(t, err, fmt.Sprintf("introspect(ctx, %v)", tt.rawToken)) {
 				return
 			}

@@ -209,19 +209,23 @@ func extractBearerToken(ctx context.Context, headers map[string]string) (string,
 	return bearerToken, true
 }
 
-func (srv *Server) extractSessionDetails(ctx context.Context, httpreq *envoyauth.AttributeContext_HttpRequest, path string) (*http.Cookie, string, string, bool) {
-	headers := httpreq.GetHeaders()
-
+func (srv *Server) extractTenantID(path string) string {
 	// extract tenant ID from the path
-	var tenantID string
 	for _, prefix := range srv.sessionPathPrefixes {
 		remainder, found := strings.CutPrefix(path, prefix)
 		if !found {
 			continue
 		}
 		parts := strings.SplitN(remainder, "/", 2)
-		tenantID = parts[0]
+		return parts[0]
 	}
+
+	return ""
+}
+
+func (srv *Server) extractSessionDetails(ctx context.Context, httpreq *envoyauth.AttributeContext_HttpRequest, path string) (*http.Cookie, string, string, bool) {
+	headers := httpreq.GetHeaders()
+	tenantID := srv.extractTenantID(path)
 	if tenantID == "" {
 		slogctx.Debug(ctx, LogPrefixSessionCookie+"failed to extract tenant ID from path", "sessionPathPrefixes", srv.sessionPathPrefixes)
 		return nil, "", "", false
