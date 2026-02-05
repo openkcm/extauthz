@@ -6,7 +6,7 @@ includes:
     flatten: true
     excludes: [] # put task names in here which are overwritten in this file
     vars:
+      NESTED_MODULES: helm-tests
       CODE_DIRS: '{{.ROOT_DIR}}/cmd/... {{.ROOT_DIR}}/internal/... {{.ROOT_DIR}}/integration/...'
       COMPONENTS: 'extauthz'
       REPO_URL: 'https://github.com/openkcm/extauthz'
-

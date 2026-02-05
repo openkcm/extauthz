@@ -80,10 +80,9 @@ func run(ctx context.Context) error {
 			),
 		)
 
-		healthOptions := make([]health.Option, 0)
-		healthOptions = append(healthOptions,
+		healthOptions := []health.Option{
 			health.WithDisabledAutostart(),
-			health.WithTimeout(5*time.Second),
+			health.WithTimeout(5 * time.Second),
 			health.WithStatusListener(func(ctx context.Context, state health.State) {
 				subctx := slogctx.With(ctx, "status", state.Status)
 				//nolint:fatcontext
@@ -96,7 +95,7 @@ func run(ctx context.Context) error {
 				}
 				slogctx.Info(subctx, "readiness status changed")
 			}),
-		)
+		}
 
 		cfg.GRPCServer.Client.Address = cfg.GRPCServer.Address
 		healthOptions = append(healthOptions,
