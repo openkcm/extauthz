@@ -1,4 +1,4 @@
-package oidc
+package handler
 
 import "errors"
 

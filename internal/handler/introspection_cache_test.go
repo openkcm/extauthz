@@ -1,4 +1,4 @@
-package oidc
+package handler
 
 import (
 	"bytes"
@@ -22,6 +22,8 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/suite"
+
+	"github.com/openkcm/extauthz/internal/oidc"
 )
 
 type handlerTestSuite struct {
@@ -30,9 +32,9 @@ type handlerTestSuite struct {
 	jwks          *jwksHandler
 	ts            *httptest.Server
 	rsaPrivateKey *rsa.PrivateKey
-	hdl           *Handler
+	hdl           *OIDC
 	token         *jwt.Token
-	provider      *Provider
+	provider      *oidc.Provider
 }
 
 func TestHandlerSuite(t *testing.T) {
@@ -91,9 +93,9 @@ func (s *handlerTestSuite) SetupSuite() {
 	certpool := x509.NewCertPool()
 	certpool.AddCert(s.ts.Certificate())
 	cl := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: certpool}}}
-	s.provider, err = NewProvider(providerURL, []string{"aud1"}, WithProviderHTTPClient(cl), WithCustomJWKSURI(jwksURI))
+	s.provider, err = oidc.NewProvider(providerURL, []string{"aud1"}, oidc.WithProviderHTTPClient(cl), oidc.WithCustomJWKSURI(jwksURI))
 	s.Require().NoError(err)
-	s.hdl, err = NewHandler(WithIssuerClaimKeys(DefaultIssuerClaims...), WithStaticProvider(s.provider))
+	s.hdl, err = NewOIDC(WithIssuerClaimKeys(oidc.DefaultIssuerClaims...), WithStaticProvider(s.provider))
 	s.Require().NoError(err)
 
 	s.token = jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
@@ -136,7 +138,7 @@ func (s *jwksHandler) handleJWKS(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *jwksHandler) handleIntrospect(w http.ResponseWriter, r *http.Request) {
-	err := json.NewEncoder(w).Encode(Introspection{Active: s.tokenActive})
+	err := json.NewEncoder(w).Encode(oidc.Introspection{Active: s.tokenActive})
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 	}
@@ -150,16 +152,16 @@ func (s *handlerTestSuite) Test_ParseAndValidate_IntrospectionCache() {
 
 	// Act
 	s.jwks.tokenActive = true
-	err = s.hdl.ParseAndValidate(context.Background(), tokenString, &claims, true)
+	err = s.hdl.ParseAndValidate(context.Background(), tokenString, "", &claims, true)
 	s.Require().NoError(err)
 
 	s.jwks.tokenActive = false
 
 	// Should not return an error because we use cache for GET requests
-	err = s.hdl.ParseAndValidate(context.Background(), tokenString, &claims, true)
+	err = s.hdl.ParseAndValidate(context.Background(), tokenString, "", &claims, true)
 	s.Require().NoError(err)
 
 	// Should invalidate cache for POST request
-	err = s.hdl.ParseAndValidate(context.Background(), tokenString, &claims, false)
+	err = s.hdl.ParseAndValidate(context.Background(), tokenString, "", &claims, false)
 	s.Require().Error(err)
 }

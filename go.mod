@@ -10,7 +10,7 @@ require (
 	github.com/gogo/googleapis v1.4.1
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/uuid v1.6.0
-	github.com/openkcm/api-sdk v0.14.0
+	github.com/openkcm/api-sdk v0.15.0
 	github.com/openkcm/common-sdk v1.11.0
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/samber/oops v1.21.0

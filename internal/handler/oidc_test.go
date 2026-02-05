@@ -1,4 +1,4 @@
-package oidc
+package handler
 
 import (
 	"bytes"
@@ -26,13 +26,14 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/openkcm/extauthz/internal/flags"
+	"github.com/openkcm/extauthz/internal/oidc"
 )
 
-func TestNewHandler(t *testing.T) {
+func TestNewOIDC(t *testing.T) {
 	t.Run("no panic with nil options", func(t *testing.T) {
 		assert.NotPanics(t, func() {
 			//nolint:errcheck
-			NewHandler(nil)
+			NewOIDC(nil)
 		})
 	})
 
@@ -44,44 +45,44 @@ func TestNewHandler(t *testing.T) {
 	// create the test cases
 	tests := []struct {
 		name      string
-		opts      []HandlerOption
-		checkFunc func(*Handler) error
+		opts      []OIDCOption
+		checkFunc func(*OIDC) error
 		wantError bool
 	}{
 		{
 			name: "zero values",
 		}, {
 			name: "with cache expiration",
-			opts: []HandlerOption{
+			opts: []OIDCOption{
 				WithProviderCacheExpiration(30*time.Second, 10*time.Minute),
 			},
 		}, {
 			name: "with issuer claim keys iss",
-			opts: []HandlerOption{
-				WithIssuerClaimKeys(DefaultIssuerClaims...),
+			opts: []OIDCOption{
+				WithIssuerClaimKeys(oidc.DefaultIssuerClaims...),
 			},
 			checkFunc: issuerClaimHandler("iss"),
 		}, {
 			name: "with issuer claim keys ias_iss",
-			opts: []HandlerOption{
+			opts: []OIDCOption{
 				WithIssuerClaimKeys("ias_iss"),
 			},
 			checkFunc: issuerClaimHandler("ias_iss"),
 		}, {
 			name: "with nil provider",
-			opts: []HandlerOption{
+			opts: []OIDCOption{
 				WithStaticProvider(nil),
 			},
 			wantError: true,
 		}, {
 			name: "with provider",
-			opts: []HandlerOption{
-				WithStaticProvider(&Provider{
-					issuerURL: providerUrl,
+			opts: []OIDCOption{
+				WithStaticProvider(&oidc.Provider{
+					IssuerURL: providerUrl,
 				}),
 			},
-			checkFunc: func(h *Handler) error {
-				key := IssuerPrefix + providerUrl.String()
+			checkFunc: func(h *OIDC) error {
+				key := issuerPrefix + providerUrl.String()
 				if _, found := h.staticProviders[key]; !found {
 					return errors.New("expected providers to be initialized")
 				}
@@ -94,9 +95,10 @@ func TestNewHandler(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			// Arrange
+			// manager := NewM
 
 			// Act
-			hdl, err := NewHandler(tc.opts...)
+			hdl, err := NewOIDC(tc.opts...)
 			if tc.checkFunc != nil {
 				err = tc.checkFunc(hdl)
 			}
@@ -131,21 +133,21 @@ func TestParseAndValidate(t *testing.T) {
 	})
 
 	mux.HandleFunc("/oauth2/introspect/fail", func(w http.ResponseWriter, r *http.Request) {
-		err := json.NewEncoder(w).Encode(Introspection{Active: false})
+		err := json.NewEncoder(w).Encode(oidc.Introspection{Active: false})
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 		}
 	})
 
 	mux.HandleFunc("/oauth2/introspect/success", func(w http.ResponseWriter, r *http.Request) {
-		err := json.NewEncoder(w).Encode(Introspection{Active: true})
+		err := json.NewEncoder(w).Encode(oidc.Introspection{Active: true})
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 		}
 	})
 
 	mux.HandleFunc("/oauth2/introspect", func(w http.ResponseWriter, r *http.Request) {
-		err := json.NewEncoder(w).Encode(Introspection{Active: true})
+		err := json.NewEncoder(w).Encode(oidc.Introspection{Active: true})
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 		}
@@ -218,13 +220,13 @@ func TestParseAndValidate(t *testing.T) {
 		name            string
 		issuerClaimKeys []string
 		token           *jwt.Token
-		providerOptions []ProviderOption
+		providerOptions []oidc.ProviderOption
 		featureGates    *commoncfg.FeatureGates
 		wantError       bool
 	}{
 		{
 			name:            "zero values",
-			issuerClaimKeys: DefaultIssuerClaims,
+			issuerClaimKeys: oidc.DefaultIssuerClaims,
 			wantError:       true,
 		}, {
 			name:            "invalid token: wrong IAS issuer",
@@ -239,7 +241,7 @@ func TestParseAndValidate(t *testing.T) {
 			wantError: true,
 		}, {
 			name:            "invalid token: wrong issuer",
-			issuerClaimKeys: DefaultIssuerClaims,
+			issuerClaimKeys: oidc.DefaultIssuerClaims,
 			token: jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
 				"sub":  "me",
 				"mail": "me@my.world",
@@ -250,7 +252,7 @@ func TestParseAndValidate(t *testing.T) {
 			wantError: true,
 		}, {
 			name:            "invalid token: wrong issuer scheme",
-			issuerClaimKeys: DefaultIssuerClaims,
+			issuerClaimKeys: oidc.DefaultIssuerClaims,
 			token: jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
 				"sub":  "me",
 				"mail": "me@my.world",
@@ -260,7 +262,7 @@ func TestParseAndValidate(t *testing.T) {
 			wantError: true,
 		}, {
 			name:            "invalid token: no audience",
-			issuerClaimKeys: DefaultIssuerClaims,
+			issuerClaimKeys: oidc.DefaultIssuerClaims,
 			token: jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
 				"sub":  "me",
 				"mail": "me@my.world",
@@ -270,7 +272,7 @@ func TestParseAndValidate(t *testing.T) {
 			wantError: true,
 		}, {
 			name:            "invalid token: wrong audience",
-			issuerClaimKeys: DefaultIssuerClaims,
+			issuerClaimKeys: oidc.DefaultIssuerClaims,
 			token: jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
 				"sub":  "me",
 				"mail": "me@my.world",
@@ -281,7 +283,7 @@ func TestParseAndValidate(t *testing.T) {
 			wantError: true,
 		}, {
 			name:            "invalid token: not before",
-			issuerClaimKeys: DefaultIssuerClaims,
+			issuerClaimKeys: oidc.DefaultIssuerClaims,
 			token: jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
 				"sub":  "me",
 				"mail": "me@my.world",
@@ -293,7 +295,7 @@ func TestParseAndValidate(t *testing.T) {
 			wantError: true,
 		}, {
 			name:            "invalid token: expired",
-			issuerClaimKeys: DefaultIssuerClaims,
+			issuerClaimKeys: oidc.DefaultIssuerClaims,
 			token: jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
 				"sub":  "me",
 				"mail": "me@my.world",
@@ -304,7 +306,7 @@ func TestParseAndValidate(t *testing.T) {
 			wantError: true,
 		}, {
 			name:            "invalid token: no expiry",
-			issuerClaimKeys: DefaultIssuerClaims,
+			issuerClaimKeys: oidc.DefaultIssuerClaims,
 			token: jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
 				"sub":  "me",
 				"mail": "me@my.world",
@@ -314,7 +316,7 @@ func TestParseAndValidate(t *testing.T) {
 			wantError: true,
 		}, {
 			name:            "valid token",
-			issuerClaimKeys: DefaultIssuerClaims,
+			issuerClaimKeys: oidc.DefaultIssuerClaims,
 			token: jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
 				"sub":  "me",
 				"mail": "me@my.world",
@@ -326,7 +328,7 @@ func TestParseAndValidate(t *testing.T) {
 		}, {
 			name:            "valid token with http issuer",
 			featureGates:    &commoncfg.FeatureGates{flags.EnableHttpIssuerScheme: true},
-			issuerClaimKeys: DefaultIssuerClaims,
+			issuerClaimKeys: oidc.DefaultIssuerClaims,
 			token: jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
 				"sub":  "me",
 				"mail": "me@my.world",
@@ -348,7 +350,7 @@ func TestParseAndValidate(t *testing.T) {
 			wantError: false,
 		}, {
 			name:            "valid IAS token with iss",
-			issuerClaimKeys: DefaultIssuerClaims,
+			issuerClaimKeys: oidc.DefaultIssuerClaims,
 			token: jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
 				"sub":  "me",
 				"mail": "me@my.world",
@@ -359,7 +361,7 @@ func TestParseAndValidate(t *testing.T) {
 			wantError: false,
 		}, {
 			name:            "revoked token",
-			issuerClaimKeys: DefaultIssuerClaims,
+			issuerClaimKeys: oidc.DefaultIssuerClaims,
 			token: jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
 				"sub":  "me",
 				"mail": "me@my.world",
@@ -367,13 +369,13 @@ func TestParseAndValidate(t *testing.T) {
 				"exp":  time.Now().Add(48 * time.Hour).Unix(),
 				"aud":  []string{"aud1", "aud2"},
 			}),
-			providerOptions: []ProviderOption{
-				WithIntrospectTokenURL(httpsProviderURL.JoinPath("oauth2", "introspect", "fail")),
+			providerOptions: []oidc.ProviderOption{
+				oidc.WithIntrospectTokenURL(httpsProviderURL.JoinPath("oauth2", "introspect", "fail")),
 			},
 			wantError: true,
 		}, {
 			name:            "Active token",
-			issuerClaimKeys: DefaultIssuerClaims,
+			issuerClaimKeys: oidc.DefaultIssuerClaims,
 			token: jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
 				"sub":  "me",
 				"mail": "me@my.world",
@@ -381,8 +383,8 @@ func TestParseAndValidate(t *testing.T) {
 				"exp":  time.Now().Add(48 * time.Hour).Unix(),
 				"aud":  []string{"aud1", "aud2"},
 			}),
-			providerOptions: []ProviderOption{
-				WithIntrospectTokenURL(httpsProviderURL.JoinPath("oauth2", "introspect", "success")),
+			providerOptions: []oidc.ProviderOption{
+				oidc.WithIntrospectTokenURL(httpsProviderURL.JoinPath("oauth2", "introspect", "success")),
 			},
 			wantError: false,
 		},
@@ -394,10 +396,10 @@ func TestParseAndValidate(t *testing.T) {
 			// Arrange
 
 			// create an http provider
-			httpProviderOpts := append([]ProviderOption{
-				WithCustomJWKSURI(httpsJwksURI),
+			httpProviderOpts := append([]oidc.ProviderOption{
+				oidc.WithCustomJWKSURI(httpsJwksURI),
 			}, tc.providerOptions...)
-			httpProvider, err := NewProvider(httpProviderURL, []string{"aud1"}, httpProviderOpts...)
+			httpProvider, err := oidc.NewProvider(httpProviderURL, []string{"aud1"}, httpProviderOpts...)
 			if err != nil {
 				t.Fatalf("could not create provider: %s", err)
 			}
@@ -406,16 +408,16 @@ func TestParseAndValidate(t *testing.T) {
 			certpool := x509.NewCertPool()
 			certpool.AddCert(httpsTestServer.Certificate())
 			cl := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: certpool}}}
-			httpsProviderOpts := append([]ProviderOption{
-				WithProviderHTTPClient(cl),
-				WithCustomJWKSURI(httpsJwksURI),
+			httpsProviderOpts := append([]oidc.ProviderOption{
+				oidc.WithProviderHTTPClient(cl),
+				oidc.WithCustomJWKSURI(httpsJwksURI),
 			}, tc.providerOptions...)
-			httpsProvider, err := NewProvider(httpsProviderURL, []string{"aud1"}, httpsProviderOpts...)
+			httpsProvider, err := oidc.NewProvider(httpsProviderURL, []string{"aud1"}, httpsProviderOpts...)
 			if err != nil {
 				t.Fatalf("could not create provider: %s", err)
 			}
 
-			handlerOpts := []HandlerOption{
+			handlerOpts := []OIDCOption{
 				WithIssuerClaimKeys(tc.issuerClaimKeys...),
 				WithStaticProvider(httpProvider),
 				WithStaticProvider(httpsProvider),
@@ -423,7 +425,7 @@ func TestParseAndValidate(t *testing.T) {
 			if tc.featureGates != nil {
 				handlerOpts = append(handlerOpts, WithFeatureGates(tc.featureGates))
 			}
-			hdl, err := NewHandler(handlerOpts...)
+			hdl, err := NewOIDC(handlerOpts...)
 			if err != nil {
 				t.Fatalf("could not create handler: %s", err)
 			}
@@ -448,7 +450,7 @@ func TestParseAndValidate(t *testing.T) {
 			}
 
 			// Act
-			err = hdl.ParseAndValidate(t.Context(), tokenString, &claims, false)
+			err = hdl.ParseAndValidate(t.Context(), tokenString, "", &claims, false)
 
 			// Assert
 			if tc.wantError {
@@ -464,8 +466,8 @@ func TestParseAndValidate(t *testing.T) {
 	}
 }
 
-func issuerClaimHandler(claimKey string) func(h *Handler) error {
-	return func(h *Handler) error {
+func issuerClaimHandler(claimKey string) func(h *OIDC) error {
+	return func(h *OIDC) error {
 		found := false
 
 		for _, key := range h.issuerClaimKeys {
