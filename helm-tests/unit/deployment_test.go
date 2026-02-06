@@ -64,6 +64,7 @@ func TestDeployment(t *testing.T) {
 			},
 			wantError: false,
 			testFunc: func(t *testing.T, resource *corev1.Deployment) {
+				t.Helper()
 				require.Equal(t, "foo", resource.Spec.Template.Spec.Containers[0].Name)
 				require.Equal(t, "bar", resource.Spec.Template.Spec.Containers[0].Image)
 			},
