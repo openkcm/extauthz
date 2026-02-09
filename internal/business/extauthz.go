@@ -3,11 +3,11 @@ package business
 import (
 	"context"
 	"fmt"
-	"net/url"
 
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
 	"github.com/openkcm/common-sdk/pkg/commongrpc"
 	"github.com/openkcm/common-sdk/pkg/commonhttp"
+	"github.com/openkcm/common-sdk/pkg/oidc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
@@ -18,7 +18,6 @@ import (
 	"github.com/openkcm/extauthz/internal/config"
 	"github.com/openkcm/extauthz/internal/extauthz"
 	"github.com/openkcm/extauthz/internal/handler"
-	"github.com/openkcm/extauthz/internal/oidc"
 	"github.com/openkcm/extauthz/internal/policies/cedarpolicy"
 	"github.com/openkcm/extauthz/internal/session"
 )
@@ -138,26 +137,21 @@ func createOIDCHandler(ctx context.Context, sessionManager *session.Manager, cfg
 }
 
 func createOIDCProvider(ctx context.Context, httpClientCfg *commoncfg.HTTPClient, cfg *config.Provider) (*oidc.Provider, error) {
-	slogctx.Info(ctx, "Using static OIDC provider", "issuer", cfg.Issuer, "audiences", cfg.Audiences, "jwksURI", cfg.JwksURI)
-	issuerURL, err := url.Parse(cfg.Issuer)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse issuer URL %q: %w", cfg.Issuer, err)
-	}
+	slogctx.Info(ctx, "Using static OIDC provider",
+		"issuer", cfg.Issuer,
+		"issuerURI", cfg.IssuerURI,
+		"jwksURI", cfg.JwksURI,
+		"audiences", cfg.Audiences,
+	)
 	httpClient, err := commonhttp.NewClient(httpClientCfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create HTTP client for OIDC provider: %w", err)
 	}
-	opts := []oidc.ProviderOption{
-		oidc.WithProviderHTTPClient(httpClient),
-	}
-	if cfg.JwksURI != "" {
-		jwksURI, err := url.Parse(cfg.JwksURI)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse JWKS URI %q: %w", cfg.JwksURI, err)
-		}
-		opts = append(opts, oidc.WithCustomJWKSURI(jwksURI))
-	}
-	oidcProvider, err := oidc.NewProvider(issuerURL, cfg.Audiences, opts...)
+	oidcProvider, err := oidc.NewProvider(cfg.Issuer, cfg.Audiences,
+		oidc.WithSecureHTTPClient(httpClient),
+		oidc.WithCustomIssuerURI(cfg.IssuerURI),
+		oidc.WithCustomJWKSURI(cfg.JwksURI),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create static OIDC provider: %w", err)
 	}
