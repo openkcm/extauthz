@@ -10,17 +10,17 @@ import (
 	"github.com/go-jose/go-jose/v4"
 	"github.com/go-jose/go-jose/v4/jwt"
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
+	"github.com/openkcm/common-sdk/pkg/oidc"
 	"github.com/patrickmn/go-cache"
 
 	slogctx "github.com/veqryn/slog-context"
 
-	"github.com/openkcm/extauthz/internal/flags"
-	"github.com/openkcm/extauthz/internal/oidc"
 	"github.com/openkcm/extauthz/internal/session"
 )
 
 const (
 	introspectPrefix = "introspect_"
+	signingKeyPrefix = "signingkey_"
 )
 
 // OIDC tracks the set of identity providers to support multi tenancy.
@@ -111,10 +111,10 @@ func (handler *OIDC) RegisterStaticProvider(provider *oidc.Provider) {
 	// To support multiple providers with the same issuer but different JWKS URIs,
 	// we prefer to use a custom JWKS URI as the unique key in the static providers
 	// map over the potentially non-unique issuer.
-	if provider.JwksURI != nil {
-		handler.staticProviders[provider.JwksURI.String()] = provider
+	if provider.CustomJWKSURI() != "" {
+		handler.staticProviders[provider.CustomJWKSURI()] = provider
 	} else {
-		handler.staticProviders[provider.IssuerURL.String()] = provider
+		handler.staticProviders[provider.Issuer()] = provider
 	}
 }
 
@@ -194,8 +194,8 @@ func (handler *OIDC) ParseAndValidate(ctx context.Context, rawToken, tenantID st
 		return errors.Join(ErrInvalidToken, errors.New("missing kid in token header"))
 	}
 
-	// let the provider lookup the key for the key ID
-	key, err := provider.SigningKeyFor(ctx, keyID)
+	// get the signing key for the key ID
+	key, err := handler.getSigningKey(ctx, provider, keyID)
 	if err != nil {
 		slogctx.Error(ctx, "Failed to get signing key for token", "error", err, "kid", keyID)
 		return errors.Join(ErrInvalidToken, err)
@@ -225,9 +225,9 @@ func (handler *OIDC) ParseAndValidate(ctx context.Context, rawToken, tenantID st
 	}
 
 	// verify the audience if any
-	if len(provider.Audiences) > 0 {
+	if len(provider.Audiences()) > 0 {
 		err = standardClaims.Validate(jwt.Expected{
-			AnyAudience: provider.Audiences,
+			AnyAudience: provider.Audiences(),
 		})
 		if err != nil {
 			slogctx.Error(ctx, "Failed to validate token audience", "error", err)
@@ -257,7 +257,7 @@ func (handler *OIDC) ProviderFor(ctx context.Context, issuer, jwksURI, tenantID 
 	// This allows supporting multiple providers with the same issuer but different JWKS URIs.
 	if jwksURI != "" {
 		if provider, ok := handler.staticProviders[jwksURI]; ok {
-			if provider.IssuerURL.String() == issuer {
+			if provider.Issuer() == issuer {
 				return provider, nil
 			}
 		}
@@ -282,13 +282,28 @@ func (handler *OIDC) ProviderFor(ctx context.Context, issuer, jwksURI, tenantID 
 	return provider, nil
 }
 
-// introspect an access or refresh token.
-func (handler *OIDC) introspect(ctx context.Context, provider *oidc.Provider, introspectToken string, useCache bool) (oidc.Introspection, error) {
-	if handler.featureGates.IsFeatureEnabled(flags.DisableJWTTokenIntrospection) {
-		slogctx.Debug(ctx, "Introspection disabled via feature gate")
-		return oidc.Introspection{Active: true}, nil
+func (handler *OIDC) getSigningKey(ctx context.Context, provider *oidc.Provider, keyID string) (*jose.JSONWebKey, error) {
+	// first check the cache for a recent signing key for this key ID
+	cacheKey := signingKeyPrefix + provider.UniqueID() + keyID
+	cache, ok := handler.cache.Get(cacheKey)
+	if ok {
+		//nolint:forcetypeassert
+		return cache.(*jose.JSONWebKey), nil
 	}
 
+	// otherwise let the provider fetch the key using the JWKS URI and cache it if found
+	key, err := provider.GetSigningKey(ctx, keyID)
+	if err != nil {
+		return nil, err
+	}
+	handler.cache.Set(cacheKey, key, 0)
+
+	return key, nil
+}
+
+// introspect an access or refresh token.
+func (handler *OIDC) introspect(ctx context.Context, provider *oidc.Provider, introspectToken string, useCache bool) (oidc.Introspection, error) {
+	// first check the cache for a recent introspection result for this token
 	cacheKey := introspectPrefix + introspectToken
 	if useCache {
 		cache, ok := handler.cache.Get(cacheKey)
@@ -298,11 +313,16 @@ func (handler *OIDC) introspect(ctx context.Context, provider *oidc.Provider, in
 		}
 	}
 
-	intr, err := provider.Introspect(ctx, introspectToken)
+	// introspect the token and cache the result
+	intr, err := provider.IntrospectToken(ctx, introspectToken)
 	if err != nil {
-		return intr, fmt.Errorf("introspecting token: %w", err)
+		if errors.Is(err, oidc.ErrNoIntrospectionEndpoint) {
+			slogctx.Debug(ctx, "No introspection endpoint configured", "issuer", provider.Issuer)
+			return oidc.Introspection{Active: true}, nil
+		}
+		slogctx.Error(ctx, "Could not introspect access token", "error", err)
+		return oidc.Introspection{Active: false}, err
 	}
-
 	handler.cache.Set(cacheKey, intr, 0)
 
 	return intr, nil
