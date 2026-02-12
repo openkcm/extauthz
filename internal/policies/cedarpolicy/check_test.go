@@ -36,7 +36,6 @@ func TestCheckWithPath(t *testing.T) {
 		name        string
 		subject     string
 		action      string
-		route       string
 		cntxt       map[string]string
 		wantError   bool
 		wantAllowed bool
@@ -48,10 +47,10 @@ func TestCheckWithPath(t *testing.T) {
 			name:    "permit if me accesses GET on my stuff",
 			subject: "me!t1",
 			action:  "GET",
-			route:   "our.service.com/my/stuff/abc",
 			cntxt: map[string]string{
 				"type":   "jwt",
-				"route":  "our.service.com/my/stuff/abc",
+				"host":   "our.service.com",
+				"path":   "/my/stuff/abc",
 				"issuer": "https://127.0.0.1:1234",
 			},
 			wantAllowed: true,
@@ -59,10 +58,10 @@ func TestCheckWithPath(t *testing.T) {
 			name:    "permit if you accesses GET on your stuff",
 			subject: "you!t1",
 			action:  "GET",
-			route:   "our.service.com/your/stuff/bla",
 			cntxt: map[string]string{
 				"type":   "jwt",
-				"route":  "our.service.com/your/stuff/bla",
+				"host":   "our.service.com",
+				"path":   "/your/stuff/bla",
 				"issuer": "https://127.0.0.1:1234",
 			},
 			wantAllowed: true,
@@ -70,10 +69,10 @@ func TestCheckWithPath(t *testing.T) {
 			name:    "forbid if me accesses GET on your stuff",
 			subject: "me!t1",
 			action:  "GET",
-			route:   "our.service.com/your/stuff/bla",
 			cntxt: map[string]string{
 				"type":   "jwt",
-				"route":  "our.service.com/your/stuff/bla",
+				"host":   "our.service.com",
+				"path":   "/your/stuff/bla",
 				"issuer": "https://127.0.0.1:1234",
 			},
 			wantAllowed: false,
@@ -81,10 +80,10 @@ func TestCheckWithPath(t *testing.T) {
 			name:    "forbid if you accesses GET on my stuff",
 			subject: "you!t1",
 			action:  "GET",
-			route:   "our.service.com/my/stuff/abc",
 			cntxt: map[string]string{
 				"type":   "jwt",
-				"route":  "our.service.com/my/stuff/abc",
+				"host":   "our.service.com",
+				"path":   "/my/stuff/abc",
 				"issuer": "https://127.0.0.1:1234",
 			},
 			wantAllowed: false,
@@ -104,7 +103,6 @@ func TestCheckWithPath(t *testing.T) {
 			allowed, reason, err := engine.Check(
 				cedarpolicy.WithSubject(tc.subject),
 				cedarpolicy.WithAction(tc.action),
-				cedarpolicy.WithRoute(tc.route),
 				cedarpolicy.WithContextData(tc.cntxt),
 			)
 			t.Logf("reason: %s", reason)

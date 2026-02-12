@@ -74,7 +74,8 @@ func (srv *Server) checkSession(ctx context.Context, sessionCookie *http.Cookie,
 	)
 
 	data := map[string]string{
-		"route":  host + path,
+		"host":   host,
+		"path":   path,
 		"type":   "jwt",
 		"issuer": session.Issuer,
 	}
@@ -82,7 +83,6 @@ func (srv *Server) checkSession(ctx context.Context, sessionCookie *http.Cookie,
 	allowed, reason, err := srv.policyEngine.Check(
 		cedarpolicy.WithSubject(session.Subject),
 		cedarpolicy.WithAction(method),
-		cedarpolicy.WithRoute(host+path),
 		cedarpolicy.WithContextData(data),
 	)
 	if err != nil {

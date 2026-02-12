@@ -38,18 +38,6 @@ func WithAction(action string) policies.CheckOption {
 		return nil
 	}
 }
-func WithRoute(route string) policies.CheckOption {
-	return func(d policies.Engine) error {
-		cpe, ok := d.(*cedarPolicyEngine)
-		if !ok {
-			return ErrUnexpectedPolicyEngine
-		}
-
-		cpe.request.Resource = cedar.NewEntityUID("Route", cedar.String(route))
-
-		return nil
-	}
-}
 
 func WithContextData(data map[string]string) policies.CheckOption {
 	return func(d policies.Engine) error {

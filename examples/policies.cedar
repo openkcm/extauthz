@@ -3,11 +3,12 @@
 permit (
 	principal == Subject::"CN=TechSys01, OU=MyUnit, O=MyOrg, C=DE",
 	action in [Action::"GET", Action::"POST", Action::"DELETE"],
-	resource is Route
+	resource
 ) when {
-	context.type == "x509"
-	&& context.route like "myorg.com/api/*"
-	&& context.issuer == "CN=MyCA, OU=MyUnit, O=MyOrg, C=DE"
+	context.type == "x509" &&
+	context.host == "myorg.com" &&
+	context.path like "/api/*" &&
+	context.issuer == "CN=MyCA, OU=MyUnit, O=MyOrg, C=DE"
 };
 
 /////////////////////////////////////////
@@ -15,11 +16,12 @@ permit (
 permit (
 	principal == Subject::"TechSys02",
 	action in [Action::"GET", Action::"POST", Action::"DELETE"],
-	resource is Route
+	resource
 ) when {
-	context.type == "jwt"
-	&& context.route like "myorg.com/api/*"
-	&& context.issuer == "https://iam.myorg.com/"
+	context.type == "jwt" &&
+	context.host == "myorg.com" &&
+	context.path like "/api/*" &&
+	context.issuer == "https://iam.myorg.com/"
 };
 
 /////////////////////////////////////////
@@ -27,9 +29,10 @@ permit (
 permit (
 	principal is Subject,
 	action in [Action::"GET", Action::"POST"],
-	resource is Route
+	resource
 ) when {
-	context.type == "jwt"
-	&& context.route like "myorg.com/cmk/*"
-	&& context.issuer == "https://iam.myorg.com/"
+	context.type == "jwt" &&
+	context.host == "myorg.com" &&
+	context.path like "/cmk/*" &&
+	context.issuer == "https://iam.myorg.com/"
 };
