@@ -10,68 +10,72 @@ var policies = map[string]string{
 		permit (
 			principal,
 			action == Action::"GET",
-			resource is Route
+			resource
 		) when {
-			principal in [
-				Subject::"me!t1",
-				Subject::"me!t2"
-			] &&
 			context.type == "jwt" &&
-			context.route like "*/my/stuff*" &&
-			[
-				"https://localhost:1234",
-				"https://127.0.0.1:1234"
-			].contains(context.issuer)
+			context.path like "/my/stuff*" &&
+			(
+				(
+					principal == Subject::"me!t1" &&
+					context.issuer == "https://127.0.0.1:1234"
+				) || (
+					principal == Subject::"me!t2" &&
+					context.issuer == "https://127.0.0.1:1234"
+				)
+			)
 		};
 		permit (
 			principal,
 			action == Action::"DELETE",
-			resource is Route
+			resource
 		) when {
-			principal in [
-				Subject::"me!t1",
-				Subject::"me!t2"
-			] &&
 			context.type == "jwt" &&
-			context.route like "*/my/stuff*" &&
-			[
-				"https://localhost:1234",
-				"https://127.0.0.1:1234"
-			].contains(context.issuer)
+			context.path like "/my/stuff*" &&
+			(
+				(
+					principal == Subject::"me!t1" &&
+					context.issuer == "https://127.0.0.1:1234"
+				) || (
+					principal == Subject::"me!t2" &&
+					context.issuer == "https://127.0.0.1:1234"
+				)
+			)
 		};
 	`,
 	policy2: `
 		permit (
 			principal,
 			action == Action::"GET",
-			resource is Route
+			resource
 		) when {
-			principal in [
-				Subject::"you!t1",
-				Subject::"you!t2"
-			] &&
 			context.type == "jwt" &&
-			context.route like "*/your/stuff*" &&
-			[
-				"https://localhost:1234",
-				"https://127.0.0.1:1234"
-			].contains(context.issuer)
+			context.path like "/your/stuff*" &&
+			(
+				(
+					principal == Subject::"you!t1" &&
+					context.issuer == "https://127.0.0.1:1234"
+				) || (
+					principal == Subject::"you!t2" &&
+					context.issuer == "https://127.0.0.1:1234"
+				)
+			)
 		};
 		permit (
 			principal,
 			action == Action::"DELETE",
-			resource is Route
+			resource
 		) when {
-			principal in [
-				Subject::"you!t1",
-				Subject::"you!t2"
-			] &&
 			context.type == "jwt" &&
-			context.route like "*/your/stuff*" &&
-			[
-				"https://localhost:1234",
-				"https://127.0.0.1:1234"
-			].contains(context.issuer)
+			context.path like "/your/stuff*" &&
+			(
+				(
+					principal == Subject::"you!t1" &&
+					context.issuer == "https://127.0.0.1:1234"
+				) || (
+					principal == Subject::"you!t2" &&
+					context.issuer == "https://127.0.0.1:1234"
+				)
+			)
 		};
 	`,
 }

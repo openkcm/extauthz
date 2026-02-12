@@ -96,7 +96,6 @@ func (srv *Server) checkJWTToken(ctx context.Context, bearerToken, method, host,
 	)
 
 	data := map[string]string{
-		"route":   host + path, // Deprecated: use host and path instead of route
 		"host":    host,
 		"path":    path,
 		"type":    "jwt",
@@ -107,7 +106,6 @@ func (srv *Server) checkJWTToken(ctx context.Context, bearerToken, method, host,
 	allowed, reason, err := srv.policyEngine.Check(
 		cedarpolicy.WithSubject(claims.Subject),
 		cedarpolicy.WithAction(method),
-		cedarpolicy.WithRoute(host+path),
 		cedarpolicy.WithContextData(data),
 	)
 	if err != nil {

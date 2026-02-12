@@ -264,7 +264,8 @@ func (srv *Server) checkClientCert(ctx context.Context, certHeader, method, host
 		"path", path)
 
 	data := map[string]string{
-		"route":  host + path,
+		"host":   host,
+		"path":   path,
 		"type":   "x509",
 		"issuer": crtIssuer,
 	}
@@ -272,7 +273,6 @@ func (srv *Server) checkClientCert(ctx context.Context, certHeader, method, host
 	allowed, reason, err := srv.policyEngine.Check(
 		cedarpolicy.WithSubject(subject),
 		cedarpolicy.WithAction(method),
-		cedarpolicy.WithRoute(host+path),
 		cedarpolicy.WithContextData(data),
 	)
 	if err != nil {

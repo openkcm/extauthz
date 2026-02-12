@@ -29,40 +29,41 @@ const (
 permit (
 	principal == Subject::"me",
 	action == Action::"GET",
-	resource is Route
+	resource
 ) when {
-	context.route like "*.service.com/foo/bar*"
-	&& context.issuer like "https://127.0.0.1:*"
+	context.host like "*.service.com" &&
+	context.path like "/foo/bar*" &&
+	context.issuer like "https://127.0.0.1:*"
 };
 
 permit (
 	principal == Subject::"CN=minime",
 	action == Action::"GET",
-	resource is Route
+	resource
 ) when {
-	context.route == "our.service.com/foo/bar"
+	context.host == "our.service.com" &&
+	context.path == "/foo/bar"
 };
 
 permit (
 	principal == Subject::"mySessionMe",
 	action == Action::"GET",
-	resource is Route
+	resource
 ) when {
-	context.route like "*.service.com/cmk/v1*"
-	&& context.issuer like "https://127.0.0.1:*"
+	context.host like "*.service.com" &&
+	context.path like "/cmk/v1*" &&
+	context.issuer like "https://127.0.0.1:*"
 };
 
 // Registry Service
 permit (
     principal,
     action in [Action::"GET", Action::"PUT", Action::"POST"],
-    resource is Route
+    resource
 ) when {
-    principal in [
-        Subject::"CN=minime"
-    ] 
-    && context.type == "x509" 
-    && context.route like "*/kms.api.cmk.registry.*.v1.Service/*"
+    principal == Subject::"CN=minime" &&
+    context.type == "x509"  &&
+    context.path like "/kms.api.cmk.registry.*.v1.Service/*"
 };
 `
 )
