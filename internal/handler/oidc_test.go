@@ -16,17 +16,14 @@ import (
 	"math/big"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"testing"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
+	"github.com/openkcm/common-sdk/pkg/oidc"
 	"github.com/stretchr/testify/assert"
-
-	"github.com/openkcm/extauthz/internal/flags"
-	"github.com/openkcm/extauthz/internal/oidc"
 )
 
 func TestNewOIDC(t *testing.T) {
@@ -37,9 +34,11 @@ func TestNewOIDC(t *testing.T) {
 		})
 	})
 
-	providerUrl, err := url.Parse("https://example.com")
+	const providerUrl = "https://example.com"
+
+	staticProvider, err := oidc.NewProvider(providerUrl, []string{"aud1"})
 	if err != nil {
-		t.Fatalf("failed to parse URL: %s", err)
+		t.Fatalf("could not create static provider: %s", err)
 	}
 
 	// create the test cases
@@ -77,12 +76,10 @@ func TestNewOIDC(t *testing.T) {
 		}, {
 			name: "with provider",
 			opts: []OIDCOption{
-				WithStaticProvider(&oidc.Provider{
-					IssuerURL: providerUrl,
-				}),
+				WithStaticProvider(staticProvider),
 			},
 			checkFunc: func(h *OIDC) error {
-				key := issuerPrefix + providerUrl.String()
+				key := providerUrl
 				if _, found := h.staticProviders[key]; !found {
 					return errors.New("expected providers to be initialized")
 				}
@@ -123,51 +120,30 @@ func TestNewOIDC(t *testing.T) {
 
 func TestParseAndValidate(t *testing.T) {
 	// create a JWKS test server
-	var jwksResponse []byte
+	var (
+		wkocResponse  []byte
+		jwksResponse  []byte
+		introspection []byte
+	)
 
 	mux := http.NewServeMux()
+	mux.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, string(wkocResponse))
+	})
 	mux.HandleFunc("/jwks", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-
 		fmt.Fprintln(w, string(jwksResponse))
 	})
-
-	mux.HandleFunc("/oauth2/introspect/fail", func(w http.ResponseWriter, r *http.Request) {
-		err := json.NewEncoder(w).Encode(oidc.Introspection{Active: false})
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-		}
-	})
-
-	mux.HandleFunc("/oauth2/introspect/success", func(w http.ResponseWriter, r *http.Request) {
-		err := json.NewEncoder(w).Encode(oidc.Introspection{Active: true})
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-		}
-	})
-
 	mux.HandleFunc("/oauth2/introspect", func(w http.ResponseWriter, r *http.Request) {
-		err := json.NewEncoder(w).Encode(oidc.Introspection{Active: true})
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, string(introspection))
 	})
 
+	httpTestServer := httptest.NewServer(mux)
+	defer httpTestServer.Close()
 	httpsTestServer := httptest.NewTLSServer(mux)
 	defer httpsTestServer.Close()
-	httpsProviderURL, err := url.Parse(httpsTestServer.URL)
-	if err != nil {
-		t.Fatalf("could not parse issuer URL: %s", err)
-	}
-	httpsJwksURI, err := url.Parse(httpsTestServer.URL + "/jwks")
-	if err != nil {
-		t.Fatalf("could not parse JWKS URI: %s", err)
-	}
-
-	httpProviderURL, err := url.Parse(httpsTestServer.URL)
-	if err != nil {
-		t.Fatalf("could not parse issuer URL: %s", err)
-	}
 
 	// create an RSA key pair
 	rsaPrivateKey, err := rsa.GenerateKey(rand.Reader, 4096)
@@ -215,6 +191,15 @@ func TestParseAndValidate(t *testing.T) {
 		t.Fatalf("could not marshal JWKS response: %s", err)
 	}
 
+	wkocResponse, err = json.Marshal(map[string]any{
+		"issuer":                 httpsTestServer.URL,
+		"jwks_uri":               httpsTestServer.URL + "/jwks",
+		"introspection_endpoint": httpsTestServer.URL + "/oauth2/introspect",
+	})
+	if err != nil {
+		t.Fatalf("could not marshal WKOC response: %s", err)
+	}
+
 	// create the test cases
 	tests := []struct {
 		name            string
@@ -222,6 +207,7 @@ func TestParseAndValidate(t *testing.T) {
 		token           *jwt.Token
 		providerOptions []oidc.ProviderOption
 		featureGates    *commoncfg.FeatureGates
+		introspection   []byte
 		wantError       bool
 	}{
 		{
@@ -256,7 +242,7 @@ func TestParseAndValidate(t *testing.T) {
 			token: jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
 				"sub":  "me",
 				"mail": "me@my.world",
-				"iss":  httpsProviderURL.String(),
+				"iss":  httpsTestServer.URL,
 				"exp":  time.Now().Add(48 * time.Hour).Unix(),
 			}),
 			wantError: true,
@@ -266,7 +252,7 @@ func TestParseAndValidate(t *testing.T) {
 			token: jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
 				"sub":  "me",
 				"mail": "me@my.world",
-				"iss":  httpsProviderURL.String(),
+				"iss":  httpsTestServer.URL,
 				"exp":  time.Now().Add(48 * time.Hour).Unix(),
 			}),
 			wantError: true,
@@ -276,7 +262,7 @@ func TestParseAndValidate(t *testing.T) {
 			token: jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
 				"sub":  "me",
 				"mail": "me@my.world",
-				"iss":  httpsProviderURL.String(),
+				"iss":  httpsTestServer.URL,
 				"exp":  time.Now().Add(48 * time.Hour).Unix(),
 				"aud":  []string{"vip"},
 			}),
@@ -287,7 +273,7 @@ func TestParseAndValidate(t *testing.T) {
 			token: jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
 				"sub":  "me",
 				"mail": "me@my.world",
-				"iss":  httpsProviderURL.String(),
+				"iss":  httpsTestServer.URL,
 				"nbf":  time.Now().Add(24 * time.Hour).Unix(),
 				"exp":  time.Now().Add(48 * time.Hour).Unix(),
 				"aud":  []string{"aud1", "aud2"},
@@ -299,7 +285,7 @@ func TestParseAndValidate(t *testing.T) {
 			token: jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
 				"sub":  "me",
 				"mail": "me@my.world",
-				"iss":  httpsProviderURL.String(),
+				"iss":  httpsTestServer.URL,
 				"exp":  time.Now().Add(-48 * time.Hour).Unix(),
 				"aud":  []string{"aud1", "aud2"},
 			}),
@@ -310,7 +296,7 @@ func TestParseAndValidate(t *testing.T) {
 			token: jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
 				"sub":  "me",
 				"mail": "me@my.world",
-				"iss":  httpsProviderURL.String(),
+				"iss":  httpsTestServer.URL,
 				"aud":  []string{"aud1", "aud2"},
 			}),
 			wantError: true,
@@ -320,19 +306,7 @@ func TestParseAndValidate(t *testing.T) {
 			token: jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
 				"sub":  "me",
 				"mail": "me@my.world",
-				"iss":  httpsProviderURL.String(),
-				"exp":  time.Now().Add(48 * time.Hour).Unix(),
-				"aud":  []string{"aud1", "aud2"},
-			}),
-			wantError: false,
-		}, {
-			name:            "valid token with http issuer",
-			featureGates:    &commoncfg.FeatureGates{flags.EnableHttpIssuerScheme: true},
-			issuerClaimKeys: oidc.DefaultIssuerClaims,
-			token: jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
-				"sub":  "me",
-				"mail": "me@my.world",
-				"iss":  httpProviderURL.String(),
+				"iss":  httpsTestServer.URL,
 				"exp":  time.Now().Add(48 * time.Hour).Unix(),
 				"aud":  []string{"aud1", "aud2"},
 			}),
@@ -343,7 +317,7 @@ func TestParseAndValidate(t *testing.T) {
 			token: jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
 				"sub":     "me",
 				"mail":    "me@my.world",
-				"ias_iss": httpsProviderURL.String(),
+				"ias_iss": httpsTestServer.URL,
 				"exp":     time.Now().Add(48 * time.Hour).Unix(),
 				"aud":     []string{"aud1", "aud2"},
 			}),
@@ -354,7 +328,7 @@ func TestParseAndValidate(t *testing.T) {
 			token: jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
 				"sub":  "me",
 				"mail": "me@my.world",
-				"iss":  httpsProviderURL.String(),
+				"iss":  httpsTestServer.URL,
 				"exp":  time.Now().Add(48 * time.Hour).Unix(),
 				"aud":  []string{"aud1", "aud2"},
 			}),
@@ -365,28 +339,25 @@ func TestParseAndValidate(t *testing.T) {
 			token: jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
 				"sub":  "me",
 				"mail": "me@my.world",
-				"iss":  httpsProviderURL.String(),
+				"iss":  httpsTestServer.URL,
 				"exp":  time.Now().Add(48 * time.Hour).Unix(),
 				"aud":  []string{"aud1", "aud2"},
 			}),
-			providerOptions: []oidc.ProviderOption{
-				oidc.WithIntrospectTokenURL(httpsProviderURL.JoinPath("oauth2", "introspect", "fail")),
-			},
-			wantError: true,
+			providerOptions: []oidc.ProviderOption{},
+			introspection:   []byte(`{"active": false}`),
+			wantError:       true,
 		}, {
 			name:            "Active token",
 			issuerClaimKeys: oidc.DefaultIssuerClaims,
 			token: jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
 				"sub":  "me",
 				"mail": "me@my.world",
-				"iss":  httpsProviderURL.String(),
+				"iss":  httpsTestServer.URL,
 				"exp":  time.Now().Add(48 * time.Hour).Unix(),
 				"aud":  []string{"aud1", "aud2"},
 			}),
-			providerOptions: []oidc.ProviderOption{
-				oidc.WithIntrospectTokenURL(httpsProviderURL.JoinPath("oauth2", "introspect", "success")),
-			},
-			wantError: false,
+			providerOptions: []oidc.ProviderOption{},
+			wantError:       false,
 		},
 	}
 
@@ -395,32 +366,21 @@ func TestParseAndValidate(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// Arrange
 
-			// create an http provider
-			httpProviderOpts := append([]oidc.ProviderOption{
-				oidc.WithCustomJWKSURI(httpsJwksURI),
-			}, tc.providerOptions...)
-			httpProvider, err := oidc.NewProvider(httpProviderURL, []string{"aud1"}, httpProviderOpts...)
-			if err != nil {
-				t.Fatalf("could not create provider: %s", err)
-			}
-
-			// create an https provider, which trusts the http test server certificate
+			// create a provider, which trusts the test server certificate
 			certpool := x509.NewCertPool()
 			certpool.AddCert(httpsTestServer.Certificate())
 			cl := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: certpool}}}
-			httpsProviderOpts := append([]oidc.ProviderOption{
-				oidc.WithProviderHTTPClient(cl),
-				oidc.WithCustomJWKSURI(httpsJwksURI),
+			providerOpts := append([]oidc.ProviderOption{
+				oidc.WithPublicHTTPClient(cl),
+				oidc.WithSecureHTTPClient(cl),
 			}, tc.providerOptions...)
-			httpsProvider, err := oidc.NewProvider(httpsProviderURL, []string{"aud1"}, httpsProviderOpts...)
+			provider, err := oidc.NewProvider(httpsTestServer.URL, []string{"aud1"}, providerOpts...)
 			if err != nil {
-				t.Fatalf("could not create provider: %s", err)
+				t.Fatalf("could not create https provider: %s", err)
 			}
-
 			handlerOpts := []OIDCOption{
 				WithIssuerClaimKeys(tc.issuerClaimKeys...),
-				WithStaticProvider(httpProvider),
-				WithStaticProvider(httpsProvider),
+				WithStaticProvider(provider),
 			}
 			if tc.featureGates != nil {
 				handlerOpts = append(handlerOpts, WithFeatureGates(tc.featureGates))
@@ -428,6 +388,11 @@ func TestParseAndValidate(t *testing.T) {
 			hdl, err := NewOIDC(handlerOpts...)
 			if err != nil {
 				t.Fatalf("could not create handler: %s", err)
+			}
+
+			introspection = []byte(`{"active": true}`)
+			if tc.introspection != nil {
+				introspection = tc.introspection
 			}
 
 			claims := struct {
@@ -441,7 +406,7 @@ func TestParseAndValidate(t *testing.T) {
 			if tc.token != nil {
 				token := tc.token
 				token.Header["kid"] = rsaKeyID
-				token.Header["jku"] = httpsJwksURI.String()
+				token.Header["jku"] = httpsTestServer.URL + "/jwks"
 
 				tokenString, err = token.SignedString(rsaPrivateKey)
 				if err != nil {

@@ -15,15 +15,13 @@ import (
 	"math/big"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"testing"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
+	"github.com/openkcm/common-sdk/pkg/oidc"
 	"github.com/stretchr/testify/suite"
-
-	"github.com/openkcm/extauthz/internal/oidc"
 )
 
 type handlerTestSuite struct {
@@ -51,13 +49,15 @@ func (s *handlerTestSuite) SetupSuite() {
 	s.jwks = newJWKSHandler()
 	s.ts = httptest.NewTLSServer(s.jwks)
 
-	providerURL, err := url.Parse(s.ts.URL)
-	s.Require().NoError(err)
-
-	jwksURI, err := url.Parse(s.ts.URL + "/jwks")
-	s.Require().NoError(err)
-
 	rsaKeyID := uuid.New().String()
+
+	// create the WKOC response
+	s.jwks.wkocResponse, err = json.Marshal(map[string]any{
+		"issuer":                 s.ts.URL,
+		"jwks_uri":               s.ts.URL + "/jwks",
+		"introspection_endpoint": s.ts.URL + "/oauth2/introspect",
+	})
+	s.Require().NoError(err)
 
 	// create a x509 certificate
 	cert := x509.Certificate{
@@ -93,7 +93,10 @@ func (s *handlerTestSuite) SetupSuite() {
 	certpool := x509.NewCertPool()
 	certpool.AddCert(s.ts.Certificate())
 	cl := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: certpool}}}
-	s.provider, err = oidc.NewProvider(providerURL, []string{"aud1"}, oidc.WithProviderHTTPClient(cl), oidc.WithCustomJWKSURI(jwksURI))
+	s.provider, err = oidc.NewProvider(s.ts.URL, []string{"aud1"},
+		oidc.WithPublicHTTPClient(cl),
+		oidc.WithSecureHTTPClient(cl),
+	)
 	s.Require().NoError(err)
 	s.hdl, err = NewOIDC(WithIssuerClaimKeys(oidc.DefaultIssuerClaims...), WithStaticProvider(s.provider))
 	s.Require().NoError(err)
@@ -101,12 +104,12 @@ func (s *handlerTestSuite) SetupSuite() {
 	s.token = jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
 		"sub":  "me",
 		"mail": "me@my.world",
-		"iss":  providerURL.String(),
+		"iss":  s.ts.URL,
 		"exp":  time.Now().Add(48 * time.Hour).Unix(),
 		"aud":  []string{"aud1", "aud2"},
 	})
 	s.token.Header["kid"] = rsaKeyID
-	s.token.Header["jku"] = jwksURI.String()
+	s.token.Header["jku"] = s.ts.URL + "/jwks"
 }
 
 func (s *handlerTestSuite) TearDownSuite() {
@@ -116,12 +119,14 @@ func (s *handlerTestSuite) TearDownSuite() {
 type jwksHandler struct {
 	mux *http.ServeMux
 
+	wkocResponse []byte
 	jwksResponse []byte
 	tokenActive  bool
 }
 
 func newJWKSHandler() *jwksHandler {
 	s := &jwksHandler{mux: http.NewServeMux()}
+	s.mux.HandleFunc("/.well-known/openid-configuration", s.handleWKOC)
 	s.mux.HandleFunc("/jwks", s.handleJWKS)
 	s.mux.HandleFunc("/oauth2/introspect", s.handleIntrospect)
 
@@ -130,6 +135,11 @@ func newJWKSHandler() *jwksHandler {
 
 func (s *jwksHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.mux.ServeHTTP(w, r)
+}
+
+func (s *jwksHandler) handleWKOC(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(s.wkocResponse)
 }
 
 func (s *jwksHandler) handleJWKS(w http.ResponseWriter, r *http.Request) {
