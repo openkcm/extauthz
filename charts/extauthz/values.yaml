@@ -246,7 +246,6 @@ config:
     disable-client-certificate-computation: false
     disable-jwt-token-computation: false
     disable-jwt-token-introspection: false
-    enable-http-issuer-scheme: false
 
   cedar:
     policyPath: /etc/extauthz-policies
