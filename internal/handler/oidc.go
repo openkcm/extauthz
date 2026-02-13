@@ -20,7 +20,6 @@ import (
 )
 
 const (
-	issuerPrefix     = "issuer_"
 	introspectPrefix = "introspect_"
 )
 
@@ -109,8 +108,14 @@ func NewOIDC(opts ...OIDCOption) (*OIDC, error) {
 
 // RegisterStaticProvider registers a provider with the handler.
 func (handler *OIDC) RegisterStaticProvider(provider *oidc.Provider) {
-	key := issuerPrefix + provider.IssuerURL.String()
-	handler.staticProviders[key] = provider
+	// To support multiple providers with the same issuer but different JWKS URIs,
+	// we prefer to use a custom JWKS URI as the unique key in the static providers
+	// map over the potentially non-unique issuer.
+	if provider.JwksURI != nil {
+		handler.staticProviders[provider.JwksURI.String()] = provider
+	} else {
+		handler.staticProviders[provider.IssuerURL.String()] = provider
+	}
 }
 
 func (handler *OIDC) ParseAndValidate(ctx context.Context, rawToken, tenantID string, userclaims any, useCache bool) error {
@@ -121,6 +126,13 @@ func (handler *OIDC) ParseAndValidate(ctx context.Context, rawToken, tenantID st
 		return errors.Join(ErrInvalidToken, err)
 	}
 
+	// Technically a JWT can have multiple headers, but in practice we expect only one.
+	if len(token.Headers) != 1 {
+		slogctx.Error(ctx, "Token does not have exactly one header", "headerCount", len(token.Headers))
+		return errors.Join(ErrInvalidToken, errors.New("token must have exactly one header"))
+	}
+	header := token.Headers[0]
+
 	// parse the claims without verification
 	claims := make(map[string]any)
 
@@ -130,37 +142,39 @@ func (handler *OIDC) ParseAndValidate(ctx context.Context, rawToken, tenantID st
 		return errors.Join(ErrInvalidToken, err)
 	}
 
-	// check the issuer to find the right provider
+	// Check the `jku` header and issuer claim to find the right provider.
+	// The issuer may not be unique, so we also use the `jku` header to find the right provider.
+	// If the `jku` header is missing, we fallback to using the issuer claim only.
+	jwksURI, ok := header.ExtraHeaders["jku"].(string)
+	if !ok {
+		jwksURI = ""
+	}
 	issuer := extractFromClaims(claims, handler.issuerClaimKeys...)
 	if issuer == "" { // in case its empty
 		slogctx.Error(ctx, "Missing issuer in token claims")
 		return errors.Join(ErrInvalidToken, fmt.Errorf("missing keys %v in token claims", handler.issuerClaimKeys))
 	}
 
-	issuerURL, err := url.Parse(issuer)
+	// Ensure that either jwksURI (if present) or the issuer (as fallback)
+	// is a valid https URL.
+	urlToCheck := jwksURI
+	if urlToCheck == "" {
+		urlToCheck = issuer
+	}
+	parsedURL, err := url.Parse(urlToCheck)
 	if err != nil {
-		slogctx.Error(ctx, "Failed to parse issuer URL", "error", err, "issuer", issuer)
+		slogctx.Error(ctx, "Failed to parse URL", "error", err, "url", urlToCheck)
 		return errors.Join(ErrInvalidToken, err)
 	}
-
-	switch issuerURL.Scheme {
-	case "https":
-		// secure scheme, all good
-	case "http":
-		// insecure scheme, allowed if the feature gate is enabled
-		if !handler.featureGates.IsFeatureEnabled(flags.EnableHttpIssuerScheme) {
-			slogctx.Error(ctx, "Invalid issuer scheme", "issuer", issuer)
-			return errors.Join(ErrInvalidToken, fmt.Errorf("invalid issuer scheme: %s", issuer))
-		}
-	default:
-		slogctx.Error(ctx, "Invalid issuer scheme", "issuer", issuer)
-		return errors.Join(ErrInvalidToken, fmt.Errorf("invalid issuer scheme: %s", issuer))
+	if parsedURL.Scheme != "https" {
+		slogctx.Error(ctx, "Invalid URL scheme", "url", urlToCheck)
+		return errors.Join(ErrInvalidToken, fmt.Errorf("invalid URL scheme: %s", urlToCheck))
 	}
 
 	// let the handler lookup the identity provider for the issuer host
-	provider, err := handler.ProviderFor(ctx, issuer, tenantID)
+	provider, err := handler.ProviderFor(ctx, issuer, jwksURI, tenantID)
 	if err != nil {
-		slogctx.Error(ctx, "Failed to get provider for issuer", "error", err, "issuer", issuer)
+		slogctx.Error(ctx, "Failed to get provider for issuer", "error", err, "issuer", issuer, "jwksURI", jwksURI, "tenantID", tenantID)
 		return errors.Join(ErrNoProvider, err)
 	}
 
@@ -236,10 +250,19 @@ func (handler *OIDC) ParseAndValidate(ctx context.Context, rawToken, tenantID st
 	return nil
 }
 
-// ProviderFor returns the provider for the given issuer.
-func (handler *OIDC) ProviderFor(ctx context.Context, issuer, tenantID string) (*oidc.Provider, error) {
-	// check the static providers map
-	if provider, ok := handler.staticProviders[issuerPrefix+issuer]; ok {
+// ProviderFor returns the provider for the given issuer/jwksURI.
+func (handler *OIDC) ProviderFor(ctx context.Context, issuer, jwksURI, tenantID string) (*oidc.Provider, error) {
+	// First check for the unique jwksURI in the static providers map, if any.
+	// Otherwise, check for the issuer in the static providers map.
+	// This allows supporting multiple providers with the same issuer but different JWKS URIs.
+	if jwksURI != "" {
+		if provider, ok := handler.staticProviders[jwksURI]; ok {
+			if provider.IssuerURL.String() == issuer {
+				return provider, nil
+			}
+		}
+	}
+	if provider, ok := handler.staticProviders[issuer]; ok {
 		return provider, nil
 	}
 

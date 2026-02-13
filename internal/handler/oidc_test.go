@@ -25,7 +25,6 @@ import (
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/openkcm/extauthz/internal/flags"
 	"github.com/openkcm/extauthz/internal/oidc"
 )
 
@@ -75,14 +74,29 @@ func TestNewOIDC(t *testing.T) {
 			},
 			wantError: true,
 		}, {
-			name: "with provider",
+			name: "with provider storing by issuer",
 			opts: []OIDCOption{
 				WithStaticProvider(&oidc.Provider{
 					IssuerURL: providerUrl,
 				}),
 			},
 			checkFunc: func(h *OIDC) error {
-				key := issuerPrefix + providerUrl.String()
+				key := providerUrl.String()
+				if _, found := h.staticProviders[key]; !found {
+					return errors.New("expected providers to be initialized")
+				}
+				return nil
+			},
+		}, {
+			name: "with provider storing by jwks URI",
+			opts: []OIDCOption{
+				WithStaticProvider(&oidc.Provider{
+					IssuerURL: providerUrl,
+					JwksURI:   providerUrl.JoinPath("jwks"),
+				}),
+			},
+			checkFunc: func(h *OIDC) error {
+				key := providerUrl.JoinPath("jwks").String()
 				if _, found := h.staticProviders[key]; !found {
 					return errors.New("expected providers to be initialized")
 				}
@@ -159,15 +173,6 @@ func TestParseAndValidate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("could not parse issuer URL: %s", err)
 	}
-	httpsJwksURI, err := url.Parse(httpsTestServer.URL + "/jwks")
-	if err != nil {
-		t.Fatalf("could not parse JWKS URI: %s", err)
-	}
-
-	httpProviderURL, err := url.Parse(httpsTestServer.URL)
-	if err != nil {
-		t.Fatalf("could not parse issuer URL: %s", err)
-	}
 
 	// create an RSA key pair
 	rsaPrivateKey, err := rsa.GenerateKey(rand.Reader, 4096)
@@ -219,6 +224,7 @@ func TestParseAndValidate(t *testing.T) {
 	tests := []struct {
 		name            string
 		issuerClaimKeys []string
+		jwksURI         string
 		token           *jwt.Token
 		providerOptions []oidc.ProviderOption
 		featureGates    *commoncfg.FeatureGates
@@ -231,6 +237,7 @@ func TestParseAndValidate(t *testing.T) {
 		}, {
 			name:            "invalid token: wrong IAS issuer",
 			issuerClaimKeys: []string{"ias_iss"},
+			jwksURI:         "https://invalid.issuer/jwks",
 			token: jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
 				"sub":     "me",
 				"mail":    "me@my.world",
@@ -242,6 +249,7 @@ func TestParseAndValidate(t *testing.T) {
 		}, {
 			name:            "invalid token: wrong issuer",
 			issuerClaimKeys: oidc.DefaultIssuerClaims,
+			jwksURI:         "https://invalid.issuer/jwks",
 			token: jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
 				"sub":  "me",
 				"mail": "me@my.world",
@@ -327,16 +335,17 @@ func TestParseAndValidate(t *testing.T) {
 			wantError: false,
 		}, {
 			name:            "valid token with http issuer",
-			featureGates:    &commoncfg.FeatureGates{flags.EnableHttpIssuerScheme: true},
+			featureGates:    &commoncfg.FeatureGates{},
 			issuerClaimKeys: oidc.DefaultIssuerClaims,
+			jwksURI:         "http://example.com/jwks",
 			token: jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
 				"sub":  "me",
 				"mail": "me@my.world",
-				"iss":  httpProviderURL.String(),
+				"iss":  "http://example.com",
 				"exp":  time.Now().Add(48 * time.Hour).Unix(),
 				"aud":  []string{"aud1", "aud2"},
 			}),
-			wantError: false,
+			wantError: true,
 		}, {
 			name:            "valid IAS token with ias_iss",
 			issuerClaimKeys: []string{"ias_iss"},
@@ -394,14 +403,13 @@ func TestParseAndValidate(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			// Arrange
-
-			// create an http provider
-			httpProviderOpts := append([]oidc.ProviderOption{
-				oidc.WithCustomJWKSURI(httpsJwksURI),
-			}, tc.providerOptions...)
-			httpProvider, err := oidc.NewProvider(httpProviderURL, []string{"aud1"}, httpProviderOpts...)
+			jwksURI := httpsTestServer.URL + "/jwks"
+			if tc.jwksURI != "" {
+				jwksURI = tc.jwksURI
+			}
+			jwksURIParsed, err := url.Parse(jwksURI)
 			if err != nil {
-				t.Fatalf("could not create provider: %s", err)
+				t.Fatalf("could not parse issuer URL: %s", err)
 			}
 
 			// create an https provider, which trusts the http test server certificate
@@ -410,7 +418,7 @@ func TestParseAndValidate(t *testing.T) {
 			cl := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: certpool}}}
 			httpsProviderOpts := append([]oidc.ProviderOption{
 				oidc.WithProviderHTTPClient(cl),
-				oidc.WithCustomJWKSURI(httpsJwksURI),
+				oidc.WithCustomJWKSURI(jwksURIParsed),
 			}, tc.providerOptions...)
 			httpsProvider, err := oidc.NewProvider(httpsProviderURL, []string{"aud1"}, httpsProviderOpts...)
 			if err != nil {
@@ -419,7 +427,6 @@ func TestParseAndValidate(t *testing.T) {
 
 			handlerOpts := []OIDCOption{
 				WithIssuerClaimKeys(tc.issuerClaimKeys...),
-				WithStaticProvider(httpProvider),
 				WithStaticProvider(httpsProvider),
 			}
 			if tc.featureGates != nil {
@@ -441,7 +448,7 @@ func TestParseAndValidate(t *testing.T) {
 			if tc.token != nil {
 				token := tc.token
 				token.Header["kid"] = rsaKeyID
-				token.Header["jku"] = httpsJwksURI.String()
+				token.Header["jku"] = jwksURIParsed.String()
 
 				tokenString, err = token.SignedString(rsaPrivateKey)
 				if err != nil {
