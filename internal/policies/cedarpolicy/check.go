@@ -39,6 +39,20 @@ func WithAction(action string) policies.CheckOption {
 	}
 }
 
+// Deprecated: WithRoute is deprecated, use WithContextData instead to pass the host and path.
+func WithRoute(route string) policies.CheckOption {
+	return func(d policies.Engine) error {
+		cpe, ok := d.(*cedarPolicyEngine)
+		if !ok {
+			return ErrUnexpectedPolicyEngine
+		}
+
+		cpe.request.Resource = cedar.NewEntityUID("Route", cedar.String(route))
+
+		return nil
+	}
+}
+
 func WithContextData(data map[string]string) policies.CheckOption {
 	return func(d policies.Engine) error {
 		cpe, ok := d.(*cedarPolicyEngine)
