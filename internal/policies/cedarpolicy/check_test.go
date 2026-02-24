@@ -10,6 +10,59 @@ import (
 	"github.com/openkcm/extauthz/internal/policies/cedarpolicy"
 )
 
+func TestWithRoute(t *testing.T) {
+	t.Run("sets resource on valid engine", func(t *testing.T) {
+		// Arrange
+		engine, err := cedarpolicy.NewEngine(nil)
+		assert.NoError(t, err)
+
+		// Act
+		allowed, _, err := engine.Check(
+			cedarpolicy.WithSubject("testSubject"),
+			cedarpolicy.WithAction("GET"),
+			cedarpolicy.WithRoute("api.example.com/test/route"),
+		)
+
+		// Assert
+		assert.NoError(t, err)
+		assert.False(t, allowed) // No policy permits this, so should be denied
+	})
+
+	t.Run("works with empty route", func(t *testing.T) {
+		// Arrange
+		engine, err := cedarpolicy.NewEngine(nil)
+		assert.NoError(t, err)
+
+		// Act
+		allowed, _, err := engine.Check(
+			cedarpolicy.WithSubject("testSubject"),
+			cedarpolicy.WithAction("GET"),
+			cedarpolicy.WithRoute(""),
+		)
+
+		// Assert
+		assert.NoError(t, err)
+		assert.False(t, allowed)
+	})
+
+	t.Run("works with special characters in route", func(t *testing.T) {
+		// Arrange
+		engine, err := cedarpolicy.NewEngine(nil)
+		assert.NoError(t, err)
+
+		// Act
+		allowed, _, err := engine.Check(
+			cedarpolicy.WithSubject("testSubject"),
+			cedarpolicy.WithAction("GET"),
+			cedarpolicy.WithRoute("api.example.com/api/v1/users?id=123&name=test"),
+		)
+
+		// Assert
+		assert.NoError(t, err)
+		assert.False(t, allowed)
+	})
+}
+
 func TestCheckWithPath(t *testing.T) {
 	t.Run("no panic with nil options", func(t *testing.T) {
 		engine, err := cedarpolicy.NewEngine(nil)

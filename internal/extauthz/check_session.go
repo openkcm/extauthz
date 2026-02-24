@@ -74,6 +74,7 @@ func (srv *Server) checkSession(ctx context.Context, sessionCookie *http.Cookie,
 	)
 
 	data := map[string]string{
+		"route":  host + path, // TODO: remove when policies are updated to use host and path instead of route
 		"host":   host,
 		"path":   path,
 		"type":   "jwt",
@@ -83,6 +84,8 @@ func (srv *Server) checkSession(ctx context.Context, sessionCookie *http.Cookie,
 	allowed, reason, err := srv.policyEngine.Check(
 		cedarpolicy.WithSubject(session.Subject),
 		cedarpolicy.WithAction(method),
+		//nolint:staticcheck
+		cedarpolicy.WithRoute(host+path), // TODO: remove when policies are updated to use host and path instead of route
 		cedarpolicy.WithContextData(data),
 	)
 	if err != nil {
