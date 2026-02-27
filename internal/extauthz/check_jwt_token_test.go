@@ -14,7 +14,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -23,20 +22,27 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
+	"github.com/openkcm/common-sdk/pkg/oidc"
 	"github.com/stretchr/testify/require"
 
 	"github.com/openkcm/extauthz/internal/clientdata"
 	"github.com/openkcm/extauthz/internal/config"
 	"github.com/openkcm/extauthz/internal/handler"
-	"github.com/openkcm/extauthz/internal/oidc"
 	"github.com/openkcm/extauthz/internal/policies/cedarpolicy"
 )
 
 func TestCheckJWTToken(t *testing.T) {
 	// create a JWKS test server
-	var jwksResponse []byte
+	var (
+		wkocResponse []byte
+		jwksResponse []byte
+	)
 
 	mux := http.NewServeMux()
+	mux.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, string(wkocResponse))
+	})
 	mux.HandleFunc("/jwks", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 
@@ -50,27 +56,17 @@ func TestCheckJWTToken(t *testing.T) {
 	ts := httptest.NewTLSServer(mux)
 	defer ts.Close()
 
-	issuerURL, err := url.Parse(ts.URL)
-	if err != nil {
-		t.Fatalf("could not parse issuer URL: %s", err)
-	}
-
-	jwksURI, err := url.Parse(ts.URL + "/jwks")
-	if err != nil {
-		t.Fatalf("could not parse JWKS URI: %s", err)
-	}
-
 	// create a JWT token
 	exp := time.Now().Add(48 * time.Hour).Unix()
 	token := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
 		"sub":    "me",
 		"mail":   "me@my.world",
-		"iss":    issuerURL.String(),
+		"iss":    ts.URL,
 		"exp":    exp,
 		"groups": []string{"groupA", "groupB"},
 	})
 	token.Header["kid"] = rsaKeyID
-	token.Header["jku"] = jwksURI.String()
+	token.Header["jku"] = ts.URL + "/jwks"
 
 	tokenString, err := token.SignedString(rsaPrivateKey)
 	if err != nil {
@@ -91,7 +87,7 @@ func TestCheckJWTToken(t *testing.T) {
 		"groups": []string{"groupA", "groupB"},
 	})
 	tokenInvalid.Header["kid"] = rsaKeyID
-	tokenInvalid.Header["jku"] = jwksURI.String()
+	tokenInvalid.Header["jku"] = ts.URL + "/jwks"
 
 	tokenStringInvalid, err := tokenInvalid.SignedString(rsaPrivateKeyInvalid)
 	if err != nil {
@@ -126,6 +122,14 @@ func TestCheckJWTToken(t *testing.T) {
 		t.Fatalf("could not marshal JWKS response: %s", err)
 	}
 
+	wkocResponse, err = json.Marshal(map[string]any{
+		"issuer":   ts.URL,
+		"jwks_uri": ts.URL + "/jwks",
+	})
+	if err != nil {
+		t.Fatalf("could not marshal WKOC response: %s", err)
+	}
+
 	dir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "keyId"), []byte("key01"), 0644))
 
@@ -157,7 +161,7 @@ func TestCheckJWTToken(t *testing.T) {
 			wantCheckResultCode: ALLOWED,
 			wantSubject:         "me",
 			wantEmail:           "me@my.world",
-			wantIssuer:          issuerURL.String(),
+			wantIssuer:          ts.URL,
 			wantGroups:          []string{"groupA", "groupB"},
 		},
 	}
@@ -171,9 +175,9 @@ func TestCheckJWTToken(t *testing.T) {
 			certpool.AddCert(ts.Certificate())
 			cl := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: certpool}}}
 
-			p, err := oidc.NewProvider(issuerURL, []string{},
-				oidc.WithProviderHTTPClient(cl),
-				oidc.WithCustomJWKSURI(jwksURI),
+			p, err := oidc.NewProvider(ts.URL, []string{},
+				oidc.WithPublicHTTPClient(cl),
+				oidc.WithSecureHTTPClient(cl),
 			)
 			if err != nil {
 				t.Fatalf("could not create provider: %s", err)

@@ -3,15 +3,13 @@ package session
 import (
 	"context"
 	"fmt"
-	"net/url"
 
+	"github.com/openkcm/common-sdk/pkg/oidc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
 	sessionv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/sessionmanager/session/v1"
-
-	"github.com/openkcm/extauthz/internal/oidc"
 )
 
 type ManagerOption func(*Manager)
@@ -67,25 +65,18 @@ func (m *Manager) GetOIDCProvider(ctx context.Context, tenantID string) (*oidc.P
 		return nil, fmt.Errorf("executing an rpc request: %w", err)
 	}
 
-	opts := make([]oidc.ProviderOption, 0, 1)
-
 	provider := pResp.GetProvider()
+	// TODO: we should extend the API to distinguish between:
+	// - issuer, which may not be a valid URI but rather a string identifier
+	// - issuerURI, which must be a valid URI used for OIDC discovery
+	// For now, we assume that the issuer is a valid URI and use it for both fields.
+	issuer := provider.GetIssuerUrl()
+	issuerURI := issuer
 
-	issuerURL, err := url.Parse(provider.GetIssuerUrl())
-	if err != nil {
-		return nil, fmt.Errorf("parsing issuer url from the rpc response: %w", err)
-	}
-
-	if u := provider.GetJwksUri(); u != "" {
-		jwksURI, err := url.Parse(provider.GetJwksUri())
-		if err != nil {
-			return nil, fmt.Errorf("parsing jwks uri from the rpc response: %w", err)
-		}
-
-		opts = append(opts, oidc.WithCustomJWKSURI(jwksURI))
-	}
-
-	oidcProvider, err := oidc.NewProvider(issuerURL, provider.GetAudiences(), opts...)
+	oidcProvider, err := oidc.NewProvider(issuer, provider.GetAudiences(),
+		oidc.WithCustomIssuerURI(issuerURI),
+		oidc.WithCustomJWKSURI(provider.GetJwksUri()),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("creating a new oidc provider: %w", err)
 	}

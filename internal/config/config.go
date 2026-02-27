@@ -90,6 +90,7 @@ type K8sProviders struct {
 
 type Provider struct {
 	Issuer    string   `yaml:"issuer"`
-	JwksURI   string   `yaml:"jwksURI"`
+	IssuerURI string   `yaml:"issuerURI"` // Optional: set if issuer is not a valid URI
+	JwksURI   string   `yaml:"jwksURI"`   // Optional: set if you want to avoid OIDC discovery
 	Audiences []string `yaml:"audiences"`
 }

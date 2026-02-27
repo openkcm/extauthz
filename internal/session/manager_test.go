@@ -4,11 +4,11 @@ import (
 	"context"
 	"errors"
 	"net"
-	"net/url"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/openkcm/common-sdk/pkg/oidc"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/grpc"
@@ -17,8 +17,6 @@ import (
 
 	sessionv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/sessionmanager/session/v1"
 	typesv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/types/v1"
-
-	"github.com/openkcm/extauthz/internal/oidc"
 )
 
 type SessionManagerMock struct {
@@ -141,10 +139,9 @@ func TestGetSession(t *testing.T) {
 }
 
 func TestManager_GetOIDCProvider(t *testing.T) {
-	issuerURL, _ := url.Parse("https://example.com/iss")
-	jwksURI, _ := url.Parse("https://example.com/jwks")
+	issuer := "https://example.com/iss"
 	audiences := []string{"a", "b"}
-	provider, err := oidc.NewProvider(issuerURL, audiences, oidc.WithCustomJWKSURI(jwksURI))
+	provider, err := oidc.NewProvider(issuer, audiences)
 	if err != nil {
 		panic(err)
 	}
@@ -161,8 +158,7 @@ func TestManager_GetOIDCProvider(t *testing.T) {
 			setupMocks: func(sm *SessionManagerMock) {
 				sm.On("GetOIDCProvider", mock.Anything, mock.Anything).Return(&sessionv1.GetOIDCProviderResponse{
 					Provider: &typesv1.OIDCProvider{
-						IssuerUrl: issuerURL.String(),
-						JwksUri:   jwksURI.String(),
+						IssuerUrl: issuer,
 						Audiences: audiences,
 					},
 				}, nil)
