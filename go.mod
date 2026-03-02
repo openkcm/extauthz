@@ -1,6 +1,6 @@
 module github.com/openkcm/extauthz
 
-go 1.25.1
+go 1.25.6
 
 require (
 	github.com/cedar-policy/cedar-go v1.5.2
@@ -12,7 +12,7 @@ require (
 	github.com/google/go-cmp v0.7.0
 	github.com/google/uuid v1.6.0
 	github.com/openkcm/api-sdk v0.15.0
-	github.com/openkcm/common-sdk v1.12.0
+	github.com/openkcm/common-sdk v1.13.0
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/samber/oops v1.21.0
 	github.com/stretchr/testify v1.11.1

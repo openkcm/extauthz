@@ -132,8 +132,8 @@ github.com/opencontainers/image-spec v1.1.1 h1:y0fUlFfIZhPF1W537XOLg0/fcx6zcHCJw
 github.com/opencontainers/image-spec v1.1.1/go.mod h1:qpqAh3Dmcf36wStyyWU+kCeDgrGnAve2nCC8+7h8Q0M=
 github.com/openkcm/api-sdk v0.15.0 h1:JfA7nEy4JnoxLafFIEerCpjmmhkJfNeEncSVB1VHn6I=
 github.com/openkcm/api-sdk v0.15.0/go.mod h1:oYv9C+bUTcNHHhVN91nRoTveO9XSkd/EO1mFCM+a0fA=
-github.com/openkcm/common-sdk v1.12.0 h1:18BMOuEDhYXO+gw/xmX+WpTUbOagYWQG58rnlDIQqUI=
-github.com/openkcm/common-sdk v1.12.0/go.mod h1:jnOzx2bSNIMRbdSIZugtNBJ2nq0CCS5MlNGSzJ90Cqk=
+github.com/openkcm/common-sdk v1.13.0 h1:XNRq/7CTaL1+DMMGXWQEPWxOjC4O8nRT5LWa3anlcZY=
+github.com/openkcm/common-sdk v1.13.0/go.mod h1:ep8uLGJ6vjcSyN6t7ktsIJS8Z9I+fy8iWP4HyPg6MJw=
 github.com/patrickmn/go-cache v2.1.0+incompatible h1:HRMgzkcYKYpi3C8ajMPV8OFXaaRUnok+kx1WdO15EQc=
 github.com/patrickmn/go-cache v2.1.0+incompatible/go.mod h1:3Qf8kWWT7OJRJbdiICTKqZju1ZixQ/KpMGzzAfe6+WQ=
 github.com/pborman/getopt v0.0.0-20170112200414-7148bc3a4c30/go.mod h1:85jBQOZwpVEaDAr341tbn15RS4fCAsIst0qp7i8ex1o=
