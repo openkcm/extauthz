@@ -71,12 +71,13 @@ func (m *Manager) GetOIDCProvider(ctx context.Context, tenantID string) (*oidc.P
 	// - issuerURI, which must be a valid URI used for OIDC discovery
 	// For now, we assume that the issuer is a valid URI and use it for both fields.
 	issuer := provider.GetIssuerUrl()
-	issuerURI := issuer
 
-	oidcProvider, err := oidc.NewProvider(issuer, provider.GetAudiences(),
-		oidc.WithCustomIssuerURI(issuerURI),
-		oidc.WithCustomJWKSURI(provider.GetJwksUri()),
-	)
+	opts := make([]oidc.ProviderOption, 0, 1)
+	if provider.GetJwksUri() != "" {
+		opts = append(opts, oidc.WithCustomJWKSURI(provider.GetJwksUri()))
+	}
+
+	oidcProvider, err := oidc.NewProvider(issuer, provider.GetAudiences(), opts...)
 	if err != nil {
 		return nil, fmt.Errorf("creating a new oidc provider: %w", err)
 	}
