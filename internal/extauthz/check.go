@@ -41,7 +41,7 @@ func (srv *Server) Check(ctx context.Context, req *envoyauth.CheckRequest) (*env
 		req.GetAttributes().GetRequest().GetHttp() == nil ||
 		req.GetAttributes().GetRequest().GetHttp().GetHeaders() == nil {
 		slogctx.Debug(ctx, LogPrefixCheck+"called with nil request")
-		return respondUnauthenticated("Invalid request"), nil
+		return respondUnauthenticated("Invalid request")
 	}
 
 	// log the header for debugging
@@ -155,7 +155,7 @@ func (srv *Server) Check(ctx context.Context, req *envoyauth.CheckRequest) (*env
 		)
 		if err != nil {
 			slogctx.Error(ctx, LogPrefixCheck+"failed to encode client data", "error", err)
-			return respondInternalServerError(), nil
+			return respondInternalServerError()
 		}
 
 		slogctx.Debug(ctx, LogPrefixCheck+"client data",
@@ -171,10 +171,12 @@ func (srv *Server) Check(ctx context.Context, req *envoyauth.CheckRequest) (*env
 	case ALWAYS_ALLOWED:
 		return respondAllowed([]*envoycore.HeaderValueOption{}, []string{}), nil
 	case UNKNOWN, UNAUTHENTICATED:
-		return respondUnauthenticated(result.info), nil
+		return respondUnauthenticated(result.info)
+	case TENANT_BLOCKED:
+		return respondTenantBlocked()
 	}
 
-	return respondPermissionDenied(), nil
+	return respondPermissionDenied()
 }
 
 func extractClientCertificates(ctx context.Context, headers map[string]string) ([]string, bool) {

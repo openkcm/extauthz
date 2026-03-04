@@ -12,9 +12,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/bufconn"
 
+	rpcv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/rpc/v1"
 	sessionv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/sessionmanager/session/v1"
 	typesv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/types/v1"
 )
@@ -90,6 +93,7 @@ func TestGetSession(t *testing.T) {
 		tenantID    string
 		fingerprint string
 		expected    *Session
+		wantErr     bool
 		setupMocks  func(*SessionManagerMock)
 	}{
 		{
@@ -103,6 +107,7 @@ func TestGetSession(t *testing.T) {
 			expected: &Session{
 				Valid: true,
 			},
+			wantErr: false,
 		}, {
 			name: "invalid session",
 			setupMocks: func(mss *SessionManagerMock) {
@@ -114,6 +119,21 @@ func TestGetSession(t *testing.T) {
 			expected: &Session{
 				Valid: false,
 			},
+			wantErr: false,
+		}, {
+			name: "Tenant blocked violation",
+			setupMocks: func(mss *SessionManagerMock) {
+				st := status.New(codes.FailedPrecondition, "failed precondition")
+				st, _ = st.WithDetails(&rpcv1.PreconditionFailure{
+					Violations: []*rpcv1.PreconditionFailure_Violation{{
+						Type: violationTenantBlocked,
+					}},
+				})
+				mss.On("GetSession", mock.Anything, mock.Anything).
+					Return(nil, st.Err())
+			},
+			expected: nil,
+			wantErr:  true,
 		},
 	}
 
@@ -129,9 +149,10 @@ func TestGetSession(t *testing.T) {
 
 			// Act
 			got, err := manager.GetSession(t.Context(), tc.sessionID, tc.tenantID, tc.fingerprint)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("Manager.GetSession() return an unexpected error %v", err)
+			}
 
-			// Assert
-			assert.NoError(t, err)
 			assert.Equal(t, tc.expected, got)
 			mock.AssertExpectations(t)
 		})

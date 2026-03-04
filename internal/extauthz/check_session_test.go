@@ -179,6 +179,20 @@ func TestCheckSession(t *testing.T) {
 			},
 			expectedResult: checkResult{is: ALLOWED},
 		},
+		{
+			name:      "Blocked tenant",
+			cookie:    &http.Cookie{Name: "session", Value: sessionID},
+			method:    "GET",
+			host:      "our.service.com",
+			path:      "/foo/bar",
+			csrfToken: csrfToken,
+			tenantID:  "t-id",
+			setupMocks: func(sm *MockSessionManager) {
+				sm.On("GetSession", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+					Return(nil, session.ErrTenantBlocked)
+			},
+			expectedResult: checkResult{is: TENANT_BLOCKED, info: "the tenant t-id is blocked"},
+		},
 	}
 
 	// run the tests
