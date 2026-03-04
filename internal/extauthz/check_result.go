@@ -10,6 +10,7 @@ const (
 	UNKNOWN checkResultCode = iota
 	ALWAYS_ALLOWED
 	ALLOWED
+	TENANT_BLOCKED
 	DENIED
 	UNAUTHENTICATED
 )
@@ -20,6 +21,8 @@ func (c checkResultCode) String() string {
 		return "always allowed"
 	case ALLOWED:
 		return "allowed"
+	case TENANT_BLOCKED:
+		return "tenant_blocked"
 	case DENIED:
 		return "denied"
 	case UNAUTHENTICATED:

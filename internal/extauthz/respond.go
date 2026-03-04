@@ -1,6 +1,8 @@
 package extauthz
 
 import (
+	"net/http"
+
 	"github.com/gogo/googleapis/google/rpc"
 
 	envoy_core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -29,6 +31,22 @@ func respondUnauthenticated(message string) *envoy_auth.CheckResponse {
 					Code: envoy_type.StatusCode_Unauthorized,
 				},
 				Body: message,
+			},
+		},
+	}
+}
+
+func respondTenantBlocked() *envoy_auth.CheckResponse {
+	return &envoy_auth.CheckResponse{
+		Status: &rpcstatus.Status{
+			Code: int32(rpc.FAILED_PRECONDITION),
+		},
+		HttpResponse: &envoy_auth.CheckResponse_DeniedResponse{
+			DeniedResponse: &envoy_auth.DeniedHttpResponse{
+				Status: &envoy_type.HttpStatus{
+					Code: envoy_type.StatusCode(http.StatusTeapot), // Use status 418 to indicate that the tenant is blocked
+				},
+				Body: "Tenant is blocked",
 			},
 		},
 	}

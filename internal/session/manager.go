@@ -9,7 +9,12 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	rpcv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/rpc/v1"
 	sessionv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/sessionmanager/session/v1"
+)
+
+const (
+	violationTenantBlocked = "tenant_blocked"
 )
 
 type ManagerOption func(*Manager)
@@ -40,8 +45,22 @@ func (m *Manager) GetSession(ctx context.Context, sessionID, tenantID, fingerpri
 	}
 	resp, err := m.grpcClient.GetSession(ctx, getSessionRequest)
 	if err != nil {
+		st := status.Convert(err)
+		for _, d := range st.Details() {
+			switch info := d.(type) {
+			case *rpcv1.PreconditionFailure:
+				for _, violation := range info.GetViolations() {
+					switch violation.GetType() {
+					case violationTenantBlocked:
+						return nil, ErrTenantBlocked
+					}
+				}
+			}
+		}
+
 		return nil, err
 	}
+
 	sess := &Session{
 		Valid:       resp.GetValid(),
 		Issuer:      resp.GetIssuer(),

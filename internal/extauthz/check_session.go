@@ -3,6 +3,7 @@ package extauthz
 import (
 	"context"
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -11,6 +12,7 @@ import (
 	slogctx "github.com/veqryn/slog-context"
 
 	"github.com/openkcm/extauthz/internal/policies/cedarpolicy"
+	"github.com/openkcm/extauthz/internal/session"
 )
 
 // checkSession checks the request using the session Cookie.
@@ -25,15 +27,19 @@ func (srv *Server) checkSession(ctx context.Context, sessionCookie *http.Cookie,
 	// - compare the fingerprints
 	// - validate the session (expiry, token revocation, ...)
 	// If the session is valid, it will return the session details.
-	session, err := srv.sessionManager.GetSession(ctx, sessionCookie.Value, tenantID, fingerprint)
+	sess, err := srv.sessionManager.GetSession(ctx, sessionCookie.Value, tenantID, fingerprint)
 	if err != nil {
+		if errors.Is(err, session.ErrTenantBlocked) {
+			return checkResult{is: TENANT_BLOCKED, info: fmt.Sprintf("the tenant %s is blocked", tenantID)}
+		}
+
 		slogctx.Debug(ctx, "Failed to get session from session manager", "error", err)
 		return checkResult{is: UNAUTHENTICATED,
 			info: fmt.Sprintf("failed to get session from session manager: %v", err),
 		}
 	}
 
-	if !session.Valid {
+	if !sess.Valid {
 		slogctx.Debug(ctx, "Session is not valid")
 		return checkResult{is: UNAUTHENTICATED,
 			info: "session is not valid",
@@ -56,18 +62,18 @@ func (srv *Server) checkSession(ctx context.Context, sessionCookie *http.Cookie,
 	// prepare the result
 	res := checkResult{
 		is:          UNKNOWN,
-		subject:     session.Subject,
-		givenname:   session.GivenName,
-		familyname:  session.FamilyName,
-		email:       session.Email,
-		groups:      session.Groups,
-		authContext: session.AuthContext,
+		subject:     sess.Subject,
+		givenname:   sess.GivenName,
+		familyname:  sess.FamilyName,
+		email:       sess.Email,
+		groups:      sess.Groups,
+		authContext: sess.AuthContext,
 	}
 
 	// check the policies
 	slogctx.Debug(ctx, "Checking policies for session",
-		"subject", session.Subject,
-		"issuer", session.Issuer,
+		"subject", sess.Subject,
+		"issuer", sess.Issuer,
 		"method", method,
 		"host", host,
 		"path", path,
@@ -78,11 +84,11 @@ func (srv *Server) checkSession(ctx context.Context, sessionCookie *http.Cookie,
 		"host":   host,
 		"path":   path,
 		"type":   "jwt",
-		"issuer": session.Issuer,
+		"issuer": sess.Issuer,
 	}
 
 	allowed, reason, err := srv.policyEngine.Check(
-		cedarpolicy.WithSubject(session.Subject),
+		cedarpolicy.WithSubject(sess.Subject),
 		cedarpolicy.WithAction(method),
 		//nolint:staticcheck
 		cedarpolicy.WithRoute(host+path), // TODO: remove when policies are updated to use host and path instead of route
