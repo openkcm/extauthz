@@ -10,7 +10,6 @@ featureGates:
   enrich-header-with-client-region: false
   disable-client-certificate-computation: false
   disable-jwt-token-computation: false
-  disable-jwt-token-introspection: false
 
 logger:
   level: debug # one of: debug, info, warn, error
