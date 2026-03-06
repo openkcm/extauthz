@@ -174,7 +174,7 @@ func (handler *OIDC) ParseAndValidate(ctx context.Context, rawToken, tenantID st
 	// let the handler lookup the identity provider for the issuer host
 	provider, err := handler.ProviderFor(ctx, issuer, jwksURI, tenantID)
 	if err != nil {
-		slogctx.Error(ctx, "Failed to get provider for issuer", "error", err, "issuer", issuer, "jwksURI", jwksURI, "tenantID", tenantID)
+		slogctx.Error(ctx, "Failed to get provider for issuer", "error", err, "issuer", issuer, "jwksURI", jwksURI, "tenantId", tenantID)
 		return errors.Join(ErrNoProvider, err)
 	}
 
