@@ -39,15 +39,21 @@ func (srv *Server) checkJWTToken(ctx context.Context, bearerToken, method, host,
 	}
 	headerBytes, err := base64.RawURLEncoding.DecodeString(parts[0])
 	if err != nil {
-		return checkResult{is: UNAUTHENTICATED, info: fmt.Sprintf("Not a JWT token: %v", err)}
+		// Log the token header. Never ever log the signature!
+		slogctx.Error(ctx, "Could not decode token header", "header", parts[0])
+		return checkResult{is: UNAUTHENTICATED, info: fmt.Sprintf("Could not decode token header: %v", err)}
 	}
 	var header jwtHeader
 	err = json.Unmarshal(headerBytes, &header)
 	if err != nil {
-		return checkResult{is: UNAUTHENTICATED, info: fmt.Sprintf("Not a JWT token: %v", err)}
+		// Log the token header. Never ever log the signature!
+		slogctx.Error(ctx, "Could not unmarshal token header", "header", parts[0])
+		return checkResult{is: UNAUTHENTICATED, info: fmt.Sprintf("Could not unmarshal token header: %v", err)}
 	}
 	if header.Typ != "JWT" {
-		return checkResult{is: UNAUTHENTICATED, info: "Not a JWT token: " + header.Typ}
+		// Log the token header. Never ever log the signature!
+		slogctx.Error(ctx, "Not a JWT token", "header", parts[0])
+		return checkResult{is: UNAUTHENTICATED, info: "Not a JWT token: invalid type in header: " + header.Typ}
 	}
 
 	// parse and validate the token and extract the claims
@@ -56,10 +62,8 @@ func (srv *Server) checkJWTToken(ctx context.Context, bearerToken, method, host,
 	var claims jwtClaims
 	err = srv.oidcHandler.ParseAndValidate(ctx, bearerToken, tenantID, &claims, useCache)
 	if err != nil {
-		slogctx.Debug(ctx, "JWT validation failed", "error", err)
-		// Log the header and payload of the token
-		// Never ever log the signature!
-		slogctx.Debug(ctx, "Token details", "header", parts[0], "payload", parts[1])
+		// Log the token header and payload. Never ever log the signature!
+		slogctx.Error(ctx, "JWT validation failed", "error", err, "header", parts[0], "payload", parts[1])
 
 		switch {
 		case errors.Is(err, handler.ErrInvalidToken):
