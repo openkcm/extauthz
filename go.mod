@@ -20,7 +20,7 @@ require (
 	github.com/testcontainers/testcontainers-go/modules/valkey v0.40.0
 	github.com/veqryn/slog-context v0.9.0
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260203192932-546029d2fa20
-	google.golang.org/grpc v1.79.1
+	google.golang.org/grpc v1.79.2
 	gopkg.in/yaml.v3 v3.0.1
 )
 
