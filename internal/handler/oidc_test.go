@@ -1088,6 +1088,129 @@ func TestParseAndValidateNoIntrospectionEndpoint(t *testing.T) {
 	})
 }
 
+func TestParseAndValidateTokenIntrospectionDisabled(t *testing.T) {
+	// Create a test server with introspection endpoint, but provider has introspection disabled
+	var (
+		wkocResponse []byte
+		jwksResponse []byte
+	)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, string(wkocResponse))
+	})
+	mux.HandleFunc("/jwks", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, string(jwksResponse))
+	})
+	mux.HandleFunc("/oauth2/introspect", func(w http.ResponseWriter, r *http.Request) {
+		// This should never be called because introspection is disabled
+		t.Error("introspection endpoint should not be called when token introspection is disabled")
+		w.WriteHeader(http.StatusForbidden)
+	})
+
+	httpsTestServer := httptest.NewTLSServer(mux)
+	defer httpsTestServer.Close()
+
+	// create an RSA key pair
+	rsaPrivateKey, err := rsa.GenerateKey(rand.Reader, 4096)
+	if err != nil {
+		t.Fatalf("could not generate RSA key: %s", err)
+	}
+
+	rsaPublicKey := &rsaPrivateKey.PublicKey
+	rsaKeyID := uuid.New().String()
+
+	// create a x509 certificate
+	cert := x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject: pkix.Name{
+			Organization: []string{"KMS, Inc"},
+		},
+		NotBefore: time.Now(),
+		NotAfter:  time.Now().Add(5 * time.Minute),
+	}
+
+	x509Cert, err := x509.CreateCertificate(rand.Reader, &cert, &cert, rsaPublicKey, rsaPrivateKey)
+	if err != nil {
+		t.Fatalf("could not create x509 certificate: %s", err)
+	}
+
+	// create the JWKS response
+	eBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(eBytes, uint64(rsaPrivateKey.E))
+	eBytes = bytes.TrimLeft(eBytes, "\x00")
+	sum := sha256.Sum256(x509Cert)
+
+	jwksResponse, err = json.Marshal(map[string]any{
+		"keys": []map[string]any{{
+			"kty":      "RSA",
+			"x5t#S256": base64.RawURLEncoding.EncodeToString(sum[:]),
+			"e":        base64.RawURLEncoding.EncodeToString(eBytes),
+			"use":      "sig",
+			"kid":      rsaKeyID,
+			"x5c":      []string{base64.StdEncoding.EncodeToString(x509Cert)},
+			"alg":      "RS256",
+			"n":        base64.RawURLEncoding.EncodeToString(rsaPrivateKey.N.Bytes()),
+		}},
+	})
+	if err != nil {
+		t.Fatalf("could not marshal JWKS response: %s", err)
+	}
+
+	// WKOC response WITH introspection_endpoint (but provider will have it disabled)
+	wkocResponse, err = json.Marshal(map[string]any{
+		"issuer":                 httpsTestServer.URL,
+		"jwks_uri":               httpsTestServer.URL + "/jwks",
+		"introspection_endpoint": httpsTestServer.URL + "/oauth2/introspect",
+	})
+	if err != nil {
+		t.Fatalf("could not marshal WKOC response: %s", err)
+	}
+
+	// create a provider that trusts the test server certificate, with introspection disabled
+	certpool := x509.NewCertPool()
+	certpool.AddCert(httpsTestServer.Certificate())
+	cl := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: certpool}}}
+	provider, err := oidc.NewProvider(httpsTestServer.URL, []string{"aud1"},
+		oidc.WithPublicHTTPClient(cl),
+		oidc.WithSecureHTTPClient(cl),
+		oidc.WithDisableTokenIntrospection(true),
+	)
+	if err != nil {
+		t.Fatalf("could not create https provider: %s", err)
+	}
+
+	t.Run("token valid when token introspection is disabled", func(t *testing.T) {
+		hdl, err := NewOIDC(
+			WithIssuerClaimKeys(oidc.DefaultIssuerClaims...),
+			WithStaticProvider(provider),
+		)
+		assert.NoError(t, err)
+
+		token := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
+			"sub": "me",
+			"iss": httpsTestServer.URL,
+			"exp": time.Now().Add(48 * time.Hour).Unix(),
+			"aud": []string{"aud1"},
+		})
+		token.Header["kid"] = rsaKeyID
+		token.Header["jku"] = httpsTestServer.URL + "/jwks"
+		tokenString, err := token.SignedString(rsaPrivateKey)
+		assert.NoError(t, err)
+
+		claims := struct {
+			Subject string `json:"sub"`
+		}{}
+
+		// This should succeed - when token introspection is disabled,
+		// the token is assumed to be active
+		err = hdl.ParseAndValidate(t.Context(), tokenString, "", &claims, false)
+		assert.NoError(t, err)
+	})
+}
+
 func TestParseAndValidateIntrospectionError(t *testing.T) {
 	// Create a test server with an introspection endpoint that returns an error
 	var (

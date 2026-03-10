@@ -142,6 +142,7 @@ func createOIDCProvider(ctx context.Context, httpClientCfg *commoncfg.HTTPClient
 		"issuerURI", cfg.IssuerURI,
 		"jwksURI", cfg.JwksURI,
 		"audiences", cfg.Audiences,
+		"disableTokenIntrospection", cfg.DisableTokenIntrospection,
 	)
 	httpClient, err := commonhttp.NewClient(httpClientCfg)
 	if err != nil {
@@ -151,6 +152,7 @@ func createOIDCProvider(ctx context.Context, httpClientCfg *commoncfg.HTTPClient
 		oidc.WithSecureHTTPClient(httpClient),
 		oidc.WithCustomIssuerURI(cfg.IssuerURI),
 		oidc.WithCustomJWKSURI(cfg.JwksURI),
+		oidc.WithDisableTokenIntrospection(cfg.DisableTokenIntrospection),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create static OIDC provider: %w", err)

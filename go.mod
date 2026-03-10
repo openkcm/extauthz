@@ -12,7 +12,7 @@ require (
 	github.com/google/go-cmp v0.7.0
 	github.com/google/uuid v1.6.0
 	github.com/openkcm/api-sdk v0.15.0
-	github.com/openkcm/common-sdk v1.13.1-0.20260303120541-517d12d4d3c2
+	github.com/openkcm/common-sdk v1.13.1-0.20260311065752-786dca0a59c5
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/samber/oops v1.21.0
 	github.com/stretchr/testify v1.11.1
