@@ -321,6 +321,10 @@ func (handler *OIDC) introspect(ctx context.Context, provider *oidc.Provider, in
 			slogctx.Debug(ctx, "No introspection endpoint configured", "issuer", provider.Issuer())
 			return oidc.Introspection{Active: true}, nil
 		}
+		if errors.Is(err, oidc.ErrTokenIntrospectionDisabled) {
+			slogctx.Debug(ctx, "Token introspection is disabled", "issuer", provider.Issuer())
+			return oidc.Introspection{Active: true}, nil
+		}
 		slogctx.Error(ctx, "Could not introspect access token", "error", err)
 		return oidc.Introspection{Active: false}, err
 	}
