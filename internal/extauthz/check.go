@@ -172,6 +172,8 @@ func (srv *Server) Check(ctx context.Context, req *envoyauth.CheckRequest) (*env
 		return respondAllowed([]*envoycore.HeaderValueOption{}, []string{}), nil
 	case UNKNOWN, UNAUTHENTICATED:
 		return respondUnauthenticated(result.info), nil
+	case TENANT_BLOCKED:
+		return respondTenantBlocked(), nil
 	}
 
 	return respondPermissionDenied(), nil
