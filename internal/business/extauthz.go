@@ -144,7 +144,7 @@ func createOIDCProvider(ctx context.Context, httpClientCfg *commoncfg.HTTPClient
 		"audiences", cfg.Audiences,
 		"disableTokenIntrospection", cfg.DisableTokenIntrospection,
 	)
-	httpClient, err := commonhttp.NewClient(httpClientCfg)
+	httpClient, err := commonhttp.NewHTTPClient(httpClientCfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create HTTP client for OIDC provider: %w", err)
 	}
