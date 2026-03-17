@@ -54,7 +54,7 @@ func (srv *Server) Check(ctx context.Context, req *envoyauth.CheckRequest) (*env
 		"id", httpreq.GetId(),
 		"protocol", httpreq.GetProtocol(),
 		"method", method,
-		"sheme", httpreq.GetScheme(),
+		"scheme", httpreq.GetScheme(),
 		"host", host,
 		"path", path,
 	)

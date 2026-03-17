@@ -89,7 +89,19 @@ type K8sProviders struct {
 }
 
 type Provider struct {
-	Issuer    string   `yaml:"issuer"`
-	JwksURI   string   `yaml:"jwksURI"`
+	// Usually a URL identifying the OIDC provider, but can technically be any string.
+	Issuer string `yaml:"issuer"`
+
+	// Set IssuerURI if issuer is not a valid URI.
+	IssuerURI string `yaml:"issuerURI"`
+
+	// Set JwksURI if you want to avoid OIDC discovery.
+	JwksURI string `yaml:"jwksURI"`
+
+	// List of audiences to validate in the token.
+	// Optional, if not set, no audience validation will be performed.
 	Audiences []string `yaml:"audiences"`
+
+	// DisableTokenIntrospection: if set to true, will disable token introspection.
+	DisableTokenIntrospection bool `yaml:"disableTokenIntrospection"`
 }
