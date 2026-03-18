@@ -1,0 +1,22 @@
+name: Helm test
+
+on:
+  push:
+
+permissions:
+  contents: read
+
+jobs:
+  helm-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v6
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go.mod'
+      - name: Install k3d
+        run: go install github.com/k3d-io/k3d/v5@v5.8.3
+      - name: Run the tests
+        run: make helm-test
