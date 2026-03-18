@@ -2,6 +2,8 @@ module github.com/openkcm/extauthz
 
 go 1.25.6
 
+toolchain go1.26.1
+
 require (
 	github.com/cedar-policy/cedar-go v1.5.2
 	github.com/envoyproxy/go-control-plane/envoy v1.37.0
