@@ -223,6 +223,23 @@ func TestCheck(t *testing.T) {
 			wantError: false,
 			wantCode:  rpc.OK,
 		}, {
+			name:         "Tenant blocked",
+			featureGates: defaultFeatureGates,
+			request: &envoyauth.CheckRequest{
+				Attributes: &envoyauth.AttributeContext{
+					Request: &envoyauth.AttributeContext_Request{
+						Http: &envoyauth.AttributeContext_HttpRequest{
+							Method:  "GET",
+							Host:    "our.service.com",
+							Path:    "/cmk/v1/myTenantID/bar",
+							Headers: map[string]string{"cookie": "__Host-Http-SESSION-myTenantID=" + sessionID, HeaderCSRFToken: csrfToken}}}}},
+			setupMocks: func(msm *MockSessionManager) {
+				msm.On("GetSession", mock.Anything, "mySessionID", "myTenantID", mock.Anything).
+					Return(nil, session.ErrTenantBlocked)
+			},
+			wantError: false,
+			wantCode:  rpc.PERMISSION_DENIED,
+		}, {
 			// 	// TODO: remove comment when CSRF validation is well tested
 			// 	name:         "with malformed CSRF token",
 			// 	featureGates: defaultFeatureGates,

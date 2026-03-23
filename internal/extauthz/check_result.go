@@ -10,6 +10,7 @@ const (
 	UNKNOWN checkResultCode = iota
 	ALWAYS_ALLOWED
 	ALLOWED
+	TENANT_BLOCKED
 	DENIED
 	UNAUTHENTICATED
 )
@@ -20,6 +21,8 @@ func (c checkResultCode) String() string {
 		return "always allowed"
 	case ALLOWED:
 		return "allowed"
+	case TENANT_BLOCKED:
+		return "tenant_blocked"
 	case DENIED:
 		return "denied"
 	case UNAUTHENTICATED:
@@ -71,7 +74,7 @@ func (r *checkResult) toClientDataOptions() []clientdata.Option {
 
 // merge updates the result if the other result is more restrictive
 func (cr *checkResult) merge(other checkResult) {
-	// UNKNOWN < ALLOWED < DENIED < UNAUTHENTICATED
+	// UNKNOWN < ALLOWED < TENANT_BLOCKED < DENIED < UNAUTHENTICATED
 	if other.is > cr.is {
 		cr.is = other.is
 		cr.info = other.info
