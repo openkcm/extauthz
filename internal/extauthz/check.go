@@ -2,11 +2,11 @@ package extauthz
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 
-	"github.com/go-andiamo/splitter"
 	"github.com/openkcm/common-sdk/pkg/auth"
 	"github.com/openkcm/common-sdk/pkg/fingerprint"
 
@@ -273,15 +273,44 @@ func (srv *Server) extractSessionDetails(ctx context.Context, httpreq *envoyauth
 // splitCertHeader splits the XFCC header on , in case there are multiple certificates.
 // https://www.envoyproxy.io/docs/envoy/latest/configuration/http/http_conn_man/headers#x-forwarded-client-cert
 func splitCertHeader(certHeader string) ([]string, error) {
-	// split on , preserving quoted values
-	spl, err := splitter.NewSplitter(',', splitter.DoubleQuotes)
-	if err != nil {
-		return nil, err
+	// Handle empty string case
+	if certHeader == "" {
+		return []string{}, nil
 	}
 
-	fields, err := spl.Split(certHeader)
-	if err != nil {
-		return nil, err
+	// Manual parsing to preserve quotes and handle XFCC format correctly
+	var fields []string
+	var current strings.Builder
+	inQuote := false
+
+	for i := range len(certHeader) {
+		ch := certHeader[i]
+
+		switch ch {
+		case '"':
+			// Toggle quote state
+			inQuote = !inQuote
+			current.WriteByte(ch)
+		case ',':
+			if inQuote {
+				// Inside quotes, comma is part of the value
+				current.WriteByte(ch)
+			} else {
+				// Outside quotes, comma is a separator
+				fields = append(fields, current.String())
+				current.Reset()
+			}
+		default:
+			current.WriteByte(ch)
+		}
+	}
+
+	// Add the last field
+	fields = append(fields, current.String())
+
+	// Check for unclosed quotes
+	if inQuote {
+		return nil, errors.New("unclosed quote in header")
 	}
 
 	return fields, nil

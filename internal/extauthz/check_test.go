@@ -408,9 +408,9 @@ func TestSplitCertHeader(t *testing.T) {
 	}{
 		{
 			name:      "zero values",
-			input:     ``,
+			input:     "",
 			wantError: false,
-			want:      []string{``},
+			want:      []string{},
 		}, {
 			name:  "one cert",
 			input: `A=b;C="d";E=f`,
