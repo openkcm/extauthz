@@ -410,7 +410,7 @@ func TestSplitCertHeader(t *testing.T) {
 			name:      "zero values",
 			input:     ``,
 			wantError: false,
-			want:      []string{``},
+			want:      []string{},
 		}, {
 			name:  "one cert",
 			input: `A=b;C="d";E=f`,
@@ -419,6 +419,14 @@ func TestSplitCertHeader(t *testing.T) {
 			name:  "two certs",
 			input: `A=b;C="d";E=f,1=2;3="4";5=6`,
 			want:  []string{`A=b;C="d";E=f`, `1=2;3="4";5=6`},
+		}, {
+			name:  "two certs with escaped quotes",
+			input: `A=b;C="A quote \"inside\" quotes";E=f,1=2;3="4";5=6`,
+			want:  []string{`A=b;C="A quote \"inside\" quotes";E=f`, `1=2;3="4";5=6`},
+		}, {
+			name:  "two certs with a single escaped quote",
+			input: `A=b;C="A single \" inside";E=f,1=2;3="4";5=6`,
+			want:  []string{`A=b;C="A single \" inside";E=f`, `1=2;3="4";5=6`},
 		}, {
 			name:  "quoted spaces",
 			input: `A=b;C="d,";E=f,1=2;3="4,";5=6`,
