@@ -8,7 +8,7 @@ require (
 	github.com/cedar-policy/cedar-go v1.6.0
 	github.com/envoyproxy/go-control-plane/envoy v1.37.0
 	github.com/go-andiamo/splitter v1.2.5
-	github.com/go-jose/go-jose/v4 v4.1.3
+	github.com/go-jose/go-jose/v4 v4.1.4
 	github.com/goccy/go-yaml v1.19.2
 	github.com/gogo/googleapis v1.4.1
 	github.com/golang-jwt/jwt/v5 v5.3.1
