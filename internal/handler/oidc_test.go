@@ -27,10 +27,11 @@ import (
 )
 
 func TestNewOIDC(t *testing.T) {
+	ctx := t.Context()
 	t.Run("no panic with nil options", func(t *testing.T) {
 		assert.NotPanics(t, func() {
 			//nolint:errcheck
-			NewOIDC(nil)
+			NewOIDC(ctx, nil)
 		})
 	})
 
@@ -51,9 +52,14 @@ func TestNewOIDC(t *testing.T) {
 		{
 			name: "zero values",
 		}, {
+			name: "with signing key cache expiration",
+			opts: []OIDCOption{
+				WithSigningKeyCacheExpiration(30 * time.Second),
+			},
+		}, {
 			name: "with cache expiration",
 			opts: []OIDCOption{
-				WithProviderCacheExpiration(30*time.Second, 10*time.Minute),
+				WithIntrospectionCacheExpiration(30 * time.Second),
 			},
 		}, {
 			name: "with issuer claim keys iss",
@@ -95,7 +101,7 @@ func TestNewOIDC(t *testing.T) {
 			// manager := NewM
 
 			// Act
-			hdl, err := NewOIDC(tc.opts...)
+			hdl, err := NewOIDC(ctx, tc.opts...)
 			if tc.checkFunc != nil {
 				err = tc.checkFunc(hdl)
 			}
@@ -119,6 +125,7 @@ func TestNewOIDC(t *testing.T) {
 }
 
 func TestParseAndValidate(t *testing.T) {
+	ctx := t.Context()
 	// create a JWKS test server
 	var (
 		wkocResponse  []byte
@@ -388,7 +395,7 @@ func TestParseAndValidate(t *testing.T) {
 			if tc.featureGates != nil {
 				handlerOpts = append(handlerOpts, WithFeatureGates(tc.featureGates))
 			}
-			hdl, err := NewOIDC(handlerOpts...)
+			hdl, err := NewOIDC(ctx, handlerOpts...)
 			if err != nil {
 				t.Fatalf("could not create handler: %s", err)
 			}
@@ -506,6 +513,7 @@ func TestExtractFromClaims(t *testing.T) {
 }
 
 func TestProviderFor(t *testing.T) {
+	ctx := t.Context()
 	const (
 		issuer   = "https://example.com"
 		jwksURI  = "https://example.com/jwks"
@@ -535,7 +543,7 @@ func TestProviderFor(t *testing.T) {
 		{
 			name: "static provider found by issuer",
 			setupHandler: func() *OIDC {
-				h, _ := NewOIDC(WithStaticProvider(staticProviderByIssuer))
+				h, _ := NewOIDC(ctx, WithStaticProvider(staticProviderByIssuer))
 				return h
 			},
 			issuer:      issuer,
@@ -545,7 +553,7 @@ func TestProviderFor(t *testing.T) {
 		{
 			name: "static provider found by jwksURI",
 			setupHandler: func() *OIDC {
-				h, _ := NewOIDC(WithStaticProvider(staticProviderByJwksURI))
+				h, _ := NewOIDC(ctx, WithStaticProvider(staticProviderByJwksURI))
 				return h
 			},
 			issuer:      issuer,
@@ -555,7 +563,7 @@ func TestProviderFor(t *testing.T) {
 		{
 			name: "no static provider and no session manager",
 			setupHandler: func() *OIDC {
-				h, _ := NewOIDC()
+				h, _ := NewOIDC(ctx)
 				return h
 			},
 			issuer:        issuer,
@@ -566,7 +574,7 @@ func TestProviderFor(t *testing.T) {
 		{
 			name: "jwksURI matches but issuer doesn't match",
 			setupHandler: func() *OIDC {
-				h, _ := NewOIDC(WithStaticProvider(staticProviderByJwksURI))
+				h, _ := NewOIDC(ctx, WithStaticProvider(staticProviderByJwksURI))
 				return h
 			},
 			issuer:        "https://other-issuer.com",
@@ -596,6 +604,7 @@ func TestProviderFor(t *testing.T) {
 }
 
 func TestRegisterStaticProvider(t *testing.T) {
+	ctx := t.Context()
 	const (
 		issuer  = "https://example.com"
 		jwksURI = "https://example.com/custom/jwks"
@@ -605,7 +614,7 @@ func TestRegisterStaticProvider(t *testing.T) {
 		provider, err := oidc.NewProvider(issuer, []string{"aud1"})
 		assert.NoError(t, err)
 
-		handler, err := NewOIDC()
+		handler, err := NewOIDC(ctx)
 		assert.NoError(t, err)
 
 		handler.RegisterStaticProvider(provider)
@@ -620,7 +629,7 @@ func TestRegisterStaticProvider(t *testing.T) {
 		provider, err := oidc.NewProvider(issuer, []string{"aud1"}, oidc.WithCustomJWKSURI(jwksURI))
 		assert.NoError(t, err)
 
-		handler, err := NewOIDC()
+		handler, err := NewOIDC(ctx)
 		assert.NoError(t, err)
 
 		handler.RegisterStaticProvider(provider)
@@ -636,6 +645,7 @@ func TestRegisterStaticProvider(t *testing.T) {
 }
 
 func TestParseAndValidateEdgeCases(t *testing.T) {
+	ctx := t.Context()
 	// create a JWKS test server
 	var (
 		wkocResponse  []byte
@@ -728,7 +738,7 @@ func TestParseAndValidateEdgeCases(t *testing.T) {
 	}
 
 	t.Run("invalid token string", func(t *testing.T) {
-		hdl, err := NewOIDC(
+		hdl, err := NewOIDC(ctx,
 			WithIssuerClaimKeys(oidc.DefaultIssuerClaims...),
 			WithStaticProvider(provider),
 		)
@@ -740,7 +750,7 @@ func TestParseAndValidateEdgeCases(t *testing.T) {
 	})
 
 	t.Run("missing issuer in claims", func(t *testing.T) {
-		hdl, err := NewOIDC(
+		hdl, err := NewOIDC(ctx,
 			WithIssuerClaimKeys("iss"),
 			WithStaticProvider(provider),
 		)
@@ -763,7 +773,7 @@ func TestParseAndValidateEdgeCases(t *testing.T) {
 	})
 
 	t.Run("missing kid in token header", func(t *testing.T) {
-		hdl, err := NewOIDC(
+		hdl, err := NewOIDC(ctx,
 			WithIssuerClaimKeys(oidc.DefaultIssuerClaims...),
 			WithStaticProvider(provider),
 		)
@@ -787,7 +797,7 @@ func TestParseAndValidateEdgeCases(t *testing.T) {
 	})
 
 	t.Run("http scheme rejected", func(t *testing.T) {
-		hdl, err := NewOIDC(
+		hdl, err := NewOIDC(ctx,
 			WithIssuerClaimKeys(oidc.DefaultIssuerClaims...),
 			WithStaticProvider(provider),
 		)
@@ -811,10 +821,9 @@ func TestParseAndValidateEdgeCases(t *testing.T) {
 
 	t.Run("use introspection cache", func(t *testing.T) {
 		introspection = []byte(`{"active": true}`)
-		hdl, err := NewOIDC(
+		hdl, err := NewOIDC(ctx,
 			WithIssuerClaimKeys(oidc.DefaultIssuerClaims...),
 			WithStaticProvider(provider),
-			WithProviderCacheExpiration(5*time.Minute, 10*time.Minute),
 		)
 		assert.NoError(t, err)
 
@@ -844,10 +853,9 @@ func TestParseAndValidateEdgeCases(t *testing.T) {
 
 	t.Run("signing key caching", func(t *testing.T) {
 		introspection = []byte(`{"active": true}`)
-		hdl, err := NewOIDC(
+		hdl, err := NewOIDC(ctx,
 			WithIssuerClaimKeys(oidc.DefaultIssuerClaims...),
 			WithStaticProvider(provider),
-			WithProviderCacheExpiration(5*time.Minute, 10*time.Minute),
 		)
 		assert.NoError(t, err)
 
@@ -877,7 +885,7 @@ func TestParseAndValidateEdgeCases(t *testing.T) {
 
 	t.Run("token without jku falls back to issuer", func(t *testing.T) {
 		introspection = []byte(`{"active": true}`)
-		hdl, err := NewOIDC(
+		hdl, err := NewOIDC(ctx,
 			WithIssuerClaimKeys(oidc.DefaultIssuerClaims...),
 			WithStaticProvider(provider),
 		)
@@ -904,7 +912,7 @@ func TestParseAndValidateEdgeCases(t *testing.T) {
 
 	t.Run("invalid claims deserialization returns error", func(t *testing.T) {
 		introspection = []byte(`{"active": true}`)
-		hdl, err := NewOIDC(
+		hdl, err := NewOIDC(ctx,
 			WithIssuerClaimKeys(oidc.DefaultIssuerClaims...),
 			WithStaticProvider(provider),
 		)
@@ -933,7 +941,7 @@ func TestParseAndValidateEdgeCases(t *testing.T) {
 	})
 
 	t.Run("no provider for issuer", func(t *testing.T) {
-		hdl, err := NewOIDC(
+		hdl, err := NewOIDC(ctx,
 			WithIssuerClaimKeys(oidc.DefaultIssuerClaims...),
 		)
 		assert.NoError(t, err)
@@ -955,23 +963,26 @@ func TestParseAndValidateEdgeCases(t *testing.T) {
 }
 
 func TestWithSessionManager(t *testing.T) {
+	ctx := t.Context()
 	t.Run("set session manager", func(t *testing.T) {
-		hdl, err := NewOIDC(WithSessionManager(nil))
+		hdl, err := NewOIDC(ctx, WithSessionManager(nil))
 		assert.NoError(t, err)
 		assert.Nil(t, hdl.sessionManager)
 	})
 }
 
 func TestWithFeatureGates(t *testing.T) {
+	ctx := t.Context()
 	t.Run("set feature gates", func(t *testing.T) {
 		fg := &commoncfg.FeatureGates{}
-		hdl, err := NewOIDC(WithFeatureGates(fg))
+		hdl, err := NewOIDC(ctx, WithFeatureGates(fg))
 		assert.NoError(t, err)
 		assert.Equal(t, fg, hdl.featureGates)
 	})
 }
 
 func TestParseAndValidateNoIntrospectionEndpoint(t *testing.T) {
+	ctx := t.Context()
 	// Create a test server without introspection endpoint
 	var (
 		wkocResponse []byte
@@ -1060,7 +1071,7 @@ func TestParseAndValidateNoIntrospectionEndpoint(t *testing.T) {
 	}
 
 	t.Run("token valid when no introspection endpoint configured", func(t *testing.T) {
-		hdl, err := NewOIDC(
+		hdl, err := NewOIDC(ctx,
 			WithIssuerClaimKeys(oidc.DefaultIssuerClaims...),
 			WithStaticProvider(provider),
 		)
@@ -1089,6 +1100,7 @@ func TestParseAndValidateNoIntrospectionEndpoint(t *testing.T) {
 }
 
 func TestParseAndValidateTokenIntrospectionDisabled(t *testing.T) {
+	ctx := t.Context()
 	// Create a test server with introspection endpoint, but provider has introspection disabled
 	var (
 		wkocResponse []byte
@@ -1183,7 +1195,7 @@ func TestParseAndValidateTokenIntrospectionDisabled(t *testing.T) {
 	}
 
 	t.Run("token valid when token introspection is disabled", func(t *testing.T) {
-		hdl, err := NewOIDC(
+		hdl, err := NewOIDC(ctx,
 			WithIssuerClaimKeys(oidc.DefaultIssuerClaims...),
 			WithStaticProvider(provider),
 		)
@@ -1212,6 +1224,7 @@ func TestParseAndValidateTokenIntrospectionDisabled(t *testing.T) {
 }
 
 func TestParseAndValidateIntrospectionError(t *testing.T) {
+	ctx := t.Context()
 	// Create a test server with an introspection endpoint that returns an error
 	var (
 		wkocResponse            []byte
@@ -1306,7 +1319,7 @@ func TestParseAndValidateIntrospectionError(t *testing.T) {
 	t.Run("introspection server error", func(t *testing.T) {
 		introspectionStatusCode = http.StatusInternalServerError
 
-		hdl, err := NewOIDC(
+		hdl, err := NewOIDC(ctx,
 			WithIssuerClaimKeys(oidc.DefaultIssuerClaims...),
 			WithStaticProvider(provider),
 		)

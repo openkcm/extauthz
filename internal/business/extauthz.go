@@ -129,7 +129,7 @@ func createOIDCHandler(ctx context.Context, sessionManager *session.Manager, cfg
 	}
 
 	// create the handler
-	hdl, err := handler.NewOIDC(opts...)
+	hdl, err := handler.NewOIDC(ctx, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create the OIDC handler: %w", err)
 	}

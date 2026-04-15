@@ -32,6 +32,7 @@ import (
 )
 
 func TestCheckJWTToken(t *testing.T) {
+	ctx := t.Context()
 	// create a JWKS test server
 	var (
 		wkocResponse []byte
@@ -183,7 +184,7 @@ func TestCheckJWTToken(t *testing.T) {
 				t.Fatalf("could not create provider: %s", err)
 			}
 
-			hdl, err := handler.NewOIDC(handler.WithStaticProvider(p))
+			hdl, err := handler.NewOIDC(ctx, handler.WithStaticProvider(p))
 			if err != nil {
 				t.Fatalf("could not create handler: %s", err)
 			}
