@@ -158,10 +158,7 @@ func (srv *Server) Check(ctx context.Context, req *envoyauth.CheckRequest) (*env
 			return respondInternalServerError()
 		}
 
-		slogctx.Debug(ctx, LogPrefixCheck+"client data",
-			auth.HeaderClientData, b64data,
-			auth.HeaderClientDataSignature, b64sig,
-		)
+		slogctx.Debug(ctx, LogPrefixCheck+"client data", auth.HeaderClientData, b64data)
 		headersToAdd = []*envoycore.HeaderValueOption{
 			headerValueOption(auth.HeaderClientData, b64data),
 			headerValueOption(auth.HeaderClientDataSignature, b64sig),
