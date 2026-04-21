@@ -40,6 +40,7 @@ type Server struct {
 	sessionManager         sessionManagerInterface
 	sessionPathPrefixes    []string
 	csrfSecret             []byte
+	cancel                 context.CancelFunc
 }
 
 // ServerOption is used to configure a server.
@@ -136,8 +137,10 @@ func NewServer(opts ...ServerOption) (*Server, error) {
 		return nil, oops.Hint("failed to create policy engine").Wrap(err)
 	}
 
-	hdl, err := handler.NewOIDC()
+	ctx, cancel := context.WithCancel(context.Background())
+	hdl, err := handler.NewOIDC(ctx)
 	if err != nil {
+		cancel()
 		return nil, oops.Hint("failed to create OIDC handler").Wrap(err)
 	}
 
@@ -146,6 +149,7 @@ func NewServer(opts ...ServerOption) (*Server, error) {
 		oidcHandler:         hdl,
 		sessionPathPrefixes: []string{},
 		featureGates:        &commoncfg.FeatureGates{},
+		cancel:              cancel,
 	}
 
 	for _, opt := range opts {
@@ -174,6 +178,7 @@ func (s *Server) Start() error {
 
 // Close starts any internal processes required by the server.
 func (s *Server) Close() error {
+	s.cancel()
 	if s.clientDataSigner != nil {
 		err := s.clientDataSigner.Close()
 		if err != nil {

@@ -33,6 +33,7 @@ type handlerTestSuite struct {
 	hdl           *OIDC
 	token         *jwt.Token
 	provider      *oidc.Provider
+	cancel        context.CancelFunc
 }
 
 func TestHandlerSuite(t *testing.T) {
@@ -40,6 +41,9 @@ func TestHandlerSuite(t *testing.T) {
 }
 
 func (s *handlerTestSuite) SetupSuite() {
+	ctx, cancel := context.WithCancel(context.Background())
+	s.cancel = cancel
+
 	var err error
 
 	// create an RSA key pair
@@ -98,7 +102,7 @@ func (s *handlerTestSuite) SetupSuite() {
 		oidc.WithSecureHTTPClient(cl),
 	)
 	s.Require().NoError(err)
-	s.hdl, err = NewOIDC(WithIssuerClaimKeys(oidc.DefaultIssuerClaims...), WithStaticProvider(s.provider))
+	s.hdl, err = NewOIDC(ctx, WithIssuerClaimKeys(oidc.DefaultIssuerClaims...), WithStaticProvider(s.provider))
 	s.Require().NoError(err)
 
 	s.token = jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
@@ -113,6 +117,7 @@ func (s *handlerTestSuite) SetupSuite() {
 }
 
 func (s *handlerTestSuite) TearDownSuite() {
+	s.cancel()
 	s.ts.Close()
 }
 

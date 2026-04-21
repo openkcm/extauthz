@@ -9,9 +9,9 @@ import (
 
 	"github.com/go-jose/go-jose/v4"
 	"github.com/go-jose/go-jose/v4/jwt"
+	"github.com/jellydator/ttlcache/v3"
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
 	"github.com/openkcm/common-sdk/pkg/oidc"
-	"github.com/patrickmn/go-cache"
 
 	slogctx "github.com/veqryn/slog-context"
 
@@ -19,8 +19,8 @@ import (
 )
 
 const (
-	introspectPrefix = "introspect_"
-	signingKeyPrefix = "signingkey_"
+	defaultSigningKeyCacheExpiration    = 5 * time.Minute
+	defaultIntrospectionCacheExpiration = 30 * time.Second
 )
 
 // OIDC tracks the set of identity providers to support multi tenancy.
@@ -30,10 +30,13 @@ type OIDC struct {
 	featureGates    *commoncfg.FeatureGates
 	sessionManager  *session.Manager
 
-	// cache the providers by issuer
-	cache           *cache.Cache // map[string]*Provider or introspection
-	expiration      time.Duration
-	cleanupInterval time.Duration
+	// cache signing keys
+	signingKeyCache           *ttlcache.Cache[string, *jose.JSONWebKey]
+	signingKeyCacheExpiration time.Duration
+
+	// cache introspection results
+	introspectionCache           *ttlcache.Cache[string, oidc.Introspection]
+	introspectionCacheExpiration time.Duration
 }
 
 // OIDCOption is used to configure a handler.
@@ -74,24 +77,30 @@ func WithFeatureGates(fg *commoncfg.FeatureGates) OIDCOption {
 	}
 }
 
-// WithProviderCacheExpiration configures the expiration of cached providers.
-func WithProviderCacheExpiration(expiration, cleanup time.Duration) OIDCOption {
+// WithSigningKeyCacheExpiration configures the expiration of cached signing keys.
+func WithSigningKeyCacheExpiration(expiration time.Duration) OIDCOption {
 	return func(handler *OIDC) error {
-		handler.expiration = expiration
-		handler.cleanupInterval = cleanup
-		handler.cache = cache.New(expiration, cleanup)
+		handler.signingKeyCacheExpiration = expiration
+		return nil
+	}
+}
 
+// WithIntrospectionCacheExpiration configures the expiration of cached introspections.
+func WithIntrospectionCacheExpiration(expiration time.Duration) OIDCOption {
+	return func(handler *OIDC) error {
+		handler.introspectionCacheExpiration = expiration
 		return nil
 	}
 }
 
 // NewOIDC creates a new handler and applies the given options.
-func NewOIDC(opts ...OIDCOption) (*OIDC, error) {
+func NewOIDC(ctx context.Context, opts ...OIDCOption) (*OIDC, error) {
 	handler := &OIDC{
-		issuerClaimKeys: oidc.DefaultIssuerClaims,
-		cache:           cache.New(30*time.Second, 10*time.Minute),
-		staticProviders: make(map[string]*oidc.Provider),
-		featureGates:    &commoncfg.FeatureGates{},
+		issuerClaimKeys:              oidc.DefaultIssuerClaims,
+		staticProviders:              make(map[string]*oidc.Provider),
+		featureGates:                 &commoncfg.FeatureGates{},
+		signingKeyCacheExpiration:    defaultSigningKeyCacheExpiration,
+		introspectionCacheExpiration: defaultIntrospectionCacheExpiration,
 	}
 	for _, opt := range opts {
 		if opt == nil {
@@ -102,6 +111,16 @@ func NewOIDC(opts ...OIDCOption) (*OIDC, error) {
 			return nil, err
 		}
 	}
+
+	handler.signingKeyCache = ttlcache.New(ttlcache.WithTTL[string, *jose.JSONWebKey](handler.signingKeyCacheExpiration))
+	handler.introspectionCache = ttlcache.New(ttlcache.WithTTL[string, oidc.Introspection](handler.introspectionCacheExpiration))
+	go handler.signingKeyCache.Start()
+	go handler.introspectionCache.Start()
+	go func(ctx context.Context) {
+		<-ctx.Done()
+		handler.signingKeyCache.Stop()
+		handler.introspectionCache.Stop()
+	}(ctx)
 
 	return handler, nil
 }
@@ -284,11 +303,9 @@ func (handler *OIDC) ProviderFor(ctx context.Context, issuer, jwksURI, tenantID 
 
 func (handler *OIDC) getSigningKey(ctx context.Context, provider *oidc.Provider, keyID string) (*jose.JSONWebKey, error) {
 	// first check the cache for a recent signing key for this key ID
-	cacheKey := signingKeyPrefix + provider.UniqueID() + keyID
-	cache, ok := handler.cache.Get(cacheKey)
-	if ok {
-		//nolint:forcetypeassert
-		return cache.(*jose.JSONWebKey), nil
+	cacheKey := provider.UniqueID() + keyID
+	if item := handler.signingKeyCache.Get(cacheKey); item != nil {
+		return item.Value(), nil
 	}
 
 	// otherwise let the provider fetch the key using the JWKS URI and cache it if found
@@ -296,7 +313,9 @@ func (handler *OIDC) getSigningKey(ctx context.Context, provider *oidc.Provider,
 	if err != nil {
 		return nil, err
 	}
-	handler.cache.Set(cacheKey, key, 0)
+
+	// Cache the result with TTL
+	handler.signingKeyCache.Set(cacheKey, key, ttlcache.DefaultTTL)
 
 	return key, nil
 }
@@ -304,12 +323,10 @@ func (handler *OIDC) getSigningKey(ctx context.Context, provider *oidc.Provider,
 // introspect an access or refresh token.
 func (handler *OIDC) introspect(ctx context.Context, provider *oidc.Provider, introspectToken string, useCache bool) (oidc.Introspection, error) {
 	// first check the cache for a recent introspection result for this token
-	cacheKey := introspectPrefix + introspectToken
+	cacheKey := introspectToken
 	if useCache {
-		cache, ok := handler.cache.Get(cacheKey)
-		if ok {
-			//nolint:forcetypeassert
-			return cache.(oidc.Introspection), nil
+		if item := handler.introspectionCache.Get(cacheKey); item != nil {
+			return item.Value(), nil
 		}
 	}
 
@@ -328,7 +345,9 @@ func (handler *OIDC) introspect(ctx context.Context, provider *oidc.Provider, in
 		slogctx.Error(ctx, "Could not introspect access token", "error", err)
 		return oidc.Introspection{Active: false}, err
 	}
-	handler.cache.Set(cacheKey, intr, 0)
+
+	// Cache the result with TTL
+	handler.introspectionCache.Set(cacheKey, intr, ttlcache.DefaultTTL)
 
 	return intr, nil
 }
