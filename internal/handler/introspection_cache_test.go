@@ -18,8 +18,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gofrs/uuid/v5"
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/google/uuid"
 	"github.com/openkcm/common-sdk/pkg/oidc"
 	"github.com/stretchr/testify/suite"
 )
@@ -53,7 +53,7 @@ func (s *handlerTestSuite) SetupSuite() {
 	s.jwks = newJWKSHandler()
 	s.ts = httptest.NewTLSServer(s.jwks)
 
-	rsaKeyID := uuid.New().String()
+	rsaKeyID := uuid.Must(uuid.NewV4()).String()
 
 	// create the WKOC response
 	s.jwks.wkocResponse, err = json.Marshal(map[string]any{
