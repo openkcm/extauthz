@@ -19,8 +19,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gofrs/uuid/v5"
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/google/uuid"
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
 	"github.com/openkcm/common-sdk/pkg/oidc"
 	"github.com/stretchr/testify/assert"
@@ -159,7 +159,7 @@ func TestParseAndValidate(t *testing.T) {
 	}
 
 	rsaPublicKey := &rsaPrivateKey.PublicKey
-	rsaKeyID := uuid.New().String()
+	rsaKeyID := uuid.Must(uuid.NewV4()).String()
 
 	// create a x509 certificate
 	cert := x509.Certificate{
@@ -677,7 +677,7 @@ func TestParseAndValidateEdgeCases(t *testing.T) {
 	}
 
 	rsaPublicKey := &rsaPrivateKey.PublicKey
-	rsaKeyID := uuid.New().String()
+	rsaKeyID := uuid.Must(uuid.NewV4()).String()
 
 	// create a x509 certificate
 	cert := x509.Certificate{
@@ -1009,7 +1009,7 @@ func TestParseAndValidateNoIntrospectionEndpoint(t *testing.T) {
 	}
 
 	rsaPublicKey := &rsaPrivateKey.PublicKey
-	rsaKeyID := uuid.New().String()
+	rsaKeyID := uuid.Must(uuid.NewV4()).String()
 
 	// create a x509 certificate
 	cert := x509.Certificate{
@@ -1132,7 +1132,7 @@ func TestParseAndValidateTokenIntrospectionDisabled(t *testing.T) {
 	}
 
 	rsaPublicKey := &rsaPrivateKey.PublicKey
-	rsaKeyID := uuid.New().String()
+	rsaKeyID := uuid.Must(uuid.NewV4()).String()
 
 	// create a x509 certificate
 	cert := x509.Certificate{
@@ -1256,7 +1256,7 @@ func TestParseAndValidateIntrospectionError(t *testing.T) {
 	}
 
 	rsaPublicKey := &rsaPrivateKey.PublicKey
-	rsaKeyID := uuid.New().String()
+	rsaKeyID := uuid.Must(uuid.NewV4()).String()
 
 	// create a x509 certificate
 	cert := x509.Certificate{
