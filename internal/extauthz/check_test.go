@@ -10,11 +10,11 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/gogo/googleapis/google/rpc"
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
 	"github.com/openkcm/common-sdk/pkg/csrf"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/genproto/googleapis/rpc/code"
 
 	envoyauth "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
 
@@ -119,14 +119,14 @@ func TestCheck(t *testing.T) {
 		request         *envoyauth.CheckRequest
 		setupMocks      func(*MockSessionManager)
 		wantError       bool
-		wantCode        rpc.Code
+		wantCode        code.Code
 		want            *envoyauth.CheckResponse
 	}{
 		{
 			name:         "zero values",
 			featureGates: defaultFeatureGates,
 			wantError:    false,
-			wantCode:     rpc.UNAUTHENTICATED,
+			wantCode:     code.Code_UNAUTHENTICATED,
 		}, {
 			name:         "missing client certificate and authorization header",
 			featureGates: defaultFeatureGates,
@@ -136,7 +136,7 @@ func TestCheck(t *testing.T) {
 						Http: &envoyauth.AttributeContext_HttpRequest{
 							Path: "/foo/bar"}}}},
 			wantError: false,
-			wantCode:  rpc.UNAUTHENTICATED,
+			wantCode:  code.Code_UNAUTHENTICATED,
 		}, {
 			name:         "with invalid client certificate",
 			featureGates: defaultFeatureGates,
@@ -147,7 +147,7 @@ func TestCheck(t *testing.T) {
 							Path:    "/foo/bar",
 							Headers: map[string]string{HeaderForwardedClientCert: "client-cert"}}}}},
 			wantError: false,
-			wantCode:  rpc.UNAUTHENTICATED,
+			wantCode:  code.Code_UNAUTHENTICATED,
 		}, {
 			name:            "with valid client certificate",
 			featureGates:    defaultFeatureGates,
@@ -161,7 +161,7 @@ func TestCheck(t *testing.T) {
 							Path:    "/foo/bar",
 							Headers: map[string]string{HeaderForwardedClientCert: "Hash=123;Subject=\"CN=minime\";Cert=" + x509CertPEMURLEncoded}}}}},
 			wantError: false,
-			wantCode:  rpc.OK,
+			wantCode:  code.Code_OK,
 		}, {
 			name:            "with valid client certificate - different subject",
 			featureGates:    defaultFeatureGates,
@@ -175,7 +175,7 @@ func TestCheck(t *testing.T) {
 							Path:    "/foo/bar",
 							Headers: map[string]string{HeaderForwardedClientCert: "Hash=123;Subject=\"CN=daummy\";Cert=" + x509CertPEMURLEncoded}}}}},
 			wantError: false,
-			wantCode:  rpc.PERMISSION_DENIED,
+			wantCode:  code.Code_PERMISSION_DENIED,
 		}, {
 			name:            "with disallowed client certificate",
 			featureGates:    defaultFeatureGates,
@@ -187,7 +187,7 @@ func TestCheck(t *testing.T) {
 							Path:    "/foo/bar",
 							Headers: map[string]string{HeaderForwardedClientCert: "Hash=123;Subject=\"CN=austin\";Cert=" + x509CertPEMURLEncoded}}}}},
 			wantError: false,
-			wantCode:  rpc.PERMISSION_DENIED,
+			wantCode:  code.Code_PERMISSION_DENIED,
 		}, {
 			name:         "with authorization header",
 			featureGates: defaultFeatureGates,
@@ -198,7 +198,7 @@ func TestCheck(t *testing.T) {
 							Path:    "/foo/bar",
 							Headers: map[string]string{"authorization": "Bearer token"}}}}},
 			wantError: false,
-			wantCode:  rpc.UNAUTHENTICATED,
+			wantCode:  code.Code_UNAUTHENTICATED,
 		}, {
 			name:         "with session cookie",
 			featureGates: defaultFeatureGates,
@@ -221,7 +221,7 @@ func TestCheck(t *testing.T) {
 					}, nil)
 			},
 			wantError: false,
-			wantCode:  rpc.OK,
+			wantCode:  code.Code_OK,
 		}, {
 			name:         "Tenant blocked",
 			featureGates: defaultFeatureGates,
@@ -238,7 +238,7 @@ func TestCheck(t *testing.T) {
 					Return(nil, session.ErrTenantBlocked)
 			},
 			wantError: false,
-			wantCode:  rpc.PERMISSION_DENIED,
+			wantCode:  code.Code_PERMISSION_DENIED,
 		}, {
 			// 	// TODO: remove comment when CSRF validation is well tested
 			// 	name:         "with malformed CSRF token",
@@ -299,7 +299,7 @@ func TestCheck(t *testing.T) {
 							Path:    "/kms.api.cmk.registry.system.v1.Service/RegisterSystem",
 							Headers: map[string]string{HeaderForwardedClientCert: "Hash=123;Subject=\"CN=minime\";Cert=" + x509CertPEMURLEncoded}}}}},
 			wantError: false,
-			wantCode:  rpc.OK,
+			wantCode:  code.Code_OK,
 		}, {
 			name:            "registry service - tenant",
 			featureGates:    defaultFeatureGates,
@@ -313,7 +313,7 @@ func TestCheck(t *testing.T) {
 							Path:    "/kms.api.cmk.registry.tenant.v1.Service/RegisterTenant",
 							Headers: map[string]string{HeaderForwardedClientCert: "Hash=123;Subject=\"CN=minime\";Cert=" + x509CertPEMURLEncoded}}}}},
 			wantError: false,
-			wantCode:  rpc.OK,
+			wantCode:  code.Code_OK,
 		},
 	}
 

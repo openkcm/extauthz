@@ -4,11 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/gogo/googleapis/google/rpc"
-
 	envoy_core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	envoy_auth "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
 	envoy_type "github.com/envoyproxy/go-control-plane/envoy/type/v3"
+	rpccode "google.golang.org/genproto/googleapis/rpc/code"
 	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
 
 	"github.com/openkcm/extauthz/internal/apierrors"
@@ -38,7 +37,7 @@ func respondPermissionDenied() (*envoy_auth.CheckResponse, error) {
 func respondAllowed(headers []*envoy_core.HeaderValueOption, headersToRemove []string) *envoy_auth.CheckResponse {
 	return &envoy_auth.CheckResponse{
 		Status: &rpcstatus.Status{
-			Code: int32(rpc.OK),
+			Code: int32(rpccode.Code_OK),
 		},
 		HttpResponse: &envoy_auth.CheckResponse_OkResponse{
 			OkResponse: &envoy_auth.OkHttpResponse{
@@ -89,17 +88,17 @@ func deniedResponse(e apierrors.Error) (*envoy_auth.CheckResponse, error) {
 	}, nil
 }
 
-func mapApiErrorToRPCCode(e apierrors.Error) rpc.Code {
+func mapApiErrorToRPCCode(e apierrors.Error) rpccode.Code {
 	switch e.Code {
 	case apierrors.CodeAuthenticationRequired:
-		return rpc.UNAUTHENTICATED
+		return rpccode.Code_UNAUTHENTICATED
 	case apierrors.CodeTenantBlocked:
-		return rpc.PERMISSION_DENIED
+		return rpccode.Code_PERMISSION_DENIED
 	case apierrors.CodeForbidden:
-		return rpc.PERMISSION_DENIED
+		return rpccode.Code_PERMISSION_DENIED
 	case apierrors.CodeInternalServerError:
-		return rpc.INTERNAL
+		return rpccode.Code_INTERNAL
 	default:
-		return rpc.UNKNOWN
+		return rpccode.Code_UNKNOWN
 	}
 }

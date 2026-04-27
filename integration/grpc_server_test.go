@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gogo/googleapis/google/rpc"
+	"google.golang.org/genproto/googleapis/rpc/code"
 	"google.golang.org/grpc"
 
 	envoy_auth "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
@@ -53,13 +53,13 @@ func TestCheck(t *testing.T) {
 		name      string
 		request   *envoy_auth.CheckRequest
 		wantError bool
-		wantCode  rpc.Code
+		wantCode  code.Code
 	}{
 		{
 			name:      "zero values",
 			request:   &envoy_auth.CheckRequest{},
 			wantError: false,
-			wantCode:  rpc.UNAUTHENTICATED,
+			wantCode:  code.Code_UNAUTHENTICATED,
 		},
 	}
 
