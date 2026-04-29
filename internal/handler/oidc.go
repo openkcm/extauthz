@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"net/url"
@@ -35,7 +36,7 @@ type OIDC struct {
 	signingKeyCacheExpiration time.Duration
 
 	// cache introspection results
-	introspectionCache           *ttlcache.Cache[string, oidc.Introspection]
+	introspectionCache           *ttlcache.Cache[[32]byte, oidc.Introspection]
 	introspectionCacheExpiration time.Duration
 }
 
@@ -113,7 +114,7 @@ func NewOIDC(ctx context.Context, opts ...OIDCOption) (*OIDC, error) {
 	}
 
 	handler.signingKeyCache = ttlcache.New(ttlcache.WithTTL[string, *jose.JSONWebKey](handler.signingKeyCacheExpiration))
-	handler.introspectionCache = ttlcache.New(ttlcache.WithTTL[string, oidc.Introspection](handler.introspectionCacheExpiration))
+	handler.introspectionCache = ttlcache.New(ttlcache.WithTTL[[32]byte, oidc.Introspection](handler.introspectionCacheExpiration))
 	go handler.signingKeyCache.Start()
 	go handler.introspectionCache.Start()
 	go func(ctx context.Context) {
@@ -323,7 +324,7 @@ func (handler *OIDC) getSigningKey(ctx context.Context, provider *oidc.Provider,
 // introspect an access or refresh token.
 func (handler *OIDC) introspect(ctx context.Context, provider *oidc.Provider, introspectToken string, useCache bool) (oidc.Introspection, error) {
 	// first check the cache for a recent introspection result for this token
-	cacheKey := introspectToken
+	cacheKey := sha256.Sum256([]byte(introspectToken))
 	if useCache {
 		if item := handler.introspectionCache.Get(cacheKey); item != nil {
 			return item.Value(), nil
