@@ -52,11 +52,10 @@ func (srv *Server) checkSession(ctx context.Context, sessionCookie *http.Cookie,
 		csrfTokenHash := sha256.New().Sum(srv.csrfSecret)
 
 		slogctx.Debug(ctx, "CSRF token is not valid", "tokenHash", tokenHash[:5], "cookieHash", cookieHash[:5], "csrfTokenHash", csrfTokenHash[:5])
-		// TODO: remove comment when CSRF validation is well tested
-		// return checkResult{
-		// 	is:   UNAUTHENTICATED,
-		// 	info: "CSRF token is not valid",
-		// }
+		return checkResult{
+			is:   UNAUTHENTICATED,
+			info: "CSRF token is not valid",
+		}
 	}
 
 	// prepare the result
