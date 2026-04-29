@@ -10,7 +10,7 @@ type Error struct {
 
 type Code string
 
-var (
+const (
 	CodeAuthenticationRequired Code = "AUTHENTICATION_REQUIRED"
 	CodeTenantBlocked          Code = "TENANT_BLOCKED"
 	CodeForbidden              Code = "FORBIDDEN"
