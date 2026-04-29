@@ -8,8 +8,6 @@ application:
 featureGates:
   enrich-header-with-client-type: false
   enrich-header-with-client-region: false
-  disable-client-certificate-computation: false
-  disable-jwt-token-computation: false
 
 logger:
   level: debug # one of: debug, info, warn, error
