@@ -47,11 +47,11 @@ func (srv *Server) checkSession(ctx context.Context, sessionCookie *http.Cookie,
 	}
 
 	if !csrf.Validate(csrfToken, sessionCookie.Value, srv.csrfSecret) {
-		tokenHash := sha256.New().Sum([]byte(csrfToken))
-		cookieHash := sha256.New().Sum([]byte(sessionCookie.Value))
-		csrfTokenHash := sha256.New().Sum(srv.csrfSecret)
+		tokenHash := sha256.Sum256([]byte(csrfToken))
+		cookieHash := sha256.Sum256([]byte(sessionCookie.Value))
+		secretHash := sha256.Sum256(srv.csrfSecret)
 
-		slogctx.Debug(ctx, "CSRF token is not valid", "tokenHash", tokenHash[:5], "cookieHash", cookieHash[:5], "csrfTokenHash", csrfTokenHash[:5])
+		slogctx.Debug(ctx, "CSRF token is not valid", "tokenHash", tokenHash[:5], "cookieHash", cookieHash[:5], "secretHash", secretHash[:5])
 		return checkResult{
 			is:   UNAUTHENTICATED,
 			info: "CSRF token is not valid",
