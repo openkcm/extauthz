@@ -13,8 +13,6 @@ import (
 	envoycore "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	envoyauth "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
 	slogctx "github.com/veqryn/slog-context"
-
-	"github.com/openkcm/extauthz/internal/flags"
 )
 
 const (
@@ -67,56 +65,30 @@ func (srv *Server) Check(ctx context.Context, req *envoyauth.CheckRequest) (*env
 	// All results are merged, the most restrictive result wins.
 	result := checkResult{is: UNKNOWN}
 
-	// Verify if DisableClientCertificateComputation flag was explicitly set in the configuration with value `true`, then the
-	// Client Certificates handling should be disabled
-	// TODO: Remove this hacking code when session support is added and tested
-	skipClientCertificates := false
-	if srv.featureGates.IsFeatureEnabled(flags.DisableClientCertificateComputation) {
-		slogctx.Error(ctx, LogPrefixCheck+"processing of client certificate has been disabled through feature gates")
-		result.is = ALWAYS_ALLOWED
-		skipClientCertificates = true
-	}
-
-	// Verify if DisableJWTTokenComputation flag was explicitly set in the configuration with value `true`, then the
-	// bearer token handling should be disabled
-	// TODO: Remove this hacking code when session support is added and tested
-	skipBearerToken := false
-	if srv.featureGates.IsFeatureEnabled(flags.DisableJWTTokenComputation) {
-		slogctx.Error(ctx, LogPrefixCheck+"processing of bearer token has been disabled through feature gates")
-		result.is = ALWAYS_ALLOWED
-		skipBearerToken = true
-	}
-
-	// TODO: Remove this hacking code when session support is added and tested
-	if !skipClientCertificates {
-		// 1. Client certificates (if any)
-		slogctx.Debug(ctx, LogPrefixClientCert+"checking for presence")
-		if clientCerts, found := extractClientCertificates(ctx, headers); !found {
-			slogctx.Debug(ctx, LogPrefixClientCert+"not found")
-		} else {
-			slogctx.Debug(ctx, LogPrefixClientCert+"found", "count", len(clientCerts))
-			for nr, part := range clientCerts {
-				slogctx.Debug(ctx, fmt.Sprintf(LogPrefixClientCert+"checking number %d", nr))
-				r := srv.checkClientCert(ctx, part, method, host, path)
-				slogctx.Debug(ctx, LogPrefixClientCert+"access "+r.is.String(), "part", nr)
-				result.merge(r)
-				result.withXFCCHeader = true
-			}
-		}
-	}
-
-	// TODO: Remove this hacking code when session support is added and tested
-	if !skipBearerToken {
-		// 2. Bearer token in the authorization header (if any)
-		slogctx.Debug(ctx, LogPrefixBearerToken+"checking for presence")
-		if bearerToken, found := extractBearerToken(ctx, headers); !found {
-			slogctx.Debug(ctx, LogPrefixBearerToken+"not found")
-		} else {
-			slogctx.Debug(ctx, LogPrefixBearerToken+"found ... checking")
-			r := srv.checkJWTToken(ctx, bearerToken, method, host, path)
-			slogctx.Debug(ctx, LogPrefixBearerToken+"access "+r.is.String())
+	// 1. Client certificates (if any)
+	slogctx.Debug(ctx, LogPrefixClientCert+"checking for presence")
+	if clientCerts, found := extractClientCertificates(ctx, headers); !found {
+		slogctx.Debug(ctx, LogPrefixClientCert+"not found")
+	} else {
+		slogctx.Debug(ctx, LogPrefixClientCert+"found", "count", len(clientCerts))
+		for nr, part := range clientCerts {
+			slogctx.Debug(ctx, fmt.Sprintf(LogPrefixClientCert+"checking number %d", nr))
+			r := srv.checkClientCert(ctx, part, method, host, path)
+			slogctx.Debug(ctx, LogPrefixClientCert+"access "+r.is.String(), "part", nr)
 			result.merge(r)
+			result.withXFCCHeader = true
 		}
+	}
+
+	// 2. Bearer token in the authorization header (if any)
+	slogctx.Debug(ctx, LogPrefixBearerToken+"checking for presence")
+	if bearerToken, found := extractBearerToken(ctx, headers); !found {
+		slogctx.Debug(ctx, LogPrefixBearerToken+"not found")
+	} else {
+		slogctx.Debug(ctx, LogPrefixBearerToken+"found ... checking")
+		r := srv.checkJWTToken(ctx, bearerToken, method, host, path)
+		slogctx.Debug(ctx, LogPrefixBearerToken+"access "+r.is.String())
+		result.merge(r)
 	}
 
 	// 3. Session cookie (if any and only if session manager is configured)
@@ -165,8 +137,6 @@ func (srv *Server) Check(ctx context.Context, req *envoyauth.CheckRequest) (*env
 		}
 
 		return respondAllowed(headersToAdd, headersToRemove), nil
-	case ALWAYS_ALLOWED:
-		return respondAllowed([]*envoycore.HeaderValueOption{}, []string{}), nil
 	case UNKNOWN, UNAUTHENTICATED:
 		return respondUnauthenticated(result.info)
 	case TENANT_BLOCKED:

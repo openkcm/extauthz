@@ -8,7 +8,6 @@ type checkResultCode uint
 
 const (
 	UNKNOWN checkResultCode = iota
-	ALWAYS_ALLOWED
 	ALLOWED
 	TENANT_BLOCKED
 	DENIED
@@ -17,8 +16,6 @@ const (
 
 func (c checkResultCode) String() string {
 	switch c {
-	case ALWAYS_ALLOWED:
-		return "always allowed"
 	case ALLOWED:
 		return "allowed"
 	case TENANT_BLOCKED:
