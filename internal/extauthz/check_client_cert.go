@@ -265,7 +265,6 @@ func (srv *Server) checkClientCert(ctx context.Context, certHeader, method, host
 	)
 
 	data := map[string]string{
-		"route":  host + path, // TODO: remove when policies are updated to use host and path instead of route
 		"host":   host,
 		"path":   path,
 		"type":   "x509",
@@ -275,8 +274,6 @@ func (srv *Server) checkClientCert(ctx context.Context, certHeader, method, host
 	allowed, reason, err := srv.policyEngine.Check(
 		cedarpolicy.WithSubject(subject),
 		cedarpolicy.WithAction(method),
-		//nolint:staticcheck
-		cedarpolicy.WithRoute(host+path), // TODO: remove when policies are updated to use host and path instead of route
 		cedarpolicy.WithContextData(data),
 	)
 	if err != nil {
