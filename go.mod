@@ -15,7 +15,7 @@ require (
 	github.com/google/go-cmp v0.7.0
 	github.com/jellydator/ttlcache/v3 v3.4.0
 	github.com/openkcm/api-sdk v0.17.0
-	github.com/openkcm/common-sdk v1.15.2
+	github.com/openkcm/common-sdk v1.15.3-0.20260428121533-dab998a84d4b
 	github.com/samber/oops v1.21.0
 	github.com/stretchr/testify v1.11.1
 	github.com/testcontainers/testcontainers-go v0.42.0
