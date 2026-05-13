@@ -76,6 +76,12 @@ func TestDeployment(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
+			// Arrange
+			if tc.opts.SetValues == nil {
+				tc.opts.SetValues = map[string]string{}
+			}
+			tc.opts.SetValues["image.tag"] = "foo"
+
 			// Act
 			got, err := helm.RenderTemplateE(t, tc.opts, path, appName, []string{yamlFile})
 
