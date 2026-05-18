@@ -31,7 +31,6 @@ image:
   repository: images/checker
 
   # Override the image tag to deploy by setting this variable.
-  # If no value is set, the chart's appVersion is used.
   # +docs:property
   tag: ""
 
