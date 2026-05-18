@@ -5,7 +5,7 @@ go 1.25.6
 toolchain go1.26.2
 
 require (
-	github.com/cedar-policy/cedar-go v1.6.0
+	github.com/cedar-policy/cedar-go v1.6.1
 	github.com/envoyproxy/go-control-plane/envoy v1.37.0
 	github.com/go-andiamo/splitter v1.2.5
 	github.com/go-jose/go-jose/v4 v4.1.4
@@ -22,7 +22,7 @@ require (
 	github.com/testcontainers/testcontainers-go/modules/valkey v0.42.0
 	github.com/veqryn/slog-context v0.9.0
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260406210006-6f92a3bedf2d
-	google.golang.org/grpc v1.81.0
+	google.golang.org/grpc v1.81.1
 )
 
 require (
