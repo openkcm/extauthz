@@ -43,7 +43,7 @@ spec:
           securityContext:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          image: "{{ template "extauthz.image" (tuple .Values.image $.Chart.AppVersion) }}"
+          image: "{{ template "extauthz.image" (tuple .Values.image) }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           {{- with .Values.image.args }}
           args:
