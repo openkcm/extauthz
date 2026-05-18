@@ -32,7 +32,7 @@ image:
 
   # Override the image tag to deploy by setting this variable.
   # +docs:property
-  tag: latest
+  tag: ""
 
   # Setting a digest will override any tag.
   # +docs:property
