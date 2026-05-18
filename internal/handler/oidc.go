@@ -117,11 +117,11 @@ func NewOIDC(ctx context.Context, opts ...OIDCOption) (*OIDC, error) {
 	handler.introspectionCache = ttlcache.New(ttlcache.WithTTL[[32]byte, oidc.Introspection](handler.introspectionCacheExpiration))
 	go handler.signingKeyCache.Start()
 	go handler.introspectionCache.Start()
-	go func(ctx context.Context) {
+	go func(ctx context.Context, h *OIDC) {
 		<-ctx.Done()
-		handler.signingKeyCache.Stop()
-		handler.introspectionCache.Stop()
-	}(ctx)
+		h.signingKeyCache.Stop()
+		h.introspectionCache.Stop()
+	}(ctx, handler)
 
 	return handler, nil
 }
