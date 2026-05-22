@@ -14,8 +14,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-andiamo/splitter"
-
 	slogctx "github.com/veqryn/slog-context"
 
 	"github.com/openkcm/extauthz/internal/policies/cedarpolicy"
@@ -138,18 +136,57 @@ func formatIssuer(cert *x509.Certificate) string {
 	return formatRDNSequence(rdnSeq)
 }
 
+// splitPreservingQuotes splits a string on semicolons while preserving
+// semicolons inside double-quoted values.
+func splitPreservingQuotes(s string) ([]string, error) {
+	var result []string
+	var current strings.Builder
+	inQuotes := false
+
+	for i := range len(s) {
+		ch := s[i]
+
+		switch ch {
+		case '"':
+			inQuotes = !inQuotes
+			current.WriteByte(ch)
+		case ';':
+			if inQuotes {
+				current.WriteByte(ch)
+			} else {
+				if current.Len() > 0 {
+					result = append(result, current.String())
+					current.Reset()
+				}
+			}
+		default:
+			current.WriteByte(ch)
+		}
+	}
+
+	if inQuotes {
+		return nil, errors.New("unclosed quote in header")
+	}
+
+	if current.Len() > 0 {
+		result = append(result, current.String())
+	}
+
+	return result, nil
+}
+
 // mapHeader takes a string "FOO=bar;BAZ=qux" and returns a map[string]string{"FOO": "bar", "BAZ": "qux"}
 func mapHeader(header string) (map[string]string, error) {
+	if header == "" {
+		return nil, errors.New("empty header")
+	}
+
 	// split on ; preserving quoted values
-	spl, err := splitter.NewSplitter(';', splitter.DoubleQuotes)
+	fields, err := splitPreservingQuotes(header)
 	if err != nil {
 		return nil, err
 	}
 
-	fields, err := spl.Split(header)
-	if err != nil {
-		return nil, err
-	}
 	// split on = and trim quotes
 	m := make(map[string]string, len(fields))
 	for _, field := range fields {
