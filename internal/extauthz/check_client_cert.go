@@ -143,7 +143,7 @@ func splitPreservingQuotes(s string) ([]string, error) {
 	var current strings.Builder
 	inQuotes := false
 
-	for i := 0; i < len(s); i++ {
+	for i := range len(s) {
 		ch := s[i]
 
 		switch ch {
