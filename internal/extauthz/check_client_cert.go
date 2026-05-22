@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -86,10 +87,10 @@ func escapeRFC2253(val string) string {
 func formatRDNSequence(rdns pkix.RDNSequence) string {
 	var parts []string
 	// Reverse the RDN order
-	for i := len(rdns) - 1; i >= 0; i-- {
+	for _, v := range slices.Backward(rdns) {
 		var attrs []string
 
-		for _, atv := range rdns[i] {
+		for _, atv := range v {
 			name := oidShortNames[atv.Type.String()]
 			if name == "" {
 				name = atv.Type.String()
@@ -265,10 +266,10 @@ func (srv *Server) checkClientCert(ctx context.Context, certHeader, method, host
 	)
 
 	data := map[string]string{
-		"host":   host,
-		"path":   path,
-		"type":   "x509",
-		"issuer": crtIssuer,
+		contextKeyHost:   host,
+		contextKeyPath:   path,
+		contextKeyType:   authTypeX509,
+		contextKeyIssuer: crtIssuer,
 	}
 
 	allowed, reason, err := srv.policyEngine.Check(

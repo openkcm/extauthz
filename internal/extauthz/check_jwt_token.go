@@ -81,7 +81,7 @@ func (srv *Server) checkJWTToken(ctx context.Context, bearerToken, method, host,
 		email:   claims.EMail,
 		groups:  claims.Groups,
 		authContext: map[string]string{
-			"issuer": claims.Issuer,
+			contextKeyIssuer: claims.Issuer,
 		},
 	}
 
@@ -96,11 +96,11 @@ func (srv *Server) checkJWTToken(ctx context.Context, bearerToken, method, host,
 	)
 
 	data := map[string]string{
-		"host":    host,
-		"path":    path,
-		"type":    "jwt",
-		"issuer":  claims.Issuer,
-		"jwksURI": header.JKU,
+		contextKeyHost:   host,
+		contextKeyPath:   path,
+		contextKeyType:   authTypeJWT,
+		contextKeyIssuer: claims.Issuer,
+		"jwksURI":        header.JKU,
 	}
 
 	allowed, reason, err := srv.policyEngine.Check(

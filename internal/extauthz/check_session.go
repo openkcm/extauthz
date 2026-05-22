@@ -79,10 +79,10 @@ func (srv *Server) checkSession(ctx context.Context, sessionCookie *http.Cookie,
 	)
 
 	data := map[string]string{
-		"host":   host,
-		"path":   path,
-		"type":   "jwt",
-		"issuer": sess.Issuer,
+		contextKeyHost:   host,
+		contextKeyPath:   path,
+		contextKeyType:   authTypeJWT,
+		contextKeyIssuer: sess.Issuer,
 	}
 
 	allowed, reason, err := srv.policyEngine.Check(

@@ -73,7 +73,7 @@ func run(ctx context.Context) error {
 	}
 
 	// Status Server Initialisation
-	go func() {
+	go func(ctx context.Context, cfg *config.Config) {
 		liveness := status.WithLiveness(
 			health.NewHandler(
 				health.NewChecker(health.WithDisabledAutostart()),
@@ -112,9 +112,10 @@ func run(ctx context.Context) error {
 		if err != nil {
 			slogctx.Error(ctx, "Failure on the status server", "error", err)
 
-			_ = syscall.Kill(syscall.Getpid(), syscall.SIGTERM)
+			//nolint:errcheck
+			syscall.Kill(syscall.Getpid(), syscall.SIGTERM)
 		}
-	}()
+	}(ctx, cfg)
 
 	// Business Logic
 	err = business.Main(ctx, cfg)

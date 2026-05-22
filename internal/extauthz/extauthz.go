@@ -17,6 +17,16 @@ import (
 
 const (
 	DefaultCMKPathPrefix = "/cmk/v1/"
+
+	// Context data keys for policy engine
+	contextKeyHost   = "host"
+	contextKeyPath   = "path"
+	contextKeyType   = "type"
+	contextKeyIssuer = "issuer"
+
+	// Auth type values
+	authTypeX509 = "x509"
+	authTypeJWT  = "jwt"
 )
 
 // sessionManagerInterface defines the interface for the session manager.
