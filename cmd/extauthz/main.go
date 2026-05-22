@@ -72,50 +72,11 @@ func run(ctx context.Context) error {
 			Wrapf(err, "Failed to load the telemetry")
 	}
 
-	// Status Server Initialisation
-	go func(ctx context.Context, cfg *config.Config) {
-		liveness := status.WithLiveness(
-			health.NewHandler(
-				health.NewChecker(health.WithDisabledAutostart()),
-			),
-		)
-
-		healthOptions := []health.Option{
-			health.WithDisabledAutostart(),
-			health.WithTimeout(5 * time.Second),
-			health.WithStatusListener(func(ctx context.Context, state health.State) {
-				subctx := slogctx.With(ctx, "status", state.Status)
-				//nolint:fatcontext
-				for name, substate := range state.CheckState {
-					subctx = slogctx.WithGroup(subctx, name)
-					subctx = slogctx.With(subctx,
-						"status", substate.Status,
-						"result", substate.Result,
-					)
-				}
-				slogctx.Info(subctx, "readiness status changed")
-			}),
-		}
-
-		cfg.GRPCServer.Client.Address = cfg.GRPCServer.Address
-		healthOptions = append(healthOptions,
-			health.WithGRPCServerChecker(cfg.GRPCServer.Client),
-		)
-
-		readiness := status.WithReadiness(
-			health.NewHandler(
-				health.NewChecker(healthOptions...),
-			),
-		)
-
-		err := status.Start(ctx, &cfg.BaseConfig, liveness, readiness)
-		if err != nil {
-			slogctx.Error(ctx, "Failure on the status server", "error", err)
-
-			//nolint:errcheck
-			syscall.Kill(syscall.Getpid(), syscall.SIGTERM)
-		}
-	}(ctx, cfg)
+	// Status server initialization
+	// Copy the gRPC client config to avoid race condition when modifying Client.Address
+	grpcClientCfg := cfg.GRPCServer.Client
+	grpcClientCfg.Address = cfg.GRPCServer.Address
+	go startStatusServer(ctx, cfg.BaseConfig, grpcClientCfg)
 
 	// Business Logic
 	err = business.Main(ctx, cfg)
@@ -165,4 +126,47 @@ func main() {
 
 	exitCode := runFuncWithSignalHandling(run)
 	os.Exit(exitCode)
+}
+
+func startStatusServer(ctx context.Context, baseCfg commoncfg.BaseConfig, grpcClientCfg commoncfg.GRPCClient) {
+	liveness := status.WithLiveness(
+		health.NewHandler(
+			health.NewChecker(health.WithDisabledAutostart()),
+		),
+	)
+
+	healthOptions := []health.Option{
+		health.WithDisabledAutostart(),
+		health.WithTimeout(5 * time.Second),
+		health.WithStatusListener(func(ctx context.Context, state health.State) {
+			subctx := slogctx.With(ctx, "status", state.Status)
+			//nolint:fatcontext
+			for name, substate := range state.CheckState {
+				subctx = slogctx.WithGroup(subctx, name)
+				subctx = slogctx.With(subctx,
+					"status", substate.Status,
+					"result", substate.Result,
+				)
+			}
+			slogctx.Info(subctx, "readiness status changed")
+		}),
+	}
+
+	healthOptions = append(healthOptions,
+		health.WithGRPCServerChecker(grpcClientCfg),
+	)
+
+	readiness := status.WithReadiness(
+		health.NewHandler(
+			health.NewChecker(healthOptions...),
+		),
+	)
+
+	err := status.Start(ctx, &baseCfg, liveness, readiness)
+	if err != nil {
+		slogctx.Error(ctx, "Failure on the status server", "error", err)
+
+		//nolint:errcheck
+		syscall.Kill(syscall.Getpid(), syscall.SIGTERM)
+	}
 }
