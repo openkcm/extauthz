@@ -5,7 +5,7 @@ go 1.25.6
 toolchain go1.26.2
 
 require (
-	github.com/cedar-policy/cedar-go v1.6.1
+	github.com/cedar-policy/cedar-go v1.6.2
 	github.com/envoyproxy/go-control-plane/envoy v1.37.0
 	github.com/go-jose/go-jose/v4 v4.1.4
 	github.com/goccy/go-yaml v1.19.2
@@ -14,7 +14,7 @@ require (
 	github.com/google/go-cmp v0.7.0
 	github.com/jellydator/ttlcache/v3 v3.4.0
 	github.com/openkcm/api-sdk v0.17.0
-	github.com/openkcm/common-sdk v1.15.3-0.20260428121533-dab998a84d4b
+	github.com/openkcm/common-sdk v1.16.0
 	github.com/samber/oops v1.21.0
 	github.com/stretchr/testify v1.11.1
 	github.com/testcontainers/testcontainers-go v0.42.0
@@ -48,7 +48,7 @@ require (
 	github.com/ebitengine/purego v0.10.0 // indirect
 	github.com/envoyproxy/protoc-gen-validate v1.3.3 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
-	github.com/fsnotify/fsnotify v1.9.0 // indirect
+	github.com/fsnotify/fsnotify v1.10.1 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
