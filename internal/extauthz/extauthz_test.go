@@ -21,9 +21,8 @@ var (
 	rsaKeyID      string
 	rsaPrivateKey *rsa.PrivateKey
 
-	rsaPublicKey              *rsa.PublicKey
-	rsaPublicKeyDER           []byte
-	rsaPublicKeyPEMURLEncoded string
+	rsaPublicKey    *rsa.PublicKey
+	rsaPublicKeyDER []byte
 
 	x509CertPEMURLEncoded string
 )
@@ -60,7 +59,7 @@ func createURLEncodedPEMCert(notBefore, notAfter time.Time) (string, error) {
 	}
 	// encode it to PEM
 	certPEM := string(pem.EncodeToMemory(&pem.Block{
-		Type:  "CERTIFICATE",
+		Type:  pemCertificateBlock,
 		Bytes: certDER,
 	}))
 	// return the URL encoded PEM certificate

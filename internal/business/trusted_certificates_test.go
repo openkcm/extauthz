@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -93,6 +94,86 @@ func TestLoadTrustedSubjects(t *testing.T) {
 					if !reflect.DeepEqual(got, tc.want) {
 						t.Errorf("expected: %+v, got: %+v", tc.want, got)
 					}
+				}
+			}
+		})
+	}
+}
+
+func TestLoadTrustedSubjectsSecurityValidation(t *testing.T) {
+	tempDir := t.TempDir()
+
+	tests := []struct {
+		name          string
+		yaml          string
+		fileName      string
+		wantError     bool
+		expectedError string
+	}{
+		{
+			name:          "reject empty subject",
+			yaml:          "region1:\n  - \"CN=valid\"\n  - \"\"",
+			fileName:      "test.yaml",
+			wantError:     true,
+			expectedError: "trusted subject cannot be empty",
+		},
+		{
+			name:          "reject empty region",
+			yaml:          "\"\":\n  - \"CN=test\"",
+			fileName:      "test.yaml",
+			wantError:     true,
+			expectedError: "region name cannot be empty",
+		},
+		{
+			name:          "reject path traversal with dots",
+			yaml:          "region1:\n  - \"CN=test\"",
+			fileName:      "../../etc/passwd",
+			wantError:     true,
+			expectedError: "path traversal detected",
+		},
+		{
+			name:          "reject empty file path",
+			yaml:          "",
+			fileName:      "",
+			wantError:     true,
+			expectedError: "file path cannot be empty",
+		},
+		{
+			name:          "accept whitespace-only subjects as empty",
+			yaml:          "region1:\n  - \"  \"",
+			fileName:      "test.yaml",
+			wantError:     true,
+			expectedError: "trusted subject cannot be empty",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var filePath string
+			if tc.fileName != "" && !strings.Contains(tc.fileName, "..") {
+				filePath = filepath.Join(tempDir, tc.fileName)
+				err := os.WriteFile(filePath, []byte(tc.yaml), 0640)
+				if err != nil {
+					t.Fatalf("could not write file: %v", err)
+				}
+			} else {
+				filePath = tc.fileName
+			}
+
+			got, err := loadTrustedSubjects(filePath)
+
+			if tc.wantError {
+				if err == nil {
+					t.Error("expected error, but got nil")
+				} else if !strings.Contains(err.Error(), tc.expectedError) {
+					t.Errorf("expected error containing %q, got: %v", tc.expectedError, err)
+				}
+				if got != nil {
+					t.Errorf("expected nil map, but got: %+v", got)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("unexpected error: %s", err)
 				}
 			}
 		})
