@@ -6,6 +6,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/asn1"
 	"encoding/pem"
+	"errors"
 	"log"
 	"math/big"
 	"net/url"
@@ -20,6 +21,7 @@ import (
 
 	"github.com/openkcm/extauthz/internal/clientdata"
 	"github.com/openkcm/extauthz/internal/config"
+	"github.com/openkcm/extauthz/internal/policies"
 	"github.com/openkcm/extauthz/internal/policies/cedarpolicy"
 )
 
@@ -815,35 +817,23 @@ func TestCheckClientCertWithSpecialCharacters(t *testing.T) {
 	})
 }
 
-// TestCheckClientCertUncoveredPaths documents the coverage limitations for checkClientCert.
+// TestCheckClientCertUncoveredPaths documents the coverage status after refactoring.
 //
-// The following paths in checkClientCert cannot be reached through integration tests
-// because they require certificates that are malformed in specific ways that still
-// pass x509.ParseCertificate validation:
+// After extracting checkClientCertCore, most paths are now directly testable:
+// - Empty subject check: COVERED BY TestCheckClientCertCore/empty_header_subject_returns_UNAUTHENTICATED
+// - Subject mismatch: COVERED BY TestCheckClientCertCore/header_subject_mismatch_returns_DENIED
+// - Untrusted subject: COVERED BY TestCheckClientCertCore/untrusted_subject_returns_DENIED
+// - Certificate time bounds: COVERED BY TestCheckClientCertCore tests
+// - Policy denial: COVERED BY TestCheckClientCertCore/policy_denies_request_returns_DENIED
 //
-// 1. formatSubject error path (lines 257-261):
-//    - Requires a certificate where RawSubject is invalid ASN.1 or empty after formatting
-//    - x509.ParseCertificate validates RawSubject during parsing, so this path is
-//      effectively dead code in the integration context
-//    - COVERED BY: TestFormatSubject unit tests
+// Remaining uncovered paths in checkClientCert (the wrapper):
+// 1. formatSubject error path - requires malformed cert that passes x509.ParseCertificate
+// 2. formatIssuer error path - same as formatSubject
 //
-// 2. Empty subject check (lines 271-275):
-//    - formatSubject already returns error for empty subjects, so this check is
-//      defense-in-depth that can only be triggered if formatSubject behavior changes
-//    - COVERED BY: TestFormatSubject/certificate_with_empty_subject_after_formatting_returns_error
+// These are covered by TestFormatSubject and TestFormatIssuer unit tests.
 //
-// 3. formatIssuer error path (lines 315-319):
-//    - Same issue as formatSubject
-//    - COVERED BY: TestFormatIssuer unit tests
-//
-// 4. Policy engine error path (lines 342-346):
-//    - Would require the Cedar policy engine to return an error during Check()
-//    - The only error paths in Check() are option application errors or json.Marshal failures
-//    - Both are extremely unlikely in normal operation
-//    - CONSIDERED LOW RISK: Policy engine is external dependency with its own test coverage
-//
-// Total checkClientCert coverage: 84.5%
-// Remaining 15.5% is defense-in-depth code that requires extraordinary conditions
+// Only remaining uncovered path in checkClientCertCore:
+// - Policy engine error (when Check() returns an error) - would require mock injection
 
 func TestCheckClientCertCertificateWithNoEmail(t *testing.T) {
 	// Use an allow-all policy for this test
@@ -881,4 +871,208 @@ func TestCheckClientCertCertificateWithNoEmail(t *testing.T) {
 		require.Empty(t, result.email)
 		require.Equal(t, "noemail-region", result.region)
 	})
+}
+
+// =============================================================================
+// Test: checkClientCertCore
+// =============================================================================
+
+// TestCheckClientCertCore tests the core authorization logic directly,
+// bypassing certificate parsing to achieve full coverage of all code paths.
+func TestCheckClientCertCore(t *testing.T) {
+	allowAllPolicy := `permit(principal, action, resource);`
+	denyAllPolicy := `permit(principal, action, resource) when { false };`
+
+	// Helper to create a valid certInfo for testing
+	validCertInfo := func() certInfo {
+		return certInfo{
+			subject:   "CN=testuser",
+			issuer:    "CN=testissuer",
+			email:     "test@example.com",
+			notBefore: time.Now().Add(-5 * time.Minute),
+			notAfter:  time.Now().Add(5 * time.Minute),
+		}
+	}
+
+	tests := []struct {
+		name                string
+		policy              string
+		trustedSubjects     map[string]string
+		certInfo            certInfo
+		headerSubject       string
+		wantCheckResultCode checkResultCode
+		wantInfo            string
+		wantSubject         string
+		wantEmail           string
+		wantRegion          string
+	}{
+		{
+			name:                "empty header subject returns UNAUTHENTICATED",
+			policy:              allowAllPolicy,
+			trustedSubjects:     map[string]string{"CN=testuser": "test-region"},
+			certInfo:            validCertInfo(),
+			headerSubject:       "",
+			wantCheckResultCode: UNAUTHENTICATED,
+			wantInfo:            "Certificate subject cannot be empty",
+		},
+		{
+			name:                "header subject mismatch returns DENIED",
+			policy:              allowAllPolicy,
+			trustedSubjects:     map[string]string{"CN=testuser": "test-region"},
+			certInfo:            validCertInfo(),
+			headerSubject:       "CN=different",
+			wantCheckResultCode: DENIED,
+			wantInfo:            "Header subject not matching with certificate subject",
+		},
+		{
+			name:                "untrusted subject returns DENIED",
+			policy:              allowAllPolicy,
+			trustedSubjects:     map[string]string{"CN=trusted": "trusted-region"},
+			certInfo:            validCertInfo(),
+			headerSubject:       "CN=testuser",
+			wantCheckResultCode: DENIED,
+			wantInfo:            "Subject not trusted",
+		},
+		{
+			name:            "certificate not yet valid returns DENIED",
+			policy:          allowAllPolicy,
+			trustedSubjects: map[string]string{"CN=testuser": "test-region"},
+			certInfo: certInfo{
+				subject:   "CN=testuser",
+				issuer:    "CN=testissuer",
+				email:     "test@example.com",
+				notBefore: time.Now().Add(5 * time.Minute), // Future
+				notAfter:  time.Now().Add(10 * time.Minute),
+			},
+			headerSubject:       "CN=testuser",
+			wantCheckResultCode: DENIED,
+			wantInfo:            "Certificate not yet valid",
+		},
+		{
+			name:            "certificate expired returns DENIED",
+			policy:          allowAllPolicy,
+			trustedSubjects: map[string]string{"CN=testuser": "test-region"},
+			certInfo: certInfo{
+				subject:   "CN=testuser",
+				issuer:    "CN=testissuer",
+				email:     "test@example.com",
+				notBefore: time.Now().Add(-10 * time.Minute),
+				notAfter:  time.Now().Add(-5 * time.Minute), // Past
+			},
+			headerSubject:       "CN=testuser",
+			wantCheckResultCode: DENIED,
+			wantInfo:            "Certificate expired",
+		},
+		{
+			name:                "policy denies request returns DENIED",
+			policy:              denyAllPolicy,
+			trustedSubjects:     map[string]string{"CN=testuser": "test-region"},
+			certInfo:            validCertInfo(),
+			headerSubject:       "CN=testuser",
+			wantCheckResultCode: DENIED,
+			wantInfo:            "Reason from policy engine:",
+		},
+		{
+			name:                "valid certificate returns ALLOWED",
+			policy:              allowAllPolicy,
+			trustedSubjects:     map[string]string{"CN=testuser": "test-region"},
+			certInfo:            validCertInfo(),
+			headerSubject:       "CN=testuser",
+			wantCheckResultCode: ALLOWED,
+			wantSubject:         "CN=testuser",
+			wantEmail:           "test@example.com",
+			wantRegion:          "test-region",
+		},
+		{
+			name:            "certificate without email returns ALLOWED with empty email",
+			policy:          allowAllPolicy,
+			trustedSubjects: map[string]string{"CN=testuser": "test-region"},
+			certInfo: certInfo{
+				subject:   "CN=testuser",
+				issuer:    "CN=testissuer",
+				email:     "", // No email
+				notBefore: time.Now().Add(-5 * time.Minute),
+				notAfter:  time.Now().Add(5 * time.Minute),
+			},
+			headerSubject:       "CN=testuser",
+			wantCheckResultCode: ALLOWED,
+			wantSubject:         "CN=testuser",
+			wantEmail:           "",
+			wantRegion:          "test-region",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := setupTestServer(t, tc.policy, tc.trustedSubjects)
+
+			result := srv.checkClientCertCore(t.Context(), tc.certInfo, tc.headerSubject, "GET", "our.service.com", "/foo/bar")
+
+			require.Equal(t, tc.wantCheckResultCode, result.is, "unexpected result code, info: %s", result.info)
+
+			if tc.wantInfo != "" {
+				require.Contains(t, result.info, tc.wantInfo, "unexpected info message")
+			}
+
+			if tc.wantSubject != "" {
+				require.Equal(t, tc.wantSubject, result.subject)
+			}
+
+			if tc.wantCheckResultCode == ALLOWED {
+				require.Equal(t, tc.wantEmail, result.email)
+				require.Equal(t, tc.wantRegion, result.region)
+			}
+		})
+	}
+}
+
+// mockErrorPolicyEngine is a mock policy engine that always returns an error.
+type mockErrorPolicyEngine struct {
+	err error
+}
+
+func (m *mockErrorPolicyEngine) Check(_ ...policies.CheckOption) (bool, string, error) {
+	return false, "", m.err
+}
+
+// TestCheckClientCertCorePolicyEngineError tests the policy engine error path
+// by using a mock policy engine that returns an error.
+func TestCheckClientCertCorePolicyEngineError(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "keyId"), []byte("key01"), 0644))
+	require.NoError(t, createFileWithGeneratedKey(filepath.Join(dir, "key01.pem")))
+
+	signer, err := clientdata.NewSigner(&commoncfg.FeatureGates{}, &config.ClientData{
+		SigningKeyIDFilePath: filepath.Join(dir, "keyId"),
+	})
+	require.NoError(t, err)
+
+	// Create server with mock policy engine that returns an error
+	mockEngine := &mockErrorPolicyEngine{err: errors.New("policy engine internal error")}
+	srv, err := NewServer(WithClientDataSigner(signer), WithPolicyEngine(mockEngine))
+	require.NoError(t, err)
+
+	srv.trustedSubjectToRegion = map[string]string{"CN=testuser": "test-region"}
+
+	t.Cleanup(func() {
+		err := srv.Close()
+		require.NoError(t, err)
+	})
+
+	require.NoError(t, srv.Start())
+
+	// Create a valid certInfo
+	info := certInfo{
+		subject:   "CN=testuser",
+		issuer:    "CN=testissuer",
+		email:     "test@example.com",
+		notBefore: time.Now().Add(-5 * time.Minute),
+		notAfter:  time.Now().Add(5 * time.Minute),
+	}
+
+	result := srv.checkClientCertCore(t.Context(), info, "CN=testuser", "GET", "our.service.com", "/foo/bar")
+
+	require.Equal(t, UNAUTHENTICATED, result.is, "expected UNAUTHENTICATED, got %v", result.is)
+	require.Contains(t, result.info, "Error from policy engine")
+	require.Contains(t, result.info, "policy engine internal error")
 }
