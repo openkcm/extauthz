@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"sync"
 	"time"
 
 	"github.com/go-jose/go-jose/v4"
@@ -28,6 +29,7 @@ const (
 type OIDC struct {
 	issuerClaimKeys []string
 	staticProviders map[string]*oidc.Provider
+	providersMu     sync.RWMutex // protects staticProviders
 	featureGates    *commoncfg.FeatureGates
 	sessionManager  *session.Manager
 
@@ -128,6 +130,9 @@ func NewOIDC(ctx context.Context, opts ...OIDCOption) (*OIDC, error) {
 
 // RegisterStaticProvider registers a provider with the handler.
 func (handler *OIDC) RegisterStaticProvider(provider *oidc.Provider) {
+	handler.providersMu.Lock()
+	defer handler.providersMu.Unlock()
+
 	// To support multiple providers with the same issuer but different JWKS URIs,
 	// we prefer to use a custom JWKS URI as the unique key in the static providers
 	// map over the potentially non-unique issuer.
@@ -272,19 +277,23 @@ func (handler *OIDC) ParseAndValidate(ctx context.Context, rawToken, tenantID st
 
 // ProviderFor returns the provider for the given issuer/jwksURI.
 func (handler *OIDC) ProviderFor(ctx context.Context, issuer, jwksURI, tenantID string) (*oidc.Provider, error) {
+	handler.providersMu.RLock()
 	// First check for the unique jwksURI in the static providers map, if any.
 	// Otherwise, check for the issuer in the static providers map.
 	// This allows supporting multiple providers with the same issuer but different JWKS URIs.
 	if jwksURI != "" {
 		if provider, ok := handler.staticProviders[jwksURI]; ok {
 			if provider.Issuer() == issuer {
+				handler.providersMu.RUnlock()
 				return provider, nil
 			}
 		}
 	}
 	if provider, ok := handler.staticProviders[issuer]; ok {
+		handler.providersMu.RUnlock()
 		return provider, nil
 	}
+	handler.providersMu.RUnlock()
 
 	if handler.sessionManager == nil {
 		return nil, fmt.Errorf("%w: no provider found for the issuer %s", ErrNoProvider, issuer)
