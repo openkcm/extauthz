@@ -2,7 +2,7 @@ module github.com/openkcm/extauthz
 
 go 1.25.6
 
-toolchain go1.26.3
+toolchain go1.26.4
 
 require (
 	github.com/cedar-policy/cedar-go v1.7.0
