@@ -9,8 +9,6 @@ import (
 )
 
 type cedarPolicyEngine struct {
-	request cedar.Request
-
 	policySet *cedar.PolicySet
 }
 
