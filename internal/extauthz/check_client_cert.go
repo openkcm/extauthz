@@ -19,6 +19,8 @@ import (
 	"github.com/openkcm/extauthz/internal/policies/cedarpolicy"
 )
 
+const pemCertificateBlock = "CERTIFICATE"
+
 var (
 	ReExSubject        = regexp.MustCompile(`Subject="([^"]+)"`)
 	ErrSubjectNotFound = errors.New("subject not found")
@@ -106,34 +108,40 @@ func formatRDNSequence(rdns pkix.RDNSequence) string {
 
 // formatSubject extracts the ASN.1 raw subject field from a certificate,
 // parses it into an RDNSequence, and returns the RFC 2253 formatted string.
-//
-// cert: the X.509 certificate to extract subject from
-// Returns the formatted subject string or an empty string on parse failure.
-func formatSubject(cert *x509.Certificate) string {
+// Returns an error if parsing fails or if the subject is empty.
+func formatSubject(cert *x509.Certificate) (string, error) {
 	var rdnSeq pkix.RDNSequence
 
 	_, err := asn1.Unmarshal(cert.RawSubject, &rdnSeq)
 	if err != nil {
-		return ""
+		return "", fmt.Errorf("failed to parse certificate subject: %w", err)
 	}
 
-	return formatRDNSequence(rdnSeq)
+	formatted := formatRDNSequence(rdnSeq)
+	if formatted == "" {
+		return "", errors.New("certificate subject is empty after formatting")
+	}
+
+	return formatted, nil
 }
 
 // formatIssuer extracts the ASN.1 raw issuer field from a certificate,
 // parses it into an RDNSequence, and returns the RFC 2253 formatted string.
-//
-// cert: the X.509 certificate to extract issuer from
-// Returns the formatted issuer string or an empty string on parse failure.
-func formatIssuer(cert *x509.Certificate) string {
+// Returns an error if parsing fails or if the issuer is empty.
+func formatIssuer(cert *x509.Certificate) (string, error) {
 	var rdnSeq pkix.RDNSequence
 
 	_, err := asn1.Unmarshal(cert.RawIssuer, &rdnSeq)
 	if err != nil {
-		return ""
+		return "", fmt.Errorf("failed to parse certificate issuer: %w", err)
 	}
 
-	return formatRDNSequence(rdnSeq)
+	formatted := formatRDNSequence(rdnSeq)
+	if formatted == "" {
+		return "", errors.New("certificate issuer is empty after formatting")
+	}
+
+	return formatted, nil
 }
 
 // splitPreservingQuotes splits a string on semicolons while preserving
@@ -212,7 +220,7 @@ func parseCert(urlEncodedPem string) (*x509.Certificate, error) {
 		return nil, errors.New("failed to decode PEM block containing certificate: block is nil")
 	}
 
-	if block.Type != "CERTIFICATE" {
+	if block.Type != pemCertificateBlock {
 		return nil, fmt.Errorf("failed to decode PEM block containing certificate: block type is %s", block.Type)
 	}
 
@@ -224,6 +232,16 @@ func parseCert(urlEncodedPem string) (*x509.Certificate, error) {
 	return crt, nil
 }
 
+// certInfo holds the extracted and formatted certificate information
+// needed for authorization checks.
+type certInfo struct {
+	subject   string    // RFC 2253 formatted subject
+	issuer    string    // RFC 2253 formatted issuer
+	email     string    // First email address from certificate (if any)
+	notBefore time.Time // Certificate validity start
+	notAfter  time.Time // Certificate validity end
+}
+
 // checkClientCert checks the request using the subject from the client certificate.
 func (srv *Server) checkClientCert(ctx context.Context, certHeader, method, host, path string) checkResult {
 	// create map of fields
@@ -233,7 +251,7 @@ func (srv *Server) checkClientCert(ctx context.Context, certHeader, method, host
 			info: "Invalid certificate header"}
 	}
 
-	// decode and parse the x509 certificate and
+	// decode and parse the x509 certificate
 	urlEncodedPem, ok := fields["Cert"]
 	if !ok {
 		return checkResult{is: UNAUTHENTICATED,
@@ -246,19 +264,62 @@ func (srv *Server) checkClientCert(ctx context.Context, certHeader, method, host
 			info: "Failed to parse x509 certificate"}
 	}
 
-	// format the certificate subject as per envoy structure
-	crtSubject := formatSubject(crt)
-
-	// extract the subject from the cert header
-	subject, err := extractSubject(certHeader)
+	// format the certificate subject - reject on parse failure or empty result
+	crtSubject, err := formatSubject(crt)
 	if err != nil {
-		subject = crtSubject
+		slogctx.Error(ctx, "Failed to format certificate subject", "error", err)
+		return checkResult{is: UNAUTHENTICATED,
+			info: "Invalid certificate subject"}
 	}
 
-	if subject != crtSubject {
+	// format the certificate issuer
+	crtIssuer, err := formatIssuer(crt)
+	if err != nil {
+		slogctx.Error(ctx, "Failed to format certificate issuer", "error", err)
+		return checkResult{is: UNAUTHENTICATED,
+			info: "Invalid certificate issuer"}
+	}
+
+	// extract email from certificate
+	email := ""
+	if len(crt.EmailAddresses) > 0 {
+		email = crt.EmailAddresses[0]
+	}
+
+	// extract the subject from the cert header
+	headerSubject, err := extractSubject(certHeader)
+	if err != nil {
+		// If header subject missing, use cert subject (fallback is OK)
+		headerSubject = crtSubject
+	}
+
+	// build certInfo for core check
+	info := certInfo{
+		subject:   crtSubject,
+		issuer:    crtIssuer,
+		email:     email,
+		notBefore: crt.NotBefore,
+		notAfter:  crt.NotAfter,
+	}
+
+	return srv.checkClientCertCore(ctx, info, headerSubject, method, host, path)
+}
+
+// checkClientCertCore performs the core authorization checks on a parsed certificate.
+// This function is separated from checkClientCert to enable comprehensive testing
+// of all code paths without needing to create malformed certificates.
+func (srv *Server) checkClientCertCore(ctx context.Context, info certInfo, headerSubject, method, host, path string) checkResult {
+	// SECURITY: Reject empty subjects explicitly
+	if headerSubject == "" {
+		slogctx.Error(ctx, "Certificate subject is empty")
+		return checkResult{is: UNAUTHENTICATED,
+			info: "Certificate subject cannot be empty"}
+	}
+
+	if headerSubject != info.subject {
 		slogctx.Debug(ctx, "Certificate and header Subject do not match",
-			"certSubject", crtSubject,
-			"subject", subject)
+			"certSubject", info.subject,
+			"subject", headerSubject)
 
 		return checkResult{is: DENIED,
 			info: "Header subject not matching with certificate subject"}
@@ -267,11 +328,11 @@ func (srv *Server) checkClientCert(ctx context.Context, certHeader, method, host
 	// prepare the result
 	res := checkResult{
 		is:      UNKNOWN,
-		subject: subject,
+		subject: headerSubject,
 	}
 
 	// check if the subject is trusted and extract the region
-	region, ok := srv.trustedSubjectToRegion[subject]
+	region, ok := srv.trustedSubjectToRegion[headerSubject]
 	if !ok {
 		res.is = DENIED
 		res.info = "Subject not trusted"
@@ -280,23 +341,22 @@ func (srv *Server) checkClientCert(ctx context.Context, certHeader, method, host
 	res.region = region
 
 	// check time bounds
-	if crt.NotBefore.After(time.Now()) {
+	if info.notBefore.After(time.Now()) {
 		res.is = DENIED
 		res.info = "Certificate not yet valid"
 		return res
 	}
 
-	if crt.NotAfter.Before(time.Now()) {
+	if info.notAfter.Before(time.Now()) {
 		res.is = DENIED
 		res.info = "Certificate expired"
 		return res
 	}
 
-	crtIssuer := formatIssuer(crt)
 	// check the policies
 	slogctx.Debug(ctx, "Checking policies for x509",
-		"subject", subject,
-		"issuer", crtIssuer,
+		"subject", headerSubject,
+		"issuer", info.issuer,
 		"method", method,
 		"host", host,
 		"path", path,
@@ -306,11 +366,11 @@ func (srv *Server) checkClientCert(ctx context.Context, certHeader, method, host
 		contextKeyHost:   host,
 		contextKeyPath:   path,
 		contextKeyType:   authTypeX509,
-		contextKeyIssuer: crtIssuer,
+		contextKeyIssuer: info.issuer,
 	}
 
 	allowed, reason, err := srv.policyEngine.Check(
-		cedarpolicy.WithSubject(subject),
+		cedarpolicy.WithSubject(headerSubject),
 		cedarpolicy.WithAction(method),
 		cedarpolicy.WithContextData(data),
 	)
@@ -326,13 +386,7 @@ func (srv *Server) checkClientCert(ctx context.Context, certHeader, method, host
 		return res
 	}
 
-	// extract the email address from the certificate
-	email := ""
-	if len(crt.EmailAddresses) > 0 {
-		email = crt.EmailAddresses[0]
-	}
-	res.email = email
-
+	res.email = info.email
 	res.is = ALLOWED
 	return res
 }
