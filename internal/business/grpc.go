@@ -7,7 +7,6 @@ import (
 
 	"github.com/openkcm/common-sdk/pkg/commongrpc"
 	"github.com/samber/oops"
-	"google.golang.org/grpc"
 
 	envoyauth "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
 	slogctx "github.com/veqryn/slog-context"
@@ -45,19 +44,23 @@ func startGRPCServer(ctx context.Context, cfg *config.Config, extauthzSrv *extau
 		return fmt.Errorf("failed to listen: %w", err)
 	}
 
-	go func(ctx context.Context, listener net.Listener, grpcServer *grpc.Server) {
+	// Start GRPC server in a separate goroutine with error channel
+	serverErrCh := make(chan error, 1)
+	go func() {
 		slogctx.Info(ctx, "Starting gRPC Server", "address", listener.Addr().String())
+		serverErrCh <- grpcServer.Serve(listener)
+	}()
 
-		err := grpcServer.Serve(listener)
+	// Wait for either context cancellation or GRPC server error
+	select {
+	case <-ctx.Done():
+		slogctx.Info(ctx, "Stopping gRPC Server", "address", cfg.GRPCServer.Address)
+		grpcServer.GracefulStop()
+		return nil
+	case err := <-serverErrCh:
 		if err != nil {
-			slogctx.Error(ctx, "Failure on the gRPC server", "error", err)
+			return fmt.Errorf("GRPC server failed: %w", err)
 		}
-	}(ctx, listener, grpcServer)
-
-	// Shutdown on context cancellation
-	<-ctx.Done()
-	slogctx.Info(ctx, "Stopping gRPC Server", "address", cfg.GRPCServer.Address)
-	grpcServer.GracefulStop()
-
-	return nil
+		return nil
+	}
 }
