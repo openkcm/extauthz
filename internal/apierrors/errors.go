@@ -4,7 +4,7 @@ import "net/http"
 
 type Error struct {
 	Code    Code   `json:"code"`
-	Status  int    `json:"status"`
+	Status  int32  `json:"status"`
 	Message string `json:"message,omitempty"`
 }
 
@@ -17,7 +17,7 @@ const (
 	CodeInternalServerError    Code = "INTERNAL_SERVER_ERROR"
 )
 
-func (c Code) Status() int {
+func (c Code) Status() int32 {
 	switch c {
 	case CodeAuthenticationRequired:
 		return http.StatusUnauthorized
