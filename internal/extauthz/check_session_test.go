@@ -22,8 +22,8 @@ type MockSessionManager struct {
 	mock.Mock
 }
 
-func (m *MockSessionManager) GetSession(ctx context.Context, sessionID, tenantID, fingerprint string) (*session.Session, error) {
-	args := m.Called(ctx, sessionID, tenantID, fingerprint)
+func (m *MockSessionManager) GetSession(ctx context.Context, sessionID, tenantID string) (*session.Session, error) {
+	args := m.Called(ctx, sessionID, tenantID)
 	if args.Get(0) == nil {
 		return &session.Session{}, args.Error(1)
 	}
@@ -41,7 +41,6 @@ func TestCheckSession(t *testing.T) {
 		name           string
 		cookie         *http.Cookie
 		tenantID       string
-		fingerprint    string
 		method         string
 		host           string
 		path           string
@@ -57,7 +56,7 @@ func TestCheckSession(t *testing.T) {
 			cookie:    &http.Cookie{Name: "session", Value: sessionID},
 			csrfToken: csrfToken,
 			setupMocks: func(sm *MockSessionManager) {
-				sm.On("GetSession", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+				sm.On("GetSession", mock.Anything, mock.Anything, mock.Anything).
 					Return(nil, errors.New("get session error"))
 			},
 			expectedResult: checkResult{is: UNAUTHENTICATED},
@@ -66,7 +65,7 @@ func TestCheckSession(t *testing.T) {
 			cookie:    &http.Cookie{Name: "session", Value: sessionID},
 			csrfToken: csrfToken,
 			setupMocks: func(sm *MockSessionManager) {
-				sm.On("GetSession", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+				sm.On("GetSession", mock.Anything, mock.Anything, mock.Anything).
 					Return(&session.Session{Valid: false}, nil)
 			},
 			expectedResult: checkResult{is: UNAUTHENTICATED},
@@ -78,7 +77,7 @@ func TestCheckSession(t *testing.T) {
 			path:      "/foo/bar",
 			csrfToken: csrfToken,
 			setupMocks: func(sm *MockSessionManager) {
-				sm.On("GetSession", mock.Anything, mock.Anything, "", "").
+				sm.On("GetSession", mock.Anything, mock.Anything, "").
 					Return(&session.Session{
 						Valid:   true,
 						Subject: "me",
@@ -94,7 +93,7 @@ func TestCheckSession(t *testing.T) {
 			path:      "/foo/bar",
 			csrfToken: "malformed csrf token",
 			setupMocks: func(sm *MockSessionManager) {
-				sm.On("GetSession", mock.Anything, mock.Anything, "", "").
+				sm.On("GetSession", mock.Anything, mock.Anything, "").
 					Return(&session.Session{
 						Valid:   true,
 						Subject: "me",
@@ -107,7 +106,7 @@ func TestCheckSession(t *testing.T) {
 			cookie:    &http.Cookie{Name: "session", Value: sessionID},
 			csrfToken: csrfToken,
 			setupMocks: func(sm *MockSessionManager) {
-				sm.On("GetSession", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+				sm.On("GetSession", mock.Anything, mock.Anything, mock.Anything).
 					Return(&session.Session{Valid: true}, nil)
 			},
 			expectedResult: checkResult{is: DENIED},
@@ -119,7 +118,7 @@ func TestCheckSession(t *testing.T) {
 			path:      "/foo/bar",
 			csrfToken: csrfToken,
 			setupMocks: func(sm *MockSessionManager) {
-				sm.On("GetSession", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+				sm.On("GetSession", mock.Anything, mock.Anything, mock.Anything).
 					Return(&session.Session{
 						Valid:   true,
 						Subject: "me",
@@ -135,7 +134,7 @@ func TestCheckSession(t *testing.T) {
 			path:      "/foo/bar",
 			csrfToken: csrfToken,
 			setupMocks: func(sm *MockSessionManager) {
-				sm.On("GetSession", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+				sm.On("GetSession", mock.Anything, mock.Anything, mock.Anything).
 					Return(&session.Session{
 						Valid:   true,
 						Subject: "me",
@@ -151,7 +150,7 @@ func TestCheckSession(t *testing.T) {
 			path:      "/foo/baz",
 			csrfToken: csrfToken,
 			setupMocks: func(sm *MockSessionManager) {
-				sm.On("GetSession", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+				sm.On("GetSession", mock.Anything, mock.Anything, mock.Anything).
 					Return(&session.Session{
 						Valid:   true,
 						Subject: "me",
@@ -167,7 +166,7 @@ func TestCheckSession(t *testing.T) {
 			path:      "/foo/bar",
 			csrfToken: csrfToken,
 			setupMocks: func(sm *MockSessionManager) {
-				sm.On("GetSession", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+				sm.On("GetSession", mock.Anything, mock.Anything, mock.Anything).
 					Return(&session.Session{
 						Valid:   true,
 						Subject: "me",
@@ -185,7 +184,7 @@ func TestCheckSession(t *testing.T) {
 			csrfToken: csrfToken,
 			tenantID:  "t-id",
 			setupMocks: func(sm *MockSessionManager) {
-				sm.On("GetSession", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+				sm.On("GetSession", mock.Anything, mock.Anything, mock.Anything).
 					Return(nil, session.ErrTenantBlocked)
 			},
 			expectedResult: checkResult{is: TENANT_BLOCKED, info: "the tenant t-id is blocked"},
@@ -224,7 +223,7 @@ func TestCheckSession(t *testing.T) {
 			}
 
 			// Act
-			result := srv.checkSession(ctx, tc.cookie, tc.tenantID, tc.fingerprint, tc.method, tc.host, tc.path, tc.csrfToken)
+			result := srv.checkSession(ctx, tc.cookie, tc.tenantID, tc.method, tc.host, tc.path, tc.csrfToken)
 
 			// Assert
 			assert.Equal(t, tc.expectedResult.is, result.is)

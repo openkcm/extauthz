@@ -88,13 +88,12 @@ func TestNewManager(t *testing.T) {
 func TestGetSession(t *testing.T) {
 	// create the test cases
 	tests := []struct {
-		name        string
-		sessionID   string
-		tenantID    string
-		fingerprint string
-		expected    *Session
-		wantErr     bool
-		setupMocks  func(*SessionManagerMock)
+		name       string
+		sessionID  string
+		tenantID   string
+		expected   *Session
+		wantErr    bool
+		setupMocks func(*SessionManagerMock)
 	}{
 		{
 			name: "valid session",
@@ -148,7 +147,7 @@ func TestGetSession(t *testing.T) {
 			}
 
 			// Act
-			got, err := manager.GetSession(t.Context(), tc.sessionID, tc.tenantID, tc.fingerprint)
+			got, err := manager.GetSession(t.Context(), tc.sessionID, tc.tenantID)
 			if (err != nil) != tc.wantErr {
 				t.Fatalf("Manager.GetSession() return an unexpected error %v", err)
 			}

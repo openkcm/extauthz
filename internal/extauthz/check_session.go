@@ -16,7 +16,7 @@ import (
 )
 
 // checkSession checks the request using the session Cookie.
-func (srv *Server) checkSession(ctx context.Context, sessionCookie *http.Cookie, tenantID, fingerprint, method, host, path, csrfToken string) checkResult {
+func (srv *Server) checkSession(ctx context.Context, sessionCookie *http.Cookie, tenantID, method, host, path, csrfToken string) checkResult {
 	if sessionCookie == nil {
 		slogctx.Debug(ctx, "Session cookie is nil")
 		return checkResult{is: UNKNOWN}
@@ -24,10 +24,9 @@ func (srv *Server) checkSession(ctx context.Context, sessionCookie *http.Cookie,
 
 	// On GetSession the session manager will:
 	// - check if the session exists for this session ID and tenant ID
-	// - compare the fingerprints
 	// - validate the session (expiry, token revocation, ...)
 	// If the session is valid, it will return the session details.
-	sess, err := srv.sessionManager.GetSession(ctx, sessionCookie.Value, tenantID, fingerprint)
+	sess, err := srv.sessionManager.GetSession(ctx, sessionCookie.Value, tenantID)
 	if err != nil {
 		if errors.Is(err, session.ErrTenantBlocked) {
 			return checkResult{is: TENANT_BLOCKED, info: fmt.Sprintf("the tenant %s is blocked", tenantID)}
