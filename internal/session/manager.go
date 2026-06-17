@@ -37,11 +37,10 @@ func NewManager(grpcConn *grpc.ClientConn, opts ...ManagerOption) (*Manager, err
 	return m, nil
 }
 
-func (m *Manager) GetSession(ctx context.Context, sessionID, tenantID, fingerprint string) (*Session, error) {
+func (m *Manager) GetSession(ctx context.Context, sessionID, tenantID string) (*Session, error) {
 	getSessionRequest := &sessionv1.GetSessionRequest{
-		SessionId:   sessionID,
-		TenantId:    tenantID,
-		Fingerprint: fingerprint,
+		SessionId: sessionID,
+		TenantId:  tenantID,
 	}
 	resp, err := m.grpcClient.GetSession(ctx, getSessionRequest)
 	if err != nil {

@@ -32,7 +32,7 @@ const (
 // sessionManagerInterface defines the interface for the session manager.
 // We don't use session.Manager directly to make testing easier.
 type sessionManagerInterface interface {
-	GetSession(ctx context.Context, sessionID, tenantID, fingerprint string) (*session.Session, error)
+	GetSession(ctx context.Context, sessionID, tenantID string) (*session.Session, error)
 }
 
 // oidcHandlerInterface defines the interface for OIDC handling.

@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/openkcm/common-sdk/pkg/auth"
-	"github.com/openkcm/common-sdk/pkg/fingerprint"
 
 	envoycore "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	envoyauth "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
@@ -94,12 +93,12 @@ func (srv *Server) Check(ctx context.Context, req *envoyauth.CheckRequest) (*env
 	// 3. Session cookie (if any and only if session manager is configured)
 	if srv.sessionManager != nil {
 		slogctx.Debug(ctx, LogPrefixSessionCookie+"checking for presence")
-		if sessionCookie, tenantID, fingerPrint, found := srv.extractSessionDetails(ctx, httpreq, path); !found {
+		if sessionCookie, tenantID, found := srv.extractSessionDetails(ctx, httpreq, path); !found {
 			slogctx.Debug(ctx, LogPrefixSessionCookie+"not found")
 		} else {
 			slogctx.Debug(ctx, LogPrefixSessionCookie+"found ... checking")
 			csrfToken := headers[HeaderCSRFToken]
-			r := srv.checkSession(ctx, sessionCookie, tenantID, fingerPrint, method, host, path, csrfToken)
+			r := srv.checkSession(ctx, sessionCookie, tenantID, method, host, path, csrfToken)
 			slogctx.Debug(ctx, LogPrefixSessionCookie+"access "+r.is.String())
 			result.merge(r)
 		}
@@ -192,24 +191,24 @@ func (srv *Server) extractTenantID(path string) string {
 	return ""
 }
 
-func (srv *Server) extractSessionDetails(ctx context.Context, httpreq *envoyauth.AttributeContext_HttpRequest, path string) (*http.Cookie, string, string, bool) {
+func (srv *Server) extractSessionDetails(ctx context.Context, httpreq *envoyauth.AttributeContext_HttpRequest, path string) (*http.Cookie, string, bool) {
 	headers := httpreq.GetHeaders()
 	tenantID := srv.extractTenantID(path)
 	if tenantID == "" {
 		slogctx.Debug(ctx, LogPrefixSessionCookie+"failed to extract tenant ID from path", "sessionPathPrefixes", srv.sessionPathPrefixes)
-		return nil, "", "", false
+		return nil, "", false
 	}
 
 	// extract the tenant specific session cookie
 	cookieHeader, found := headers[HeaderCookie]
 	if !found {
 		slogctx.Debug(ctx, LogPrefixSessionCookie+"no cookie header found", "headers", mapKeys(headers))
-		return nil, "", "", false
+		return nil, "", false
 	}
 	cookies, err := http.ParseCookie(cookieHeader)
 	if err != nil {
 		slogctx.Debug(ctx, LogPrefixSessionCookie+"failed to parse cookie header", "error", err)
-		return nil, "", "", false
+		return nil, "", false
 	}
 	sessionCookieName := SessionCookiePrefix + tenantID
 	var sessionCookie *http.Cookie
@@ -224,17 +223,10 @@ func (srv *Server) extractSessionDetails(ctx context.Context, httpreq *envoyauth
 	// return if no session cookie found
 	if sessionCookie == nil {
 		slogctx.Debug(ctx, LogPrefixSessionCookie+"tenant specific session cookie not found", "name", sessionCookieName)
-		return nil, "", "", false
+		return nil, "", false
 	}
 
-	// determine the fingerprint for the request
-	fp, err := fingerprint.NewBuilder().FromEnvoyHTTPRequest(httpreq)
-	if err != nil {
-		slogctx.Debug(ctx, LogPrefixSessionCookie+"failed to compute fingerprint from request", "error", err)
-		return nil, "", "", false
-	}
-
-	return sessionCookie, tenantID, fp, true
+	return sessionCookie, tenantID, true
 }
 
 // splitCertHeader splits the XFCC header on , in case there are multiple certificates.
