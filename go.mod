@@ -13,7 +13,7 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/go-cmp v0.7.0
 	github.com/jellydator/ttlcache/v3 v3.4.0
-	github.com/openkcm/api-sdk v0.18.1
+	github.com/openkcm/api-sdk v0.19.1
 	github.com/openkcm/common-sdk v1.17.0
 	github.com/samber/oops v1.22.0
 	github.com/stretchr/testify v1.11.1

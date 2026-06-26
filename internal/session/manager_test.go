@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net"
+	"net/http"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -20,6 +21,8 @@ import (
 	rpcv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/rpc/v1"
 	sessionv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/sessionmanager/session/v1"
 	typesv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/types/v1"
+
+	"github.com/openkcm/extauthz/internal/oauth2client"
 )
 
 type SessionManagerMock struct {
@@ -57,7 +60,7 @@ func startMockGRPCServer(t *testing.T) (*grpc.Server, *SessionManagerMock, *bufc
 	return server, sessionManagerMock, lis
 }
 
-func setupSessionClient(t *testing.T) (*Manager, *SessionManagerMock, func()) {
+func setupSessionClient(t *testing.T, opts ...ManagerOption) (*Manager, *SessionManagerMock, func()) {
 	t.Helper()
 	grpcServer, sessionMock, lis := startMockGRPCServer(t)
 	bufDialer := func(context.Context, string) (net.Conn, error) {
@@ -67,7 +70,7 @@ func setupSessionClient(t *testing.T) (*Manager, *SessionManagerMock, func()) {
 		grpc.WithContextDialer(bufDialer),
 		grpc.WithTransportCredentials(insecure.NewCredentials()))
 	assert.NoError(t, err)
-	manager, err := NewManager(conn)
+	manager, err := NewManager(conn, opts...)
 	assert.NoError(t, err)
 	teardown := func() {
 		// manager.Close()
@@ -161,17 +164,26 @@ func TestGetSession(t *testing.T) {
 func TestManager_GetOIDCProvider(t *testing.T) {
 	issuer := "https://example.com/iss"
 	audiences := []string{"a", "b"}
+	customJWKSURI := "https://example.com/custom/jwks"
+
 	provider, err := oidc.NewProvider(issuer, audiences)
+	if err != nil {
+		panic(err)
+	}
+	providerWithJWKS, err := oidc.NewProvider(issuer, audiences, oidc.WithCustomJWKSURI(customJWKSURI))
 	if err != nil {
 		panic(err)
 	}
 
 	tests := []struct {
-		name       string
-		setupMocks func(*SessionManagerMock)
-		tenantID   string
-		want       *oidc.Provider
-		wantErr    bool
+		name            string
+		setupMocks      func(*SessionManagerMock)
+		oauth2Builder   oauth2client.Builder
+		tenantID        string
+		want            *oidc.Provider
+		wantErr         bool
+		wantErrIs       error
+		wantErrContains string
 	}{
 		{
 			name: "Success",
@@ -192,17 +204,119 @@ func TestManager_GetOIDCProvider(t *testing.T) {
 			setupMocks: func(sm *SessionManagerMock) {
 				sm.On("GetOIDCProvider", mock.Anything, mock.Anything).Return(nil, errors.New("some error"))
 			},
+			tenantID:        "tenant-id",
+			want:            nil,
+			wantErr:         true,
+			wantErrContains: "executing an rpc request",
+		},
+		{
+			name: "NotFound returns ErrNotFound",
+			setupMocks: func(sm *SessionManagerMock) {
+				sm.On("GetOIDCProvider", mock.Anything, mock.Anything).
+					Return(nil, status.Error(codes.NotFound, "tenant not found"))
+			},
+			tenantID:  "unknown-tenant",
+			want:      nil,
+			wantErr:   true,
+			wantErrIs: ErrNotFound,
+		},
+		{
+			name: "Success with OAuth2 client builder",
+			setupMocks: func(sm *SessionManagerMock) {
+				sm.On("GetOIDCProvider", mock.Anything, mock.Anything).Return(&sessionv1.GetOIDCProviderResponse{
+					Provider: &typesv1.OIDCProvider{
+						IssuerUrl: issuer,
+						Audiences: audiences,
+						ClientId:  "my-client-id",
+					},
+				}, nil)
+			},
+			oauth2Builder: func(_ string) (*http.Client, error) {
+				return &http.Client{}, nil
+			},
 			tenantID: "tenant-id",
-			want:     nil,
-			wantErr:  true,
+			want:     provider,
+			wantErr:  false,
+		},
+		{
+			name: "OAuth2 client builder error",
+			setupMocks: func(sm *SessionManagerMock) {
+				sm.On("GetOIDCProvider", mock.Anything, mock.Anything).Return(&sessionv1.GetOIDCProviderResponse{
+					Provider: &typesv1.OIDCProvider{
+						IssuerUrl: issuer,
+						Audiences: audiences,
+						ClientId:  "my-client-id",
+					},
+				}, nil)
+			},
+			oauth2Builder: func(_ string) (*http.Client, error) {
+				return nil, errors.New("oauth2 client creation failed")
+			},
+			tenantID:        "tenant-id",
+			want:            nil,
+			wantErr:         true,
+			wantErrContains: "creating OAuth2 HTTP client",
+		},
+		{
+			name: "OAuth2 builder configured but clientID empty",
+			setupMocks: func(sm *SessionManagerMock) {
+				sm.On("GetOIDCProvider", mock.Anything, mock.Anything).Return(&sessionv1.GetOIDCProviderResponse{
+					Provider: &typesv1.OIDCProvider{
+						IssuerUrl: issuer,
+						Audiences: audiences,
+						ClientId:  "", // Empty clientID
+					},
+				}, nil)
+			},
+			oauth2Builder: func(_ string) (*http.Client, error) {
+				// This should not be called when clientID is empty
+				panic("builder should not be called when clientID is empty")
+			},
+			tenantID: "tenant-id",
+			want:     provider,
+			wantErr:  false,
+		},
+		{
+			name: "Success with custom JWKS URI",
+			setupMocks: func(sm *SessionManagerMock) {
+				sm.On("GetOIDCProvider", mock.Anything, mock.Anything).Return(&sessionv1.GetOIDCProviderResponse{
+					Provider: &typesv1.OIDCProvider{
+						IssuerUrl: issuer,
+						Audiences: audiences,
+						JwksUri:   customJWKSURI,
+					},
+				}, nil)
+			},
+			tenantID: "tenant-id",
+			want:     providerWithJWKS,
+			wantErr:  false,
+		},
+		{
+			name: "Invalid issuer URL",
+			setupMocks: func(sm *SessionManagerMock) {
+				sm.On("GetOIDCProvider", mock.Anything, mock.Anything).Return(&sessionv1.GetOIDCProviderResponse{
+					Provider: &typesv1.OIDCProvider{
+						IssuerUrl: "://invalid-url",
+						Audiences: audiences,
+					},
+				}, nil)
+			},
+			tenantID:        "tenant-id",
+			want:            nil,
+			wantErr:         true,
+			wantErrContains: "creating a new oidc provider",
 		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			manager, mock, teardown := setupSessionClient(t)
+			var opts []ManagerOption
+			if tc.oauth2Builder != nil {
+				opts = append(opts, WithOAuth2ClientBuilder(tc.oauth2Builder))
+			}
+			manager, sessionMock, teardown := setupSessionClient(t, opts...)
 			defer teardown()
 			if tc.setupMocks != nil {
-				tc.setupMocks(mock)
+				tc.setupMocks(sessionMock)
 			}
 
 			got, err := manager.GetOIDCProvider(t.Context(), tc.tenantID)
@@ -210,11 +324,18 @@ func TestManager_GetOIDCProvider(t *testing.T) {
 				t.Fatalf("Manager.GetOIDCProvider() return an unexpected error %v", err)
 			}
 
+			if tc.wantErrIs != nil {
+				assert.ErrorIs(t, err, tc.wantErrIs)
+			}
+			if tc.wantErrContains != "" && err != nil {
+				assert.Contains(t, err.Error(), tc.wantErrContains)
+			}
+
 			if diff := cmp.Diff(tc.want, got, cmpopts.IgnoreUnexported(oidc.Provider{})); diff != "" {
 				t.Fatalf("Unexpected provider result (-want, +got):\n%s", diff)
 			}
 
-			mock.AssertExpectations(t)
+			sessionMock.AssertExpectations(t)
 		})
 	}
 }
