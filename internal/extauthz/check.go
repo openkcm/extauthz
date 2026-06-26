@@ -8,10 +8,16 @@ import (
 	"strings"
 
 	"github.com/openkcm/common-sdk/pkg/auth"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/trace"
 
 	envoycore "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	envoyauth "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
 	slogctx "github.com/veqryn/slog-context"
+	semconv "go.opentelemetry.io/otel/semconv/v1.41.0"
 )
 
 const (
@@ -28,6 +34,16 @@ const (
 
 // Ensure Server implements the AuthorizationServer interface
 var _ envoyauth.AuthorizationServer = &Server{}
+
+// Span and attribute names for the per-Check application span.
+const (
+	spanNameCheck     = "ext_authz.check"
+	spanAttrDecision  = "ext_authz.decision"
+	spanAttrAuthType  = "ext_authz.auth_type"
+	HeaderTraceparent = "traceparent"
+	HeaderTracestate  = "tracestate"
+	HeaderBaggage     = "baggage"
+)
 
 // Check authorizes the request based on either client certificate, bearer token or session cookie.
 func (srv *Server) Check(ctx context.Context, req *envoyauth.CheckRequest) (*envoyauth.CheckResponse, error) {
@@ -47,6 +63,13 @@ func (srv *Server) Check(ctx context.Context, req *envoyauth.CheckRequest) (*env
 	method := httpreq.GetMethod()
 	host := httpreq.GetHost()
 	path := httpreq.GetPath()
+
+	// Extract W3C trace context from the inbound HTTP headers carried by the
+	// CheckRequest. Envoy delivers header keys lower-cased, which is what the
+	// OTel TextMapPropagator expects. When traceparent is missing or malformed
+	// the propagator returns ctx unchanged (per OTel spec).
+	ctx = otel.GetTextMapPropagator().Extract(ctx, propagation.MapCarrier(headers))
+
 	ctx = slogctx.With(ctx,
 		"id", httpreq.GetId(),
 		"protocol", httpreq.GetProtocol(),
@@ -55,6 +78,19 @@ func (srv *Server) Check(ctx context.Context, req *envoyauth.CheckRequest) (*env
 		"host", host,
 		"path", path,
 	)
+
+	// Start the application span as a child of the extracted context. Span
+	// kind is server because ExtAuthz is handling an inbound gRPC call.
+	ctx, span := srv.tracer.Start(ctx, spanNameCheck,
+		trace.WithSpanKind(trace.SpanKindServer),
+		trace.WithAttributes(
+			semconv.HTTPRequestMethodKey.String(method),
+			semconv.URLPath(path),
+			semconv.ServerAddress(host),
+		),
+	)
+	defer span.End()
+
 	slogctx.Debug(ctx, LogPrefixCheck+"called")
 
 	// Authenticate in the following order:
@@ -74,6 +110,7 @@ func (srv *Server) Check(ctx context.Context, req *envoyauth.CheckRequest) (*env
 			slogctx.Debug(ctx, fmt.Sprintf(LogPrefixClientCert+"checking number %d", nr))
 			r := srv.checkClientCert(ctx, part, method, host, path)
 			slogctx.Debug(ctx, LogPrefixClientCert+"access "+r.is.String(), "part", nr)
+			r.kind = authKindX509
 			result.merge(r)
 			result.withXFCCHeader = true
 		}
@@ -87,6 +124,7 @@ func (srv *Server) Check(ctx context.Context, req *envoyauth.CheckRequest) (*env
 		slogctx.Debug(ctx, LogPrefixBearerToken+"found ... checking")
 		r := srv.checkJWTToken(ctx, bearerToken, method, host, path)
 		slogctx.Debug(ctx, LogPrefixBearerToken+"access "+r.is.String())
+		r.kind = authKindJWT
 		result.merge(r)
 	}
 
@@ -100,6 +138,7 @@ func (srv *Server) Check(ctx context.Context, req *envoyauth.CheckRequest) (*env
 			csrfToken := headers[HeaderCSRFToken]
 			r := srv.checkSession(ctx, sessionCookie, tenantID, method, host, path, csrfToken)
 			slogctx.Debug(ctx, LogPrefixSessionCookie+"access "+r.is.String())
+			r.kind = authKindSession
 			result.merge(r)
 		}
 	}
@@ -110,6 +149,17 @@ func (srv *Server) Check(ctx context.Context, req *envoyauth.CheckRequest) (*env
 		"info", result.info,
 		"subject", result.subject,
 	)
+
+	// Decorate the span with the post-merge decision and credential channel.
+	span.SetAttributes(
+		attribute.String(spanAttrDecision, result.is.String()),
+		attribute.String(spanAttrAuthType, result.authType()),
+	)
+	if result.is == ALLOWED {
+		span.SetStatus(codes.Ok, "")
+	} else {
+		span.SetStatus(codes.Error, result.info)
+	}
 
 	// Prepare the response
 	switch result.is {

@@ -7,6 +7,8 @@ import (
 
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
 	"github.com/samber/oops"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/openkcm/extauthz/internal/clientdata"
 	"github.com/openkcm/extauthz/internal/handler"
@@ -14,6 +16,11 @@ import (
 	"github.com/openkcm/extauthz/internal/policies/cedarpolicy"
 	"github.com/openkcm/extauthz/internal/session"
 )
+
+// tracerName is the OTel instrumentation library name used for the
+// application span emitted by Check(). Using the module path follows the
+// OTel Go convention.
+const tracerName = "github.com/openkcm/extauthz"
 
 const (
 	DefaultCMKPathPrefix = "/cmk/v1/"
@@ -50,6 +57,7 @@ type Server struct {
 	sessionManager         sessionManagerInterface
 	sessionPathPrefixes    []string
 	csrfSecret             []byte
+	tracer                 trace.Tracer
 	cancel                 context.CancelFunc
 }
 
@@ -140,6 +148,22 @@ func WithCSRFSecret(secret []byte) ServerOption {
 	}
 }
 
+// WithTracer overrides the default OpenTelemetry tracer used to emit the
+// per-Check application span. The default tracer is obtained from the
+// global TracerProvider at NewServer time (see NewServer). Tests use this
+// option to inject an SDK tracer backed by an in-memory exporter.
+func WithTracer(t trace.Tracer) ServerOption {
+	return func(server *Server) error {
+		if t == nil {
+			return errors.New("tracer must not be nil")
+		}
+
+		server.tracer = t
+
+		return nil
+	}
+}
+
 // NewServer creates a new server and applies the given options.
 func NewServer(opts ...ServerOption) (*Server, error) {
 	policyEngine, err := cedarpolicy.NewEngine(cedarpolicy.WithBytes("empty", []byte("")))
@@ -170,6 +194,14 @@ func NewServer(opts ...ServerOption) (*Server, error) {
 		if err != nil {
 			return nil, err
 		}
+	}
+
+	// Default tracer is acquired from the global TracerProvider after options
+	// have been applied so WithTracer can override it. Acquiring it at
+	// construction time (rather than at import time) ensures we observe the
+	// real TracerProvider installed by otlp.Init during process startup.
+	if server.tracer == nil {
+		server.tracer = otel.Tracer(tracerName)
 	}
 
 	return server, nil

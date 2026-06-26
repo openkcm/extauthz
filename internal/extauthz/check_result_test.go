@@ -20,6 +20,7 @@ func TestMerge(t *testing.T) {
 			email:      "email1@foo.bar",
 			region:     "Region1",
 			groups:     []string{"Group1"},
+			kind:       authKindX509,
 		}
 	})
 	r2mutator := testutils.NewMutator(func() checkResult {
@@ -32,6 +33,7 @@ func TestMerge(t *testing.T) {
 			email:      "email2@foo.bar",
 			region:     "Region2",
 			groups:     []string{"Group2"},
+			kind:       authKindJWT,
 		}
 	})
 
@@ -51,6 +53,16 @@ func TestMerge(t *testing.T) {
 			name:  "no merge as r2 is less restrictive",
 			r1:    r1mutator(func(k *checkResult) { k.is = DENIED }),
 			r2:    r2mutator(func(k *checkResult) { k.is = ALLOWED }),
+			merge: false,
+		}, {
+			name:  "merge adopts other's kind when other is more restrictive",
+			r1:    r1mutator(func(k *checkResult) { k.is = ALLOWED; k.kind = authKindX509 }),
+			r2:    r2mutator(func(k *checkResult) { k.is = UNAUTHENTICATED; k.kind = authKindSession }),
+			merge: true,
+		}, {
+			name:  "no merge keeps original kind when already most restrictive",
+			r1:    r1mutator(func(k *checkResult) { k.is = UNAUTHENTICATED; k.kind = authKindX509 }),
+			r2:    r2mutator(func(k *checkResult) { k.is = ALLOWED; k.kind = authKindSession }),
 			merge: false,
 		},
 	}

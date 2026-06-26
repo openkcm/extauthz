@@ -9,10 +9,9 @@ import (
 	"testing"
 	"time"
 
+	envoy_auth "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
 	"google.golang.org/genproto/googleapis/rpc/code"
 	"google.golang.org/grpc"
-
-	envoy_auth "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
 )
 
 func TestCheck(t *testing.T) {
@@ -99,4 +98,46 @@ func TestCheck(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("trace headers are not stripped or overwritten", func(t *testing.T) {
+		// Send a request whose HTTP headers include trace propagation
+		// headers and verify they are not in HeadersToRemove and not present
+		// as overwrites in HeadersToAdd in any OkResponse, and that the
+		// service does not return an error.
+		const tp = "00-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbb-01"
+		req := &envoy_auth.CheckRequest{Attributes: &envoy_auth.AttributeContext{
+			Request: &envoy_auth.AttributeContext_Request{Http: &envoy_auth.AttributeContext_HttpRequest{
+				Method: "GET", Host: "myorg.com", Path: "/api/whatever",
+				Headers: map[string]string{
+					"traceparent": tp,
+					"tracestate":  "vendor=value",
+					"baggage":     "k1=v1",
+				},
+			}},
+		}}
+
+		resp, err := client.Check(t.Context(), req)
+		if err != nil {
+			t.Fatalf("unexpected error: %s", err)
+		}
+
+		// The integration scaffold cannot easily mint a real OkResponse
+		// (would require trusted certs, OIDC keys, etc.), so assert
+		// conditionally — if we did get an OkResponse, the trace headers
+		// must not be in HeadersToRemove and must not be overwritten in
+		// HeadersToAdd. Either way, the call must not error.
+		if ok := resp.GetOkResponse(); ok != nil {
+			for _, h := range ok.GetHeadersToRemove() {
+				if h == "traceparent" || h == "tracestate" || h == "baggage" {
+					t.Errorf("trace header %q must not be in HeadersToRemove", h)
+				}
+			}
+			for _, h := range ok.GetHeaders() {
+				k := h.GetHeader().GetKey()
+				if k == "traceparent" || k == "tracestate" || k == "baggage" {
+					t.Errorf("trace header %q must not be overwritten in HeadersToAdd", k)
+				}
+			}
+		}
+	})
 }
