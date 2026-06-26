@@ -52,3 +52,25 @@ sessionManager:
 clientData:
   # Signing client data
   signingKeyIDFilePath: ./keyId
+
+# Telemetry / OpenTelemetry (commented out by default).
+#
+# Enabling any of telemetry.traces, telemetry.logs, or non-Prometheus
+# telemetry.metrics causes common-sdk to install a global W3C
+# TextMapPropagator and (for traces.enabled=true) a real TracerProvider.
+# ExtAuthz extracts W3C trace context from inbound HTTP headers and emits
+# an `ext_authz.check` span per Check call when this is on. Aligned to
+# github.com/openkcm/common-sdk/pkg/commoncfg.Telemetry.
+#
+# telemetry:
+#   traces:
+#     enabled: true
+#     protocol: grpc            # one of: grpc, http
+#     host:                     # SourceRef; embedded or fileRef
+#       embedded: otel-collector:4317
+#     secretRef:
+#       type: insecure          # use mtls / apiToken / oauth2 / basic in prod
+#   logs:
+#     enabled: false
+#   metrics:
+#     enabled: false

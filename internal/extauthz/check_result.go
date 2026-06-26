@@ -17,17 +17,38 @@ const (
 func (c checkResultCode) String() string {
 	switch c {
 	case ALLOWED:
-		return "allowed"
+		return "ALLOWED"
 	case TENANT_BLOCKED:
-		return "tenant_blocked"
+		return "TENANT_BLOCKED"
 	case DENIED:
-		return "denied"
+		return "DENIED"
 	case UNAUTHENTICATED:
-		return "unauthenticated"
+		return "UNAUTHENTICATED"
 	default:
-		return "unknown"
+		return "UNKNOWN"
 	}
 }
+
+// authKind identifies which credential channel produced a checkResult.
+// It is set by each credential branch in Check() before merging so the
+// surviving result carries provenance for the ext_authz.auth_type span
+// attribute.
+type authKind uint
+
+const (
+	authKindNone authKind = iota
+	authKindX509
+	authKindJWT
+	authKindSession
+)
+
+// Auth type span attribute values.
+const (
+	authTypeNone       = "none"
+	authTypeX509Label  = "x509"
+	authTypeJWTLabel   = "jwt"
+	authTypeSessionStr = "session"
+)
 
 type checkResult struct {
 	is         checkResultCode
@@ -42,6 +63,11 @@ type checkResult struct {
 	authContext map[string]string
 
 	withXFCCHeader bool
+
+	// kind records which credential channel produced this result. It rides
+	// the same merge precedence as `is`: when a more-restrictive result wins,
+	// its kind is adopted as well.
+	kind authKind
 }
 
 func (r *checkResult) toClientDataOptions() []clientdata.Option {
@@ -69,7 +95,10 @@ func (r *checkResult) toClientDataOptions() []clientdata.Option {
 	}
 }
 
-// merge updates the result if the other result is more restrictive
+// merge updates the result if the other result is more restrictive.
+// The merge adopts the more-restrictive result's `kind` along with its
+// other fields so the surviving auth_type label reflects which credential
+// channel produced the decision.
 func (cr *checkResult) merge(other checkResult) {
 	// UNKNOWN < ALLOWED < TENANT_BLOCKED < DENIED < UNAUTHENTICATED
 	if other.is > cr.is {
@@ -82,5 +111,21 @@ func (cr *checkResult) merge(other checkResult) {
 		cr.region = other.region
 		cr.groups = other.groups
 		cr.authContext = other.authContext
+		cr.kind = other.kind
+	}
+}
+
+// authType returns the lower-case label corresponding to the credential
+// channel that produced this result.
+func (r *checkResult) authType() string {
+	switch r.kind {
+	case authKindX509:
+		return authTypeX509Label
+	case authKindJWT:
+		return authTypeJWTLabel
+	case authKindSession:
+		return authTypeSessionStr
+	default:
+		return authTypeNone
 	}
 }
