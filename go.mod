@@ -1,6 +1,6 @@
 module github.com/openkcm/extauthz
 
-go 1.25.6
+go 1.25.9
 
 toolchain go1.26.4
 
@@ -12,9 +12,9 @@ require (
 	github.com/gofrs/uuid/v5 v5.4.0
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/go-cmp v0.7.0
-	github.com/jellydator/ttlcache/v3 v3.4.0
-	github.com/openkcm/api-sdk v0.18.1
-	github.com/openkcm/common-sdk v1.17.0
+	github.com/jellydator/ttlcache/v3 v3.4.1
+	github.com/openkcm/api-sdk v0.19.1
+	github.com/openkcm/common-sdk v1.18.0
 	github.com/samber/oops v1.22.0
 	github.com/stretchr/testify v1.11.1
 	github.com/testcontainers/testcontainers-go v0.43.0
@@ -79,7 +79,7 @@ require (
 	github.com/opencontainers/image-spec v1.1.1 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10 // indirect
-	github.com/pmezard/go-difflib v1.0.0 // indirect
+	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/power-devops/perfstat v0.0.0-20240221224432-82ca36839d55 // indirect
 	github.com/prometheus/client_golang v1.23.2 // indirect
 	github.com/prometheus/client_model v0.6.2 // indirect
