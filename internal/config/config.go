@@ -71,6 +71,10 @@ type JWT struct {
 	// A list of static JWT providers
 	Providers []Provider `yaml:"providers"`
 
+	// OAuth2 template configuration - the OAuth2 client builder will dynamically
+	// create http clients from this based on the client ID of tenant trusts.
+	OAuth2 commoncfg.OAuth2 `yaml:"oauth2"`
+
 	// HTTP client configuration for interacting with OIDC providers
 	HTTPClient commoncfg.HTTPClient `yaml:"httpClient"`
 }

@@ -65,6 +65,12 @@ linters:
       - std-error-handling
     rules:
       - linters:
+          - staticcheck
+        text: "SA1019:"
+        paths:
+          - internal/session/manager.go
+          - internal/session/manager_test.go
+      - linters:
           - dupl
           - funlen
           - maintidx

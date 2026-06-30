@@ -18,6 +18,7 @@ import (
 	"github.com/openkcm/extauthz/internal/config"
 	"github.com/openkcm/extauthz/internal/extauthz"
 	"github.com/openkcm/extauthz/internal/handler"
+	"github.com/openkcm/extauthz/internal/oauth2client"
 	"github.com/openkcm/extauthz/internal/policies/cedarpolicy"
 	"github.com/openkcm/extauthz/internal/session"
 )
@@ -53,7 +54,7 @@ func createExtAuthZServer(ctx context.Context, cfg *config.Config) (*extauthz.Se
 	var sessionManager *session.Manager
 	// Create the session manager (if configured)
 	if cfg.SessionManager.Enabled && len(cfg.SessionPathPrefixes) > 0 {
-		sessionManager, err = createSessionManager(ctx, &cfg.SessionManager)
+		sessionManager, err = createSessionManager(ctx, cfg)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create session manager: %w", err)
 		}
@@ -160,18 +161,24 @@ func createOIDCProvider(ctx context.Context, httpClientCfg *commoncfg.HTTPClient
 	return oidcProvider, nil
 }
 
-func createSessionManager(ctx context.Context, cfg *commoncfg.GRPCClient) (*session.Manager, error) {
-	slogctx.Info(ctx, "Using Session Manager", "address", cfg.Address)
-	creds, err := transportCredentialsFromSecretRef(cfg.SecretRef)
+func createSessionManager(ctx context.Context, cfg *config.Config) (*session.Manager, error) {
+	slogctx.Info(ctx, "Using Session Manager", "address", cfg.SessionManager.Address)
+	creds, err := transportCredentialsFromSecretRef(cfg.SessionManager.SecretRef)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create transport credentials: %w", err)
 	}
 	// create the gRPC connection
-	grpcConn, err := commongrpc.NewClient(cfg, grpc.WithTransportCredentials(creds))
+	grpcConn, err := commongrpc.NewClient(&cfg.SessionManager, grpc.WithTransportCredentials(creds))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create gRPC connection: %w", err)
 	}
-	sm, err := session.NewManager(grpcConn)
+
+	// Create the OAuth2 client builder from the JWT OAuth2 template configuration
+	builder := oauth2client.NewBuilder(cfg.JWT.OAuth2)
+
+	sm, err := session.NewManager(grpcConn,
+		session.WithOAuth2ClientBuilder(builder),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create session manager: %w", err)
 	}

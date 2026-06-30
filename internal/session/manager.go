@@ -3,6 +3,7 @@ package session
 import (
 	"context"
 	"fmt"
+	"net/http"
 
 	"github.com/openkcm/common-sdk/pkg/oidc"
 	"google.golang.org/grpc"
@@ -11,17 +12,19 @@ import (
 
 	rpcv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/rpc/v1"
 	sessionv1 "github.com/openkcm/api-sdk/proto/kms/api/cmk/sessionmanager/session/v1"
+
+	"github.com/openkcm/extauthz/internal/oauth2client"
 )
 
 const (
 	violationTenantBlocked = "tenant_blocked"
 )
 
-type ManagerOption func(*Manager)
-
 type Manager struct {
 	grpcConn   *grpc.ClientConn
 	grpcClient sessionv1.ServiceClient
+
+	newCreds oauth2client.Builder
 }
 
 func NewManager(grpcConn *grpc.ClientConn, opts ...ManagerOption) (*Manager, error) {
@@ -89,8 +92,20 @@ func (m *Manager) GetOIDCProvider(ctx context.Context, tenantID string) (*oidc.P
 	// - issuerURI, which must be a valid URI used for OIDC discovery
 	// For now, we assume that the issuer is a valid URI and use it for both fields.
 	issuer := provider.GetIssuerUrl()
+	clientID := provider.GetClientId()
 
-	opts := make([]oidc.ProviderOption, 0, 1)
+	opts := make([]oidc.ProviderOption, 0, 2)
+
+	// Create OAuth2 HTTP client if builder is configured and clientID is provided
+	var httpClient *http.Client
+	if m.newCreds != nil && clientID != "" {
+		var err error
+		httpClient, err = m.newCreds(clientID)
+		if err != nil {
+			return nil, fmt.Errorf("creating OAuth2 HTTP client for clientID %s: %w", clientID, err)
+		}
+	}
+	opts = append(opts, oidc.WithSecureHTTPClient(httpClient))
 	if provider.GetJwksUri() != "" {
 		opts = append(opts, oidc.WithCustomJWKSURI(provider.GetJwksUri()))
 	}
