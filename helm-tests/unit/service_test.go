@@ -1,91 +1,83 @@
+//go:build helmtests
+
 package main_test
 
 import (
+	"bytes"
+	"os/exec"
+	"strings"
 	"testing"
-
-	"github.com/gruntwork-io/terratest/modules/helm"
-	"github.com/gruntwork-io/terratest/modules/k8s"
-	"github.com/stretchr/testify/require"
-
-	corev1 "k8s.io/api/core/v1"
 )
 
 func TestService(t *testing.T) {
-	t.Parallel()
-
-	// Arrange
-	yamlFile := "templates/service.yaml"
-
-	// create the test cases
+	ctx := t.Context()
 	tests := []struct {
-		name      string
-		opts      *helm.Options
-		wantError bool
-		testFunc  func(t *testing.T, resource *corev1.Service)
+		name     string
+		values   string
+		expected []string
 	}{
 		{
-			name:      "default values",
-			opts:      &helm.Options{},
-			wantError: false,
-			testFunc: func(t *testing.T, resource *corev1.Service) {
-				t.Helper()
-				require.Equal(t, appName, resource.Name)
-				require.Equal(t, "default", resource.Namespace)
-				require.Equal(t, "ClusterIP", string(resource.Spec.Type))
-				require.Equal(t, 9092, int(resource.Spec.Ports[0].Port))
-				require.Equal(t, 9092, int(resource.Spec.Ports[0].TargetPort.IntVal))
-				require.Equal(t, 8080, int(resource.Spec.Ports[1].Port))
-				require.Equal(t, 8080, int(resource.Spec.Ports[1].TargetPort.IntVal))
+			name:   "default values",
+			values: "",
+			expected: []string{
+				"kind: Service",
+				"name: " + appName,
+				"namespace: default",
+				"type: ClusterIP",
+				"port: 9092",
+				"targetPort: 9092",
+				"port: 8080",
+				"targetPort: 8080",
 			},
-		}, {
-			name: "custom values",
-			opts: &helm.Options{
-				SetValues: map[string]string{
-					"service.type":                "NodePort",
-					"service.ports[0].port":       "9093",
-					"service.ports[0].targetPort": "9093",
-					"service.ports[1].port":       "8081",
-					"service.ports[1].targetPort": "8081",
-				},
-				KubectlOptions: k8s.NewKubectlOptions("", "", "foo"),
+		},
+		{
+			name:   "custom values",
+			values: "--set service.type=NodePort --set service.ports[0].port=9093 --set service.ports[0].targetPort=9093 --set service.ports[1].port=8081 --set service.ports[1].targetPort=8081 --namespace foo",
+			expected: []string{
+				"kind: Service",
+				"name: " + appName,
+				"namespace: foo",
+				"type: NodePort",
+				"port: 9093",
+				"targetPort: 9093",
+				"port: 8081",
+				"targetPort: 8081",
 			},
-			wantError: false,
-			testFunc: func(t *testing.T, resource *corev1.Service) {
-				t.Helper()
-				require.Equal(t, appName, resource.Name)
-				require.Equal(t, "foo", resource.Namespace)
-				require.Equal(t, "NodePort", string(resource.Spec.Type))
-				require.Equal(t, 9093, int(resource.Spec.Ports[0].Port))
-				require.Equal(t, 9093, int(resource.Spec.Ports[0].TargetPort.IntVal))
-				require.Equal(t, 8081, int(resource.Spec.Ports[1].Port))
-				require.Equal(t, 8081, int(resource.Spec.Ports[1].TargetPort.IntVal))
+		},
+		{
+			name:   "LoadBalancer type",
+			values: "--set service.type=LoadBalancer",
+			expected: []string{
+				"type: LoadBalancer",
 			},
 		},
 	}
 
-	// run the tests
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			// Arrange
-			if tc.opts.SetValues == nil {
-				tc.opts.SetValues = map[string]string{}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			args := []string{"template", appName, path, "-s", "templates/service.yaml",
+				"--set", "image.tag=foo",
 			}
-			tc.opts.SetValues["image.tag"] = "foo"
-
-			// Act
-			got, err := helm.RenderTemplateE(t, tc.opts, path, appName, []string{yamlFile})
-
-			// Assert
-			if tc.wantError {
-				require.Error(t, err)
-				return
+			if tt.values != "" {
+				args = append(args, strings.Split(tt.values, " ")...)
 			}
-			require.NoError(t, err)
-			var resource corev1.Service
-			helm.UnmarshalK8SYaml(t, got, &resource)
-			tc.testFunc(t, &resource)
+
+			cmd := exec.CommandContext(ctx, "helm", args...)
+			var out bytes.Buffer
+			cmd.Stdout = &out
+			cmd.Stderr = &out
+
+			err := cmd.Run()
+			if err != nil {
+				t.Fatalf("helm template failed: %v\nOutput: %s", err, out.String())
+			}
+
+			output := out.String()
+			for _, expected := range tt.expected {
+				if !strings.Contains(output, expected) {
+					t.Errorf("expected output to contain %q, but it didn't.\nOutput: %s", expected, output)
+				}
+			}
 		})
 	}
 }

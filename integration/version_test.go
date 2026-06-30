@@ -8,8 +8,9 @@ import (
 )
 
 func TestVersion(t *testing.T) {
+	ctx := t.Context()
 	// Arrange
-	cmd := exec.CommandContext(t.Context(), "./"+binary, "-version")
+	cmd := exec.CommandContext(ctx, "./"+binary, "-version")
 
 	// Act
 	err := cmd.Run()

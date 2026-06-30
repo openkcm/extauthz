@@ -37,7 +37,7 @@ helm-test: helm-unit-test helm-integration-test
 
 .PHONY: helm-unit-test
 helm-unit-test:
-	cd ./helm-tests/unit && go test -v -count=1 -race .
+	go test -v -count=1 -race -tags=helmtests ./helm-tests/unit/...
 
 .PHONY: helm-integration-test
 helm-integration-test:
@@ -50,14 +50,13 @@ helm-integration-test:
 .PHONY: k3d-setup
 k3d-setup:
 	k3d cluster create $(K3D_CLUSTER_NAME) -p "30083:30083@server:0" --api-port 127.0.0.1:6443
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o $(SERVICE_NAME) ./cmd/$(SERVICE_NAME)
 	docker build --no-cache -t localhost/$(SERVICE_NAME):latest -f Dockerfile.dev .
 	k3d image import localhost/$(SERVICE_NAME):latest -c $(K3D_CLUSTER_NAME)
 
 .PHONY: helm-integration-test-run
 helm-integration-test-run:
 	kubectl config current-context
-	cd ./helm-tests/integration && go test -v -count=1 -race .
+	go test -v -count=1 -race -tags=helmtests ./helm-tests/integration/...
 
 .PHONY: k3d-teardown
 k3d-teardown:

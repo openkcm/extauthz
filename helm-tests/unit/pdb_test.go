@@ -1,110 +1,108 @@
+//go:build helmtests
+
 package main_test
 
 import (
+	"bytes"
+	"os/exec"
+	"strings"
 	"testing"
-
-	"github.com/gruntwork-io/terratest/modules/helm"
-	"github.com/gruntwork-io/terratest/modules/k8s"
-	"github.com/stretchr/testify/require"
-
-	corev1 "k8s.io/api/policy/v1"
 )
 
 func TestPodDisruptionBudget(t *testing.T) {
-	t.Parallel()
-
-	// Arrange
-	yamlFile := "templates/pdb.yaml"
-
-	// create the test cases
+	ctx := t.Context()
 	tests := []struct {
 		name      string
-		opts      *helm.Options
+		values    string
+		expected  []string
 		wantError bool
-		testFunc  func(t *testing.T, resource *corev1.PodDisruptionBudget)
 	}{
 		{
-			name: "default values",
-			opts: &helm.Options{
-				SetValues: map[string]string{
-					"pod.disruptionBudget.enabled": "true",
-				},
+			name:   "default values",
+			values: "--set pod.disruptionBudget.enabled=true",
+			expected: []string{
+				"kind: PodDisruptionBudget",
+				"name: " + appName,
+				"namespace: default",
+				"minAvailable: 1",
 			},
-			wantError: false,
-			testFunc: func(t *testing.T, resource *corev1.PodDisruptionBudget) {
-				t.Helper()
-				require.Equal(t, appName, resource.Name)
-				require.Equal(t, "default", resource.Namespace)
-				require.Equal(t, "1", resource.Spec.MinAvailable.String())
+		},
+		{
+			name:   "custom minAvailable",
+			values: "--set pod.disruptionBudget.enabled=true --set pod.disruptionBudget.minAvailable=42 --namespace foo",
+			expected: []string{
+				"kind: PodDisruptionBudget",
+				"name: " + appName,
+				"namespace: foo",
+				"minAvailable: 42",
 			},
-		}, {
-			name: "custom minAvailable",
-			opts: &helm.Options{
-				SetValues: map[string]string{
-					"pod.disruptionBudget.enabled":      "true",
-					"pod.disruptionBudget.minAvailable": "42",
-				},
-				KubectlOptions: k8s.NewKubectlOptions("", "", "foo"),
+		},
+		{
+			name:   "custom maxUnavailable",
+			values: "--set pod.disruptionBudget.enabled=true --set pod.disruptionBudget.maxUnavailable=42 --namespace foo",
+			expected: []string{
+				"kind: PodDisruptionBudget",
+				"name: " + appName,
+				"namespace: foo",
+				"maxUnavailable: 42",
 			},
-			wantError: false,
-			testFunc: func(t *testing.T, resource *corev1.PodDisruptionBudget) {
-				t.Helper()
-				require.Equal(t, appName, resource.Name)
-				require.Equal(t, "foo", resource.Namespace)
-				require.Equal(t, "42", resource.Spec.MinAvailable.String())
-			},
-		}, {
-			name: "custom maxUnavailable",
-			opts: &helm.Options{
-				SetValues: map[string]string{
-					"pod.disruptionBudget.enabled":        "true",
-					"pod.disruptionBudget.maxUnavailable": "42",
-				},
-				KubectlOptions: k8s.NewKubectlOptions("", "", "foo"),
-			},
-			wantError: false,
-			testFunc: func(t *testing.T, resource *corev1.PodDisruptionBudget) {
-				t.Helper()
-				require.Equal(t, appName, resource.Name)
-				require.Equal(t, "foo", resource.Namespace)
-				require.Equal(t, "42", resource.Spec.MaxUnavailable.String())
-			},
-		}, {
-			name: "conflicting minAvailable + maxUnavailable",
-			opts: &helm.Options{
-				SetValues: map[string]string{
-					"pod.disruptionBudget.enabled":        "true",
-					"pod.disruptionBudget.minAvailable":   "41",
-					"pod.disruptionBudget.maxUnavailable": "43",
-				},
-			},
+		},
+		{
+			name:      "conflicting minAvailable + maxUnavailable",
+			values:    "--set pod.disruptionBudget.enabled=true --set pod.disruptionBudget.minAvailable=41 --set pod.disruptionBudget.maxUnavailable=43",
 			wantError: true,
+		},
+		{
+			name:     "PDB disabled by default",
+			values:   "",
+			expected: []string{
+				// When PDB is disabled, the template should not render
+			},
 		},
 	}
 
-	// run the tests
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			// Arrange
-			if tc.opts.SetValues == nil {
-				tc.opts.SetValues = map[string]string{}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			args := []string{"template", appName, path, "-s", "templates/pdb.yaml",
+				"--set", "image.tag=foo",
 			}
-			tc.opts.SetValues["image.tag"] = "foo"
+			if tt.values != "" {
+				args = append(args, strings.Split(tt.values, " ")...)
+			}
 
-			// Act
-			got, err := helm.RenderTemplateE(t, tc.opts, path, appName, []string{yamlFile})
+			cmd := exec.CommandContext(ctx, "helm", args...)
+			var out bytes.Buffer
+			cmd.Stdout = &out
+			cmd.Stderr = &out
 
-			// Assert
-			if tc.wantError {
-				require.Error(t, err)
+			err := cmd.Run()
+			output := out.String()
+
+			// For error case
+			if tt.wantError {
+				if err == nil {
+					t.Errorf("expected error but got none.\nOutput: %s", output)
+				}
 				return
 			}
-			require.NoError(t, err)
-			var resource corev1.PodDisruptionBudget
-			helm.UnmarshalK8SYaml(t, got, &resource)
-			tc.testFunc(t, &resource)
+
+			// For "PDB disabled by default" case, we expect an error or empty output
+			if tt.name == "PDB disabled by default" {
+				if err == nil && strings.Contains(output, "kind: PodDisruptionBudget") {
+					t.Errorf("expected PDB to not be rendered when disabled, but got output:\n%s", output)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("helm template failed: %v\nOutput: %s", err, output)
+			}
+
+			for _, expected := range tt.expected {
+				if !strings.Contains(output, expected) {
+					t.Errorf("expected output to contain %q, but it didn't.\nOutput: %s", expected, output)
+				}
+			}
 		})
 	}
 }

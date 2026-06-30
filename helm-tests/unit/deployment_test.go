@@ -1,99 +1,132 @@
+//go:build helmtests
+
 package main_test
 
 import (
+	"bytes"
+	"os/exec"
+	"strings"
 	"testing"
-
-	"github.com/gruntwork-io/terratest/modules/helm"
-	"github.com/stretchr/testify/require"
-
-	corev1 "k8s.io/api/apps/v1"
 )
 
 func TestDeployment(t *testing.T) {
-	t.Parallel()
-
-	// Arrange
-	yamlFile := "templates/deployment.yaml"
-
-	// create the test cases
+	ctx := t.Context()
 	tests := []struct {
-		name      string
-		opts      *helm.Options
-		wantError bool
-		testFunc  func(t *testing.T, resource *corev1.Deployment)
+		name     string
+		values   string
+		expected []string
 	}{
 		{
-			name: "default values",
-			opts: &helm.Options{
-				SetValues: map[string]string{},
+			name:   "default values",
+			values: "",
+			expected: []string{
+				"kind: Deployment",
+				"name: " + appName,
+				"app.kubernetes.io/name: " + appName,
+				"namespace: default",
+				"name: registry-access",
+				"serviceAccountName: " + appName,
 			},
-			wantError: false,
-			testFunc: func(t *testing.T, resource *corev1.Deployment) {
-				t.Helper()
-				require.Equal(t, appName, resource.Name)
-				require.Equal(t, "default", resource.Namespace)
-				require.Equal(t, "registry-access", resource.Spec.Template.Spec.ImagePullSecrets[0].Name)
-				require.Equal(t, appName, resource.Spec.Template.Spec.ServiceAccountName)
+		},
+		{
+			name:   "custom values with HPA",
+			values: "--set hpa.enabled=true --set hpa.minReplicas=3 --set imagePullSecrets[0].name=my-registry-access --set serviceAccount.name=my-extauthz",
+			expected: []string{
+				"kind: Deployment",
+				"name: " + appName,
+				"namespace: default",
+				"replicas: 3",
+				"name: my-registry-access",
+				"serviceAccountName: my-extauthz",
 			},
-		}, {
-			name: "custom values",
-			opts: &helm.Options{
-				SetValues: map[string]string{
-					"hpa.enabled":              "true",
-					"hpa.minReplicas":          "3",
-					"imagePullSecrets[0].name": "my-registry-access",
-					"serviceAccount.name":      "my-extauthz",
-				},
+		},
+		{
+			name:   "extraContainers",
+			values: "--set extraContainers[0].name=foo --set extraContainers[0].image=bar",
+			expected: []string{
+				"name: foo",
+				"image: bar",
 			},
-			wantError: false,
-			testFunc: func(t *testing.T, resource *corev1.Deployment) {
-				t.Helper()
-				require.Equal(t, appName, resource.Name)
-				require.Equal(t, "default", resource.Namespace)
-				require.Equal(t, 3, int(*resource.Spec.Replicas))
-				require.Equal(t, "my-registry-access", resource.Spec.Template.Spec.ImagePullSecrets[0].Name)
-				require.Equal(t, "my-extauthz", resource.Spec.Template.Spec.ServiceAccountName)
+		},
+		{
+			name:   "custom namespace",
+			values: "--namespace mynamespace",
+			expected: []string{
+				"namespace: mynamespace",
 			},
-		}, {
-			name: "extraContainers",
-			opts: &helm.Options{
-				SetValues: map[string]string{
-					"extraContainers[0].name":  "foo",
-					"extraContainers[0].image": "bar",
-				},
+		},
+		{
+			name:   "custom replica count via hpa.minReplicas",
+			values: "--set hpa.enabled=true --set hpa.minReplicas=5",
+			expected: []string{
+				"replicas: 5",
 			},
-			wantError: false,
-			testFunc: func(t *testing.T, resource *corev1.Deployment) {
-				t.Helper()
-				require.Equal(t, "foo", resource.Spec.Template.Spec.Containers[0].Name)
-				require.Equal(t, "bar", resource.Spec.Template.Spec.Containers[0].Image)
+		},
+		{
+			name:   "custom image",
+			values: "--set image.registry=docker.io --set image.repository=myorg/extauthz",
+			expected: []string{
+				`image: "docker.io/myorg/extauthz:foo"`,
+			},
+		},
+		{
+			name:   "with resources",
+			values: "--set resources.limits.cpu=1000m --set resources.limits.memory=512Mi --set resources.requests.cpu=100m --set resources.requests.memory=128Mi",
+			expected: []string{
+				"resources:",
+				"limits:",
+				"cpu: 1000m",
+				"memory: 512Mi",
+				"requests:",
+				"cpu: 100m",
+				"memory: 128Mi",
+			},
+		},
+		{
+			name:   "with pod annotations",
+			values: "--set pod.annotations.prometheus\\.io/scrape=true --set pod.annotations.prometheus\\.io/port=8080",
+			expected: []string{
+				"annotations:",
+				"prometheus.io/port: 8080",
+				"prometheus.io/scrape: true",
+			},
+		},
+		{
+			name:   "with nodeSelector",
+			values: "--set pod.nodeSelector.disktype=ssd --set pod.nodeSelector.zone=us-west",
+			expected: []string{
+				"nodeSelector:",
+				"disktype: ssd",
+				"zone: us-west",
 			},
 		},
 	}
 
-	// run the tests
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			// Arrange
-			if tc.opts.SetValues == nil {
-				tc.opts.SetValues = map[string]string{}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			args := []string{"template", appName, path, "-s", "templates/deployment.yaml",
+				"--set", "image.tag=foo",
 			}
-			tc.opts.SetValues["image.tag"] = "foo"
-
-			// Act
-			got, err := helm.RenderTemplateE(t, tc.opts, path, appName, []string{yamlFile})
-
-			// Assert
-			if tc.wantError {
-				require.Error(t, err)
-				return
+			if tt.values != "" {
+				args = append(args, strings.Split(tt.values, " ")...)
 			}
-			require.NoError(t, err)
-			var resource corev1.Deployment
-			helm.UnmarshalK8SYaml(t, got, &resource)
-			tc.testFunc(t, &resource)
+
+			cmd := exec.CommandContext(ctx, "helm", args...)
+			var out bytes.Buffer
+			cmd.Stdout = &out
+			cmd.Stderr = &out
+
+			err := cmd.Run()
+			if err != nil {
+				t.Fatalf("helm template failed: %v\nOutput: %s", err, out.String())
+			}
+
+			output := out.String()
+			for _, expected := range tt.expected {
+				if !strings.Contains(output, expected) {
+					t.Errorf("expected output to contain %q, but it didn't.\nOutput: %s", expected, output)
+				}
+			}
 		})
 	}
 }

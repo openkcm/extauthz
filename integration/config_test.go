@@ -41,6 +41,7 @@ func TestConfig(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			// Arrange
+			ctx := t.Context()
 
 			// write config.yaml
 			if tc.config != "" {
@@ -63,7 +64,7 @@ func TestConfig(t *testing.T) {
 			}
 
 			// create the command with a timeout context
-			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+			ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 			defer cancel()
 			cmd := exec.CommandContext(ctx, "./"+binary)
 
