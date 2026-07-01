@@ -1,5 +1,57 @@
 # Changelog
 
+## [0.12.0](https://github.com/openkcm/extauthz/compare/v0.11.3...v0.12.0) (2026-07-01)
+
+
+### Features
+
+* add agents.md ([#307](https://github.com/openkcm/extauthz/issues/307)) ([6afc82f](https://github.com/openkcm/extauthz/commit/6afc82f080be60a3195ba35d6af8d221da6800fb))
+* add client data CreatedAt timestamp ([#293](https://github.com/openkcm/extauthz/issues/293)) ([5bc7388](https://github.com/openkcm/extauthz/commit/5bc7388ba29c996d40e33cf2386892f7dc749bcf))
+* handle blocked tenant error ([#251](https://github.com/openkcm/extauthz/issues/251)) ([abb7a2a](https://github.com/openkcm/extauthz/commit/abb7a2ab3f3f335122e5dc2ec22a31ccd83ea17b))
+* propagate trace context ([#319](https://github.com/openkcm/extauthz/issues/319)) ([bb67a00](https://github.com/openkcm/extauthz/commit/bb67a0027b00413f2fd322a3d34ac0900d255a5a))
+
+
+### Bug Fixes
+
+* bearer token introspection for tenant related requests ([#320](https://github.com/openkcm/extauthz/issues/320)) ([ee99adb](https://github.com/openkcm/extauthz/commit/ee99adba9135e00dfb69c4ff97ab0cef7b56b394))
+* bump Go toolchain to v1.26.4 ([#309](https://github.com/openkcm/extauthz/issues/309)) ([4b030c5](https://github.com/openkcm/extauthz/commit/4b030c5af99a667a8bfa7d42405bba7ac80666c0))
+* bump toolchain ([#279](https://github.com/openkcm/extauthz/issues/279)) ([db7ee34](https://github.com/openkcm/extauthz/commit/db7ee34725b832744ef31dca0e3be509dd782105))
+* cedar request handling and policy configuration ([#303](https://github.com/openkcm/extauthz/issues/303)) ([ca5cd57](https://github.com/openkcm/extauthz/commit/ca5cd5782773eeaf4bde61ebcde952c2bac5dea4))
+* certificate handling ([#305](https://github.com/openkcm/extauthz/issues/305)) ([df3b27d](https://github.com/openkcm/extauthz/commit/df3b27df7241ad45f13dec9e66136ca0addf1649))
+* const error code declarations ([#290](https://github.com/openkcm/extauthz/issues/290)) ([55c0305](https://github.com/openkcm/extauthz/commit/55c0305dd67dd72bbbe118d341ccdc49daf6cb43))
+* CxOne and linter findings ([#298](https://github.com/openkcm/extauthz/issues/298)) ([f4a14f2](https://github.com/openkcm/extauthz/commit/f4a14f267dadbed7d87585d2d3e9702d5473f3f8))
+* CxONE reported race condition ([#311](https://github.com/openkcm/extauthz/issues/311)) ([eac6357](https://github.com/openkcm/extauthz/commit/eac635704487d6a2b041c9d946eb634a877d77f7))
+* **deps:** bump actions/checkout from 6 to 7 ([#317](https://github.com/openkcm/extauthz/issues/317)) ([2c18e2e](https://github.com/openkcm/extauthz/commit/2c18e2e04c19ecb23256869c2a24b8233738906a))
+* **deps:** bump distroless/static-debian12 from `a932952` to `d093aa3` ([#296](https://github.com/openkcm/extauthz/issues/296)) ([7092a85](https://github.com/openkcm/extauthz/commit/7092a85b19d8685c6f57ab091d95b1aa5e3ac901))
+* **deps:** bump github.com/openkcm/api-sdk from 0.17.0 to 0.18.0 in the gomod-group group across 1 directory ([#314](https://github.com/openkcm/extauthz/issues/314)) ([3b3b704](https://github.com/openkcm/extauthz/commit/3b3b704417522e227718fcbed2d0bc18a59ed07f))
+* **deps:** bump google.golang.org/grpc from 1.79.2 to 1.79.3 ([#265](https://github.com/openkcm/extauthz/issues/265)) ([2353266](https://github.com/openkcm/extauthz/commit/23532666cf5ef8f40053fdf0a254ad6a326edb4c))
+* **deps:** bump google.golang.org/grpc from 1.80.0 to 1.81.0 in the gomod-group group ([#294](https://github.com/openkcm/extauthz/issues/294)) ([8f5880b](https://github.com/openkcm/extauthz/commit/8f5880b9be28769424b40225efc80870031e4664))
+* **deps:** bump the gomod-group group across 1 directory with 2 updates ([#269](https://github.com/openkcm/extauthz/issues/269)) ([d3f43ac](https://github.com/openkcm/extauthz/commit/d3f43ac42f5b2c073e9526cae05ae008ade0015b))
+* **deps:** bump the gomod-group group across 1 directory with 3 updates ([#302](https://github.com/openkcm/extauthz/issues/302)) ([f2ed305](https://github.com/openkcm/extauthz/commit/f2ed3051beaaac277199d211449667e825a9cbd1))
+* **deps:** bump the gomod-group group across 1 directory with 7 updates ([#278](https://github.com/openkcm/extauthz/issues/278)) ([9279577](https://github.com/openkcm/extauthz/commit/9279577e45dcdfd81032f65ec5a1b2b60c4d5f0b))
+* **deps:** bump the gomod-group group with 2 updates ([#297](https://github.com/openkcm/extauthz/issues/297)) ([538262f](https://github.com/openkcm/extauthz/commit/538262f2573cb8621028337a8447110d733ba718))
+* **deps:** bump the gomod-group group with 2 updates ([#318](https://github.com/openkcm/extauthz/issues/318)) ([07ced2b](https://github.com/openkcm/extauthz/commit/07ced2b7b421a8e26edd8a481793b4d48cd583be))
+* **deps:** bump the gomod-group group with 3 updates ([#310](https://github.com/openkcm/extauthz/issues/310)) ([5abd1c6](https://github.com/openkcm/extauthz/commit/5abd1c66437a56e049ee66e2602d858b4757e41f))
+* do not automount service account token ([#264](https://github.com/openkcm/extauthz/issues/264)) ([9704b1a](https://github.com/openkcm/extauthz/commit/9704b1ade38c3d3a12c13238ee855ac658fd7b6a))
+* do not log the client data signature ([#283](https://github.com/openkcm/extauthz/issues/283)) ([f2ec0bb](https://github.com/openkcm/extauthz/commit/f2ec0bb9a3565c48f60d9fb6a273325d7647fb59))
+* enforce CSRF checks ([#287](https://github.com/openkcm/extauthz/issues/287)) ([56f80cd](https://github.com/openkcm/extauthz/commit/56f80cd8a63a98909e88376ebaf9c525696abcaa))
+* **helm:** make image.tag or image.digest mandatory ([#295](https://github.com/openkcm/extauthz/issues/295)) ([2b583fb](https://github.com/openkcm/extauthz/commit/2b583fb4e340bb4c16bc0f8ea12370790f753334))
+* potential race condition ([#304](https://github.com/openkcm/extauthz/issues/304)) ([28b5289](https://github.com/openkcm/extauthz/commit/28b528965635d21c79f2307b7826f14a9f792f1f))
+* race condition reported by CxONE ([#300](https://github.com/openkcm/extauthz/issues/300)) ([acb2fc6](https://github.com/openkcm/extauthz/commit/acb2fc6ed3cf4acf1cd8252f938a55e3ae90bae7))
+* Remove browser fingerprint ([#312](https://github.com/openkcm/extauthz/issues/312)) ([7cb887d](https://github.com/openkcm/extauthz/commit/7cb887d77c47efdfbdcfa1d59ce229623c81a457))
+* remove critical flags ([#288](https://github.com/openkcm/extauthz/issues/288)) ([f21ca7a](https://github.com/openkcm/extauthz/commit/f21ca7a92d5c39668299a21987f117ba20018e9d))
+* remove dependency ([#299](https://github.com/openkcm/extauthz/issues/299)) ([7f09861](https://github.com/openkcm/extauthz/commit/7f098619fe5341dbbe23f94ff9bcb0255310b87b))
+* remove dependency github.com/go-andiamo/splitter ([#268](https://github.com/openkcm/extauthz/issues/268)) ([6f947a6](https://github.com/openkcm/extauthz/commit/6f947a61fc5b9f1d1bd96158f8455868c945671a))
+* replace outdated package ([#286](https://github.com/openkcm/extauthz/issues/286)) ([cdf3bc2](https://github.com/openkcm/extauthz/commit/cdf3bc2e61438376832ba249997c3f349e5453ab))
+* sha256 hashing ([#292](https://github.com/openkcm/extauthz/issues/292)) ([b3a5be4](https://github.com/openkcm/extauthz/commit/b3a5be4aa53fc954f14a5e97788bec88d806e72a))
+* switch in-memory cache implementation ([#280](https://github.com/openkcm/extauthz/issues/280)) ([dd84a82](https://github.com/openkcm/extauthz/commit/dd84a82f28bd4bf52be4bb06b35ab016d9e59978))
+* update common-sdk to fill up new ttl field on clientdata encode ([#315](https://github.com/openkcm/extauthz/issues/315)) ([8b5a17a](https://github.com/openkcm/extauthz/commit/8b5a17a6f4e1e7bb3870141745e715abaebdae36))
+* update toolchain and vulnerable dependencies ([#306](https://github.com/openkcm/extauthz/issues/306)) ([4088142](https://github.com/openkcm/extauthz/commit/4088142dc9dfd97639d8ee7b26cbb0cbd54d9798))
+* use a hash as cache key ([#289](https://github.com/openkcm/extauthz/issues/289)) ([0c8daf1](https://github.com/openkcm/extauthz/commit/0c8daf1d34e689baabb2be1aa54f9b5ea7048486))
+* use an actively maintained yaml package ([#270](https://github.com/openkcm/extauthz/issues/270)) ([30b918f](https://github.com/openkcm/extauthz/commit/30b918f65982d1f8d1dde53ef85a54ac66b90261))
+* use int32 for the status code ([#313](https://github.com/openkcm/extauthz/issues/313)) ([2266ad3](https://github.com/openkcm/extauthz/commit/2266ad303caa1383c3995b2c4a87fb2a100368d7))
+* vulnerabilities in golang.org/x/* ([#308](https://github.com/openkcm/extauthz/issues/308)) ([cee4924](https://github.com/openkcm/extauthz/commit/cee4924688bc6a7d76f9ce67b06f34cfeea30321))
+
 ## [0.11.2](https://github.com/openkcm/extauthz/compare/v0.11.1...v0.11.2) (2025-12-18)
 
 
