@@ -9,9 +9,10 @@ import (
 	"testing"
 	"time"
 
-	envoy_auth "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
 	"google.golang.org/genproto/googleapis/rpc/code"
 	"google.golang.org/grpc"
+
+	envoy_auth "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
 )
 
 func TestCheck(t *testing.T) {
@@ -25,17 +26,18 @@ func TestCheck(t *testing.T) {
 	defer cleanup()
 
 	// start the service in the background
-	cmd := exec.Command("./"+binary, "--graceful-shutdown=0")
+	cmd := exec.CommandContext(t.Context(), "./"+binary, "--graceful-shutdown=0")
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
-	if err = cmd.Start(); err != nil {
+	err = cmd.Start()
+	if err != nil {
 		t.Fatalf("could not start command: %s", err)
 	}
 	// defer the graceful stop of the service so that coverprofiles are written
 	defer func() {
-		syscall.Kill(cmd.Process.Pid, syscall.SIGTERM)
-		cmd.Wait()
+		_ = syscall.Kill(cmd.Process.Pid, syscall.SIGTERM)
+		_ = cmd.Wait()
 		t.Logf("Stdout: %s\n", stdout.String())
 		t.Logf("Stderr: %s\n", stderr.String())
 	}()
@@ -67,7 +69,8 @@ func TestCheck(t *testing.T) {
 		if i < 1 {
 			t.Fatalf("could not connect to server: %s", err)
 		}
-		if _, err := client.Check(t.Context(), nil); err == nil {
+		_, checkErr := client.Check(t.Context(), nil)
+		if checkErr == nil {
 			break
 		}
 		time.Sleep(100 * time.Millisecond)
