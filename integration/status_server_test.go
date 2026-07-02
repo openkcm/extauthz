@@ -22,17 +22,18 @@ func TestStatusServer(t *testing.T) {
 	defer cleanup()
 
 	// start the service in the background
-	cmd := exec.Command("./"+binary, "--graceful-shutdown=0")
+	cmd := exec.CommandContext(t.Context(), "./"+binary, "--graceful-shutdown=0")
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
-	if err = cmd.Start(); err != nil {
+	err = cmd.Start()
+	if err != nil {
 		t.Fatalf("could not start command: %s", err)
 	}
 	// defer the graceful stop of the service so that coverprofiles are written
 	defer func() {
-		syscall.Kill(cmd.Process.Pid, syscall.SIGTERM)
-		cmd.Wait()
+		_ = syscall.Kill(cmd.Process.Pid, syscall.SIGTERM)
+		_ = cmd.Wait()
 		t.Logf("Stdout: %s", stdout.String())
 		t.Logf("Stderr: %s", stderr.String())
 	}()
@@ -67,7 +68,13 @@ func TestStatusServer(t *testing.T) {
 		if i < 1 {
 			t.Fatalf("could not connect to server: %s", err)
 		}
-		if _, err := http.Get("http://localhost:8080/"); err == nil {
+		req, reqErr := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://localhost:8080/", nil)
+		if reqErr != nil {
+			t.Fatalf("could not build request: %s", reqErr)
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err == nil {
+			resp.Body.Close()
 			break
 		}
 		time.Sleep(100 * time.Millisecond)
@@ -77,7 +84,11 @@ func TestStatusServer(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			// Act
-			resp, err := http.Get("http://localhost:8080/" + tc.endpoint)
+			req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://localhost:8080/"+tc.endpoint, nil)
+			if err != nil {
+				t.Fatalf("could not build request: %s", err)
+			}
+			resp, err := http.DefaultClient.Do(req)
 			if err != nil {
 				t.Fatalf("could not send request: %s", err)
 			}

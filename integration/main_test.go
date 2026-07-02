@@ -86,9 +86,10 @@ func writeFiles(config, trustedSubjects, policies, rsaPrivateKeyPEM string) (fun
 
 	// write the files and remember them for later cleanup
 	for file, content := range files {
-		if err := os.WriteFile(file, []byte(content), 0640); err != nil {
+		err := os.WriteFile(file, []byte(content), 0640)
+		if err != nil {
 			cleanupFunc() // clean up any files written before the error
-			return nil, fmt.Errorf("could not write file: %v, got: %s", file, err)
+			return nil, fmt.Errorf("could not write file: %v, got: %w", file, err)
 		}
 		cleanupFiles = append(cleanupFiles, file)
 	}
@@ -103,7 +104,8 @@ func buildCommandsAndRunTests(m *testing.M, cmds ...string) int {
 		log.Fatalf("error starting valkey container: %v", err)
 	}
 	defer func() {
-		if err := testcontainers.TerminateContainer(valkeyContainer); err != nil {
+		err := testcontainers.TerminateContainer(valkeyContainer)
+		if err != nil {
 			log.Printf("failed to terminate container: %s", err)
 		}
 	}()
@@ -113,8 +115,9 @@ func buildCommandsAndRunTests(m *testing.M, cmds ...string) int {
 
 	// build the commands to be tested
 	for _, name := range cmds {
-		cmd := exec.Command("go", "build", "-buildvcs=false", "-race", "-cover", "-o", name, "../cmd/"+name)
-		if output, err := cmd.CombinedOutput(); err != nil {
+		cmd := exec.CommandContext(context.Background(), "go", "build", "-buildvcs=false", "-race", "-cover", "-o", name, "../cmd/"+name)
+		output, err := cmd.CombinedOutput()
+		if err != nil {
 			log.Printf("output: %s", output)
 			log.Fatalf("error: %v", err)
 		}
@@ -142,15 +145,15 @@ func startValkeyContainer() (*tcvalkey.ValkeyContainer, string, error) {
 		tcvalkey.WithLogLevel(tcvalkey.LogLevelVerbose),
 	)
 	if err != nil {
-		return nil, "", fmt.Errorf("error starting valkey container: %v", err)
+		return nil, "", fmt.Errorf("error starting valkey container: %w", err)
 	}
 	connstr, err := valkeyContainer.ConnectionString(ctx)
 	if err != nil {
-		return nil, "", fmt.Errorf("error getting valkey container connection string: %v", err)
+		return nil, "", fmt.Errorf("error getting valkey container connection string: %w", err)
 	}
 	uri, err := url.Parse(connstr)
 	if err != nil {
-		return nil, "", fmt.Errorf("error parsing valkey container connection string: %v", err)
+		return nil, "", fmt.Errorf("error parsing valkey container connection string: %w", err)
 	}
 
 	return valkeyContainer, uri.Host, nil
