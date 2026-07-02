@@ -14,6 +14,8 @@ import (
 )
 
 func TestStatusServer(t *testing.T) {
+	ctx := t.Context()
+
 	// write files needed for the test
 	cleanup, err := writeFiles(validConfig, trustedSubjects, policies, rsaPrivateKeyPEM)
 	if err != nil {
@@ -22,7 +24,7 @@ func TestStatusServer(t *testing.T) {
 	defer cleanup()
 
 	// start the service in the background
-	cmd := exec.CommandContext(t.Context(), "./"+binary, "--graceful-shutdown=0")
+	cmd := exec.CommandContext(ctx, "./"+binary, "--graceful-shutdown=0")
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -64,15 +66,16 @@ func TestStatusServer(t *testing.T) {
 	}
 
 	// give the server some time to start before running the test
+	httpClient := &http.Client{Timeout: 5 * time.Second}
 	for i := 100; i > 0; i-- {
 		if i < 1 {
 			t.Fatalf("could not connect to server: %s", err)
 		}
-		req, reqErr := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://localhost:8080/", nil)
+		req, reqErr := http.NewRequestWithContext(ctx, http.MethodGet, "http://localhost:8080/", nil)
 		if reqErr != nil {
 			t.Fatalf("could not build request: %s", reqErr)
 		}
-		resp, err := http.DefaultClient.Do(req)
+		resp, err := httpClient.Do(req)
 		if err == nil {
 			resp.Body.Close()
 			break
@@ -83,8 +86,9 @@ func TestStatusServer(t *testing.T) {
 	// run the tests
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			ctx := t.Context()
 			// Act
-			req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://localhost:8080/"+tc.endpoint, nil)
+			req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://localhost:8080/"+tc.endpoint, nil)
 			if err != nil {
 				t.Fatalf("could not build request: %s", err)
 			}

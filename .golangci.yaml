@@ -3,15 +3,12 @@ version: "2"
 run:
   concurrency: 4
   timeout: 10m
-  build-tags: ["integration"]
+  build-tags: [integration, helmtests]
 
 linters:
   default: all
   disable:
-    - nilerr
-    - tagliatelle
     - bodyclose
-    - gomoddirectives
     - contextcheck
     - cyclop
     - depguard
@@ -28,17 +25,20 @@ linters:
     - gocritic
     - godot
     - godox
-    - gomodguard
+    - gomoddirectives
+    - gomodguard # Replaced by gomodguard_v2, enabled with default: all
     - gosec
     - ireturn
     - lll
     - mnd
     - musttag
     - nestif
+    - nilerr
     - nlreturn
     - prealloc
     - revive
     - tagalign
+    - tagliatelle
     - testpackage
     - unparam
     - varnamelen
