@@ -1,3 +1,5 @@
+//go:build helmtests
+
 package main_test
 
 const (
@@ -5,3 +7,6 @@ const (
 	name = "test"
 	app  = "extauthz"
 )
+
+// This file defines common constants used across all integration tests.
+// The path points to the Helm chart directory.

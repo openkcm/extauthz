@@ -15,8 +15,18 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v6
         with:
-          go-version-file: 'go.mod'
-      - name: Install k3d
-        run: go install github.com/k3d-io/k3d/v5@v5.8.3
-      - name: Run the tests
-        run: make helm-test
+          go-version-file: "go.mod"
+      - name: Run the helm unit tests
+        run: go test -v -count=1 -race -tags=helmtests ./helm-tests/unit/...
+      - name: Build the Docker image
+        run: docker build --no-cache -f Dockerfile.dev -t localhost/extauthz:latest .
+      - name: Setup k3s
+        run: |
+          go install tool github.com/k3d-io/k3d/v5
+          k3d --version
+          k3d cluster create k3scluster --wait --image=rancher/k3s:latest
+          while ! kubectl get serviceaccount default >/dev/null; do sleep 1; done
+      - name: Import the Docker image
+        run: k3d image import localhost/extauthz:latest -c k3scluster
+      - name: Run the helm integration tests
+        run: go test -timeout 15m -v -count=1 -race -tags=helmtests ./helm-tests/integration/...

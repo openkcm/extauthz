@@ -11,12 +11,14 @@ import (
 
 	"google.golang.org/genproto/googleapis/rpc/code"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 
 	envoy_auth "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
 )
 
 func TestCheck(t *testing.T) {
 	var err error
+	ctx := t.Context()
 
 	// write files needed for the test
 	cleanup, err := writeFiles(validConfig, trustedSubjects, policies, rsaPrivateKeyPEM)
@@ -43,7 +45,7 @@ func TestCheck(t *testing.T) {
 	}()
 
 	// create the gRPC based authorization client
-	conn, err := grpc.NewClient("localhost:9092", grpc.WithInsecure())
+	conn, err := grpc.NewClient("localhost:9092", grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("could not connect to server: %s", err)
 	}
@@ -69,8 +71,8 @@ func TestCheck(t *testing.T) {
 		if i < 1 {
 			t.Fatalf("could not connect to server: %s", err)
 		}
-		_, checkErr := client.Check(t.Context(), nil)
-		if checkErr == nil {
+		_, err := client.Check(ctx, nil)
+		if err == nil {
 			break
 		}
 		time.Sleep(100 * time.Millisecond)
@@ -79,8 +81,9 @@ func TestCheck(t *testing.T) {
 	// run the tests
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			ctx := t.Context()
 			// Act
-			got, err := client.Check(t.Context(), tc.request)
+			got, err := client.Check(ctx, tc.request)
 
 			// Assert
 			if tc.wantError {
@@ -103,6 +106,7 @@ func TestCheck(t *testing.T) {
 	}
 
 	t.Run("trace headers are not stripped or overwritten", func(t *testing.T) {
+		ctx := t.Context()
 		// Send a request whose HTTP headers include trace propagation
 		// headers and verify they are not in HeadersToRemove and not present
 		// as overwrites in HeadersToAdd in any OkResponse, and that the
@@ -119,7 +123,7 @@ func TestCheck(t *testing.T) {
 			}},
 		}}
 
-		resp, err := client.Check(t.Context(), req)
+		resp, err := client.Check(ctx, req)
 		if err != nil {
 			t.Fatalf("unexpected error: %s", err)
 		}

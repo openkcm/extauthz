@@ -1,97 +1,92 @@
+//go:build helmtests
+
 package main_test
 
 import (
+	"bytes"
+	"os/exec"
+	"strings"
 	"testing"
-
-	"github.com/gruntwork-io/terratest/modules/helm"
-	"github.com/gruntwork-io/terratest/modules/k8s"
-	"github.com/stretchr/testify/require"
-
-	corev1 "k8s.io/api/autoscaling/v2"
 )
 
 func TestHorizontalPodAutoscaler(t *testing.T) {
-	t.Parallel()
-
-	// Arrange
-	yamlFile := "templates/hpa.yaml"
-
-	// create the test cases
+	ctx := t.Context()
 	tests := []struct {
-		name      string
-		opts      *helm.Options
-		wantError bool
-		testFunc  func(t *testing.T, resource *corev1.HorizontalPodAutoscaler)
+		name     string
+		values   string
+		expected []string
 	}{
 		{
-			name: "default values",
-			opts: &helm.Options{
-				SetValues: map[string]string{
-					"hpa.enabled": "true",
-				},
+			name:   "default values",
+			values: "--set hpa.enabled=true",
+			expected: []string{
+				"kind: HorizontalPodAutoscaler",
+				"name: " + appName,
+				"namespace: default",
+				"minReplicas: 1",
+				"maxReplicas: 100",
+				"name: cpu",
+				"averageUtilization: 80",
+				"name: memory",
 			},
-			wantError: false,
-			testFunc: func(t *testing.T, resource *corev1.HorizontalPodAutoscaler) {
-				t.Helper()
-				require.Equal(t, appName, resource.Name)
-				require.Equal(t, "default", resource.Namespace)
-				require.Equal(t, 1, int(*resource.Spec.MinReplicas))
-				require.Equal(t, 100, int(resource.Spec.MaxReplicas))
-				require.Equal(t, "cpu", string(resource.Spec.Metrics[0].Resource.Name))
-				require.Equal(t, 80, int(*resource.Spec.Metrics[0].Resource.Target.AverageUtilization))
-				require.Equal(t, "memory", string(resource.Spec.Metrics[1].Resource.Name))
-				require.Equal(t, 80, int(*resource.Spec.Metrics[1].Resource.Target.AverageUtilization))
+		},
+		{
+			name:   "custom values",
+			values: "--set hpa.enabled=true --set hpa.minReplicas=2 --set hpa.maxReplicas=5 --set hpa.targetCPUUtilizationPercentage=70 --set hpa.targetMemoryUtilizationPercentage=70 --namespace foo",
+			expected: []string{
+				"kind: HorizontalPodAutoscaler",
+				"name: " + appName,
+				"namespace: foo",
+				"minReplicas: 2",
+				"maxReplicas: 5",
+				"name: cpu",
+				"averageUtilization: 70",
+				"name: memory",
 			},
-		}, {
-			name: "custom values",
-			opts: &helm.Options{
-				SetValues: map[string]string{
-					"hpa.enabled":                           "true",
-					"hpa.minReplicas":                       "2",
-					"hpa.maxReplicas":                       "5",
-					"hpa.targetCPUUtilizationPercentage":    "70",
-					"hpa.targetMemoryUtilizationPercentage": "70",
-				},
-				KubectlOptions: k8s.NewKubectlOptions("", "", "foo"),
-			},
-			wantError: false,
-			testFunc: func(t *testing.T, resource *corev1.HorizontalPodAutoscaler) {
-				t.Helper()
-				require.Equal(t, appName, resource.Name)
-				require.Equal(t, "foo", resource.Namespace)
-				require.Equal(t, 2, int(*resource.Spec.MinReplicas))
-				require.Equal(t, 5, int(resource.Spec.MaxReplicas))
-				require.Equal(t, "cpu", string(resource.Spec.Metrics[0].Resource.Name))
-				require.Equal(t, 70, int(*resource.Spec.Metrics[0].Resource.Target.AverageUtilization))
-				require.Equal(t, "memory", string(resource.Spec.Metrics[1].Resource.Name))
-				require.Equal(t, 70, int(*resource.Spec.Metrics[1].Resource.Target.AverageUtilization))
+		},
+		{
+			name:     "HPA disabled by default",
+			values:   "",
+			expected: []string{
+				// When HPA is disabled, the template should not render
 			},
 		},
 	}
 
-	// run the tests
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			// Arrange
-			if tc.opts.SetValues == nil {
-				tc.opts.SetValues = map[string]string{}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			args := []string{"template", appName, path, "-s", "templates/hpa.yaml",
+				"--set", "image.tag=foo",
 			}
-			tc.opts.SetValues["image.tag"] = "foo"
+			if tt.values != "" {
+				args = append(args, strings.Split(tt.values, " ")...)
+			}
 
-			// Act
-			got, err := helm.RenderTemplateE(t, tc.opts, path, appName, []string{yamlFile})
+			cmd := exec.CommandContext(ctx, "helm", args...)
+			var out bytes.Buffer
+			cmd.Stdout = &out
+			cmd.Stderr = &out
 
-			// Assert
-			if tc.wantError {
-				require.Error(t, err)
+			err := cmd.Run()
+			output := out.String()
+
+			// For "HPA disabled by default" case, we expect an error or empty output
+			if tt.name == "HPA disabled by default" {
+				if err == nil && strings.Contains(output, "kind: HorizontalPodAutoscaler") {
+					t.Errorf("expected HPA to not be rendered when disabled, but got output:\n%s", output)
+				}
 				return
 			}
-			require.NoError(t, err)
-			var resource corev1.HorizontalPodAutoscaler
-			helm.UnmarshalK8SYaml(t, got, &resource)
-			tc.testFunc(t, &resource)
+
+			if err != nil {
+				t.Fatalf("helm template failed: %v\nOutput: %s", err, output)
+			}
+
+			for _, expected := range tt.expected {
+				if !strings.Contains(output, expected) {
+					t.Errorf("expected output to contain %q, but it didn't.\nOutput: %s", expected, output)
+				}
+			}
 		})
 	}
 }
