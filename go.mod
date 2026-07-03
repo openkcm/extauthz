@@ -29,6 +29,12 @@ require (
 	k8s.io/client-go v0.36.2
 )
 
+// Without the following workaround, command
+//   go list -mod readonly -json -m all
+// will fail with
+//   go: k8s.io/kubelet@v0.0.0: invalid version: unknown revision v0.0.0
+replace k8s.io/kubelet => k8s.io/kubelet v0.36.2
+
 require (
 	github.com/AdaLogics/go-fuzz-headers v0.0.0-20240806141605-e8a1dd7889d6 // indirect
 	github.com/Azure/go-ansiterm v0.0.0-20250102033503-faa5f7b0171c // indirect
