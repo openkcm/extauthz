@@ -15,7 +15,7 @@ require (
 	github.com/jellydator/ttlcache/v3 v3.4.1
 	github.com/openkcm/api-sdk v0.19.1
 	github.com/openkcm/common-sdk v1.18.0
-	github.com/samber/oops v1.22.0
+	github.com/samber/oops v1.23.0
 	github.com/stretchr/testify v1.11.1
 	github.com/veqryn/slog-context v0.9.0
 	github.com/veqryn/slog-context/otel v0.9.0
