@@ -15,7 +15,7 @@ require (
 	github.com/jellydator/ttlcache/v3 v3.4.1
 	github.com/openkcm/api-sdk v0.19.1
 	github.com/openkcm/common-sdk v1.18.0
-	github.com/samber/oops v1.22.0
+	github.com/samber/oops v1.23.0
 	github.com/stretchr/testify v1.11.1
 	github.com/veqryn/slog-context v0.9.0
 	github.com/veqryn/slog-context/otel v0.9.0
@@ -23,7 +23,7 @@ require (
 	go.opentelemetry.io/otel/sdk v1.44.0
 	go.opentelemetry.io/otel/trace v1.44.0
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260526163538-3dc84a4a5aaa
-	google.golang.org/grpc v1.82.0
+	google.golang.org/grpc v1.82.1
 	k8s.io/api v0.36.2
 	k8s.io/apimachinery v0.36.2
 	k8s.io/client-go v0.36.2
