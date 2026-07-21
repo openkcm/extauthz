@@ -21,10 +21,12 @@ jobs:
       - name: Build the Docker image
         run: docker build --no-cache -f Dockerfile.dev -t localhost/extauthz:latest .
       - name: Setup k3s
+        uses: nolar/setup-k3d-k3s@62c9d1bd2bc843275c85d2e7dcd696edc1160eee # v1.1.0
+        with:
+          k3d-name: k3scluster
+      - name: Check k3s
         run: |
-          go install tool github.com/k3d-io/k3d/v5
           k3d --version
-          k3d cluster create k3scluster --wait --image=rancher/k3s:latest
           while ! kubectl get serviceaccount default >/dev/null; do sleep 1; done
       - name: Import the Docker image
         run: k3d image import localhost/extauthz:latest -c k3scluster
