@@ -1,6 +1,8 @@
 package config
 
 import (
+	"time"
+
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
 )
 
@@ -33,6 +35,61 @@ type Config struct {
 
 	// CSRFSecret is a key using to generate the CSRF token.
 	CSRFSecret commoncfg.SourceRef `yaml:"csrfSecret"`
+
+	// Valkey cache to collect request rate metrics.
+	Valkey Valkey `yaml:"valkey"`
+}
+
+type Valkey struct {
+	Address   commoncfg.SourceRef `yaml:"address" json:"address"`
+	User      commoncfg.SourceRef `yaml:"user"`
+	Password  commoncfg.SourceRef `yaml:"password"`
+	Prefix    string              `yaml:"prefix"`
+	SecretRef commoncfg.SecretRef `yaml:"secretRef"`
+
+	// RateDetection configures the cross-pod detection of unauthenticated
+	// request bursts. When disabled the whole feature is a no-op and Valkey is
+	// never contacted.
+	RateDetection RateDetection `yaml:"rateDetection"`
+}
+
+// RateDetection configures threshold-over-window detection of unauthenticated
+// request bursts. Crossing Threshold within Window emits a single audit event
+// across the fleet, suppressed for Cooldown.
+type RateDetection struct {
+	// Enabled turns the unauthenticated-burst detection on. When false the
+	// Valkey rate store is not created and no burst events are emitted.
+	Enabled bool `yaml:"enabled"`
+
+	// Threshold is the number of unauthenticated requests for the same identity
+	// within Window that triggers a single audit event.
+	Threshold int64 `yaml:"threshold" default:"50"`
+
+	// Window is the tumbling window over which requests are counted.
+	Window time.Duration `yaml:"window" default:"1m"`
+
+	// Cooldown is how long a fired event suppresses further events for the same
+	// identity and window. Defaults to Window when unset. It should be >= Window,
+	// otherwise the suppression latch expires before the window rolls over and a
+	// single burst can emit multiple events.
+	Cooldown time.Duration `yaml:"cooldown"`
+
+	// CountUnknown includes UNKNOWN results (no credentials presented at all) in
+	// the burst count. Off by default so health probes and anonymous public
+	// traffic are not counted as auth failures.
+	CountUnknown bool `yaml:"countUnknown"`
+
+	// QueueSize bounds the async audit dispatch queue. When full, events are
+	// dropped and counted rather than blocking the Check() hot path.
+	QueueSize int `yaml:"queueSize" default:"1024"`
+
+	// Workers is the number of goroutines draining the audit dispatch queue.
+	Workers int `yaml:"workers" default:"4"`
+
+	// DispatchTimeout bounds how long a single queued audit job (Valkey observe
+	// + audit send) may run before its context is cancelled, so a hung backend
+	// cannot permanently occupy a worker.
+	DispatchTimeout time.Duration `yaml:"dispatchTimeout" default:"10s"`
 }
 
 // ClientData configuration
@@ -66,7 +123,7 @@ type MTLS struct {
 
 type JWT struct {
 	// IssuerClaimKeys configures the JWT issuer keys
-	IssuerClaimKeys []string `yaml:"issuerClaimKeys" default:"['iss']"`
+	IssuerClaimKeys []string `yaml:"issuerClaimKeys" default:"[\"iss\"]"`
 
 	// A list of static JWT providers
 	Providers []Provider `yaml:"providers"`

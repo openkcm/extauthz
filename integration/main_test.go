@@ -109,6 +109,20 @@ func buildCommandsAndRunTests(m *testing.M, cmds ...string) int {
 	return code
 }
 
+// serviceCmd builds the exec.Cmd for the service binary with its coverage output
+// directed at EXTAUTHZ_COVERDIR (set by the Makefile). `go test` overrides
+// GOCOVERDIR for the test binary to an internal temp dir that the subprocess
+// would otherwise inherit and whose profile is discarded on exit, so the
+// subprocess's coverage is only captured when we point it at the real dir
+// explicitly.
+func serviceCmd(ctx context.Context, args ...string) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, "./"+binary, args...)
+	if dir := os.Getenv("EXTAUTHZ_COVERDIR"); dir != "" {
+		cmd.Env = append(os.Environ(), "GOCOVERDIR="+dir)
+	}
+	return cmd
+}
+
 func TestMain(m *testing.M) {
 	// put this in a function so we can use defer to clean up
 	code := buildCommandsAndRunTests(m, binary)

@@ -223,7 +223,7 @@ func TestCheckSession(t *testing.T) {
 			}
 
 			// Act
-			result := srv.checkSession(ctx, tc.cookie, tc.tenantID, tc.method, tc.host, tc.path, tc.csrfToken)
+			result := srv.checkSession(ctx, tc.cookie, tc.csrfToken, requestInfo{method: tc.method, host: tc.host, path: tc.path, tenantID: tc.tenantID})
 
 			// Assert
 			assert.Equal(t, tc.expectedResult.is, result.is)

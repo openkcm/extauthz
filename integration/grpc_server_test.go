@@ -4,7 +4,6 @@ package integration_test
 
 import (
 	"bytes"
-	"os/exec"
 	"syscall"
 	"testing"
 	"time"
@@ -28,7 +27,7 @@ func TestCheck(t *testing.T) {
 	defer cleanup()
 
 	// start the service in the background
-	cmd := exec.CommandContext(t.Context(), "./"+binary, "--graceful-shutdown=0")
+	cmd := serviceCmd(t.Context(), "--graceful-shutdown=0")
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr

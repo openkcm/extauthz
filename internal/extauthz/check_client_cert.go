@@ -243,7 +243,7 @@ type certInfo struct {
 }
 
 // checkClientCert checks the request using the subject from the client certificate.
-func (srv *Server) checkClientCert(ctx context.Context, certHeader, method, host, path string) checkResult {
+func (srv *Server) checkClientCert(ctx context.Context, certHeader string, req requestInfo) checkResult {
 	// create map of fields
 	fields, err := mapHeader(certHeader)
 	if err != nil {
@@ -302,13 +302,13 @@ func (srv *Server) checkClientCert(ctx context.Context, certHeader, method, host
 		notAfter:  crt.NotAfter,
 	}
 
-	return srv.checkClientCertCore(ctx, info, headerSubject, method, host, path)
+	return srv.checkClientCertCore(ctx, info, headerSubject, req)
 }
 
 // checkClientCertCore performs the core authorization checks on a parsed certificate.
 // This function is separated from checkClientCert to enable comprehensive testing
 // of all code paths without needing to create malformed certificates.
-func (srv *Server) checkClientCertCore(ctx context.Context, info certInfo, headerSubject, method, host, path string) checkResult {
+func (srv *Server) checkClientCertCore(ctx context.Context, info certInfo, headerSubject string, req requestInfo) checkResult {
 	// SECURITY: Reject empty subjects explicitly
 	if headerSubject == "" {
 		slogctx.Error(ctx, "Certificate subject is empty")
@@ -357,21 +357,21 @@ func (srv *Server) checkClientCertCore(ctx context.Context, info certInfo, heade
 	slogctx.Debug(ctx, "Checking policies for x509",
 		"subject", headerSubject,
 		"issuer", info.issuer,
-		"method", method,
-		"host", host,
-		"path", path,
+		"method", req.method,
+		"host", req.host,
+		"path", req.path,
 	)
 
 	data := map[string]string{
-		contextKeyHost:   host,
-		contextKeyPath:   path,
+		contextKeyHost:   req.host,
+		contextKeyPath:   req.path,
 		contextKeyType:   authTypeX509,
 		contextKeyIssuer: info.issuer,
 	}
 
 	allowed, reason, err := srv.policyEngine.Check(
 		cedarpolicy.WithSubject(headerSubject),
-		cedarpolicy.WithAction(method),
+		cedarpolicy.WithAction(req.method),
 		cedarpolicy.WithContextData(data),
 	)
 	if err != nil {

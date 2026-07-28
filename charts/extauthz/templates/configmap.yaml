@@ -68,6 +68,18 @@ data:
       {{- toYaml . | nindent 6 }}
     {{- end }}
 
+    # Audit sink (common-sdk Audit)
+    {{- with .Values.config.audit }}
+    audit:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+
+    # Valkey unauthenticated-burst rate detection
+    {{- with .Values.config.valkey }}
+    valkey:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+
     {{- with .Values.config.sessionPathPrefixes }}
     sessionPathPrefixes:
       {{- toYaml . | nindent 6 }}

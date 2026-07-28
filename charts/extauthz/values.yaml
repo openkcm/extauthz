@@ -269,3 +269,41 @@ config:
   clientData:
     # Signing client data
     signingKeyIDFilePath: /etc/extauthz-signing/keyId
+
+  # Audit sink (github.com/openkcm/common-sdk/pkg/commoncfg.Audit). When set,
+  # extauthz sends audit log events (unauthenticated bursts and unauthorised
+  # requests) to this OTLP logs endpoint (the ALS collector). Omit to disable.
+  # +docs:property
+  # audit:
+  #   endpoint: http://als-collector:4317/v1/logs
+  #   httpClient:
+  #     timeout: 10s
+  #     # Authenticate to the collector in production, e.g. mtls:
+  #     # mtls:
+  #     #   cert: { source: file, file: { path: /etc/extauthz-audit/tls.crt } }
+  #     #   certKey: { source: file, file: { path: /etc/extauthz-audit/tls.key } }
+  #   # additionalProperties: "{ service: extauthz }"
+
+  # Valkey-backed, cross-pod detection of unauthenticated request bursts. When
+  # rateDetection.enabled is true, extauthz counts UNAUTHENTICATED results per
+  # identity in a shared Valkey and emits a single audit event per window when
+  # the threshold is crossed. Requires the audit sink above for delivery. Omit
+  # the block (or set rateDetection.enabled: false) to disable; unauthorised
+  # requests are still audited immediately without Valkey.
+  # +docs:property
+  # valkey:
+  #   address:
+  #     value: valkey:6379       # SourceRef; source defaults to "embedded"
+  #   prefix: extauthz
+  #   secretRef:
+  #     type: insecure           # use mtls in production
+  #   rateDetection:
+  #     enabled: true
+  #     threshold: 50            # N unauthenticated requests ...
+  #     window: 1m               # ... within this window trips one event
+  #     cooldown: 1m             # suppress repeat events per identity/window;
+  #                              # should be >= window (defaults to window if unset)
+  #     countUnknown: false      # count requests with no credentials at all
+  #     queueSize: 1024          # bounded async audit dispatch queue
+  #     workers: 4
+  #     dispatchTimeout: 10s     # per-job timeout (Valkey observe + audit send)

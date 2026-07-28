@@ -10,10 +10,14 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 
+	"github.com/openkcm/extauthz/internal/audit"
+	"github.com/openkcm/extauthz/internal/auditqueue"
 	"github.com/openkcm/extauthz/internal/clientdata"
 	"github.com/openkcm/extauthz/internal/handler"
+	"github.com/openkcm/extauthz/internal/metric"
 	"github.com/openkcm/extauthz/internal/policies"
 	"github.com/openkcm/extauthz/internal/policies/cedarpolicy"
+	"github.com/openkcm/extauthz/internal/ratestore"
 	"github.com/openkcm/extauthz/internal/session"
 )
 
@@ -59,10 +63,76 @@ type Server struct {
 	csrfSecret             []byte
 	tracer                 trace.Tracer
 	cancel                 context.CancelFunc
+	audit                  audit.Logger
+
+	// rateStore detects unauthenticated request bursts across pods. Defaults to
+	// a no-op so Check() can call it unconditionally.
+	rateStore ratestore.RateStore
+	// auditQueue dispatches audit events asynchronously. When nil, events are
+	// sent inline (used only when no queue is wired).
+	auditQueue *auditqueue.Queue
+	metrics    *metric.Metrics
+	// countUnknown includes UNKNOWN results (no credentials at all) in the
+	// unauthenticated burst count.
+	countUnknown bool
 }
 
 // ServerOption is used to configure a server.
 type ServerOption func(*Server) error
+
+func WithAuditLogger(logger audit.Logger) ServerOption {
+	return func(s *Server) error {
+		if logger == nil {
+			return errors.New("audit logger must not be nil")
+		}
+		s.audit = logger
+		return nil
+	}
+}
+
+// WithRateStore sets the cross-pod store used to detect unauthenticated request
+// bursts. When unset the server uses a no-op store and never emits burst events.
+func WithRateStore(rs ratestore.RateStore) ServerOption {
+	return func(s *Server) error {
+		if rs == nil {
+			return errors.New("rate store must not be nil")
+		}
+		s.rateStore = rs
+		return nil
+	}
+}
+
+// WithAuditQueue sets the asynchronous dispatcher used to deliver audit events
+// off the Check() hot path.
+func WithAuditQueue(q *auditqueue.Queue) ServerOption {
+	return func(s *Server) error {
+		if q == nil {
+			return errors.New("audit queue must not be nil")
+		}
+		s.auditQueue = q
+		return nil
+	}
+}
+
+// WithMetrics sets the audit-pipeline metrics.
+func WithMetrics(m *metric.Metrics) ServerOption {
+	return func(s *Server) error {
+		if m == nil {
+			return errors.New("metrics must not be nil")
+		}
+		s.metrics = m
+		return nil
+	}
+}
+
+// WithCountUnknown controls whether UNKNOWN results (no credentials presented)
+// are included in the unauthenticated burst count.
+func WithCountUnknown(count bool) ServerOption {
+	return func(s *Server) error {
+		s.countUnknown = count
+		return nil
+	}
+}
 
 func WithTrustedSubjects(m map[string]string) ServerOption {
 	return func(server *Server) error {
@@ -184,6 +254,8 @@ func NewServer(opts ...ServerOption) (*Server, error) {
 		sessionPathPrefixes: []string{},
 		featureGates:        &commoncfg.FeatureGates{},
 		cancel:              cancel,
+		audit:               audit.NoopLogger{},
+		rateStore:           ratestore.Noop{},
 	}
 
 	for _, opt := range opts {
@@ -215,6 +287,9 @@ func (s *Server) Start() error {
 			return oops.Hint("failed to start the signing key loader").Wrap(err)
 		}
 	}
+	if s.auditQueue != nil {
+		s.auditQueue.Start()
+	}
 	return nil
 }
 
@@ -226,6 +301,14 @@ func (s *Server) Close() error {
 		if err != nil {
 			return oops.Hint("failed to stop the signing key loader").Wrap(err)
 		}
+	}
+
+	// Drain buffered audit events before releasing the rate store connection.
+	if s.auditQueue != nil {
+		_ = s.auditQueue.Close()
+	}
+	if s.rateStore != nil {
+		_ = s.rateStore.Close()
 	}
 
 	return nil
