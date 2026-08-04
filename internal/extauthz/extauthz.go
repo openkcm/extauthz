@@ -265,6 +265,7 @@ func NewServer(opts ...ServerOption) (*Server, error) {
 		}
 		err := opt(server)
 		if err != nil {
+			cancel()
 			return nil, err
 		}
 	}
