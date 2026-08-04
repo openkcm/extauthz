@@ -40,6 +40,10 @@ func NewManager(grpcConn *grpc.ClientConn, opts ...ManagerOption) (*Manager, err
 	return m, nil
 }
 
+func (m *Manager) Close() error {
+	return m.grpcConn.Close()
+}
+
 func (m *Manager) GetSession(ctx context.Context, sessionID, tenantID string) (*Session, error) {
 	getSessionRequest := &sessionv1.GetSessionRequest{
 		SessionId: sessionID,
