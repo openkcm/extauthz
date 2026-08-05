@@ -80,7 +80,7 @@ func (srv *Server) checkSession(ctx context.Context, sessionCookie *http.Cookie,
 	data := map[string]string{
 		contextKeyHost:   req.host,
 		contextKeyPath:   req.path,
-		contextKeyType:   authTypeJWT,
+		contextKeyType:   authTypeSession,
 		contextKeyIssuer: sess.Issuer,
 	}
 

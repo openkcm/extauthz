@@ -36,3 +36,16 @@ permit (
 	context.path like "/cmk/*" &&
 	context.issuer == "https://iam.myorg.com/"
 };
+
+/////////////////////////////////////////
+// Users based on session cookie accessing the CMK Backend via the CMK UI
+permit (
+	principal is Subject,
+	action in [Action::"GET", Action::"POST"],
+	resource
+) when {
+	context.type == "session" &&
+	context.host == "myorg.com" &&
+	context.path like "/cmk/*" &&
+	context.issuer like "*"
+};
