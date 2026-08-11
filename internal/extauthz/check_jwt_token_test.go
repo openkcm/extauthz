@@ -219,7 +219,7 @@ func TestCheckJWTToken(t *testing.T) {
 				t.Fatalf("could not start the server: %s", err)
 			}
 			// Act
-			result := srv.checkJWTToken(t.Context(), tc.bearerToken, "GET", "our.service.com", "/foo/bar")
+			result := srv.checkJWTToken(t.Context(), tc.bearerToken, requestInfo{method: "GET", host: "our.service.com", path: "/foo/bar"})
 
 			// Assert
 			if result.is != tc.wantCheckResultCode {

@@ -28,7 +28,7 @@ type jwtClaims struct {
 }
 
 // checkJWTToken checks the request using the JWT bearer token.
-func (srv *Server) checkJWTToken(ctx context.Context, bearerToken, method, host, path string) checkResult {
+func (srv *Server) checkJWTToken(ctx context.Context, bearerToken string, req requestInfo) checkResult {
 	// Parse the header for basic checks. Also extract the JKU/jwksURI to be able
 	// to use it in permission checks. This is important because the issuer itself
 	// may not be unique. With the JKU we can distinguish tokens from different
@@ -53,10 +53,9 @@ func (srv *Server) checkJWTToken(ctx context.Context, bearerToken, method, host,
 	}
 
 	// parse and validate the token and extract the claims
-	useCache := method == http.MethodGet // Allow using cache for token introspection for GET requests
-	tenantID := srv.extractTenantID(path)
+	useCache := req.method == http.MethodGet // Allow using cache for token introspection for GET requests
 	var claims jwtClaims
-	err = srv.oidcHandler.ParseAndValidate(ctx, bearerToken, tenantID, &claims, useCache)
+	err = srv.oidcHandler.ParseAndValidate(ctx, bearerToken, req.tenantID, &claims, useCache)
 	if err != nil {
 		// Log the token header and payload. Never ever log the signature!
 		slogctx.Error(ctx, "JWT validation failed", "error", err, "header", parts[0], "payload", parts[1])
@@ -90,14 +89,14 @@ func (srv *Server) checkJWTToken(ctx context.Context, bearerToken, method, host,
 		"subject", claims.Subject,
 		"issuer", claims.Issuer,
 		"jwksURI", header.JKU,
-		"method", method,
-		"host", host,
-		"path", path,
+		"method", req.method,
+		"host", req.host,
+		"path", req.path,
 	)
 
 	data := map[string]string{
-		contextKeyHost:   host,
-		contextKeyPath:   path,
+		contextKeyHost:   req.host,
+		contextKeyPath:   req.path,
 		contextKeyType:   authTypeJWT,
 		contextKeyIssuer: claims.Issuer,
 		"jwksURI":        header.JKU,
@@ -105,7 +104,7 @@ func (srv *Server) checkJWTToken(ctx context.Context, bearerToken, method, host,
 
 	allowed, reason, err := srv.policyEngine.Check(
 		cedarpolicy.WithSubject(claims.Subject),
-		cedarpolicy.WithAction(method),
+		cedarpolicy.WithAction(req.method),
 		cedarpolicy.WithContextData(data),
 	)
 	if err != nil {

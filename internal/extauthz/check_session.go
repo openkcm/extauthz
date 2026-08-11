@@ -16,7 +16,7 @@ import (
 )
 
 // checkSession checks the request using the session Cookie.
-func (srv *Server) checkSession(ctx context.Context, sessionCookie *http.Cookie, tenantID, method, host, path, csrfToken string) checkResult {
+func (srv *Server) checkSession(ctx context.Context, sessionCookie *http.Cookie, csrfToken string, req requestInfo) checkResult {
 	if sessionCookie == nil {
 		slogctx.Debug(ctx, "Session cookie is nil")
 		return checkResult{is: UNKNOWN}
@@ -26,10 +26,10 @@ func (srv *Server) checkSession(ctx context.Context, sessionCookie *http.Cookie,
 	// - check if the session exists for this session ID and tenant ID
 	// - validate the session (expiry, token revocation, ...)
 	// If the session is valid, it will return the session details.
-	sess, err := srv.sessionManager.GetSession(ctx, sessionCookie.Value, tenantID)
+	sess, err := srv.sessionManager.GetSession(ctx, sessionCookie.Value, req.tenantID)
 	if err != nil {
 		if errors.Is(err, session.ErrTenantBlocked) {
-			return checkResult{is: TENANT_BLOCKED, info: fmt.Sprintf("the tenant %s is blocked", tenantID)}
+			return checkResult{is: TENANT_BLOCKED, info: fmt.Sprintf("the tenant %s is blocked", req.tenantID)}
 		}
 
 		slogctx.Debug(ctx, "Failed to get session from session manager", "error", err)
@@ -72,21 +72,21 @@ func (srv *Server) checkSession(ctx context.Context, sessionCookie *http.Cookie,
 	slogctx.Debug(ctx, "Checking policies for session",
 		"subject", sess.Subject,
 		"issuer", sess.Issuer,
-		"method", method,
-		"host", host,
-		"path", path,
+		"method", req.method,
+		"host", req.host,
+		"path", req.path,
 	)
 
 	data := map[string]string{
-		contextKeyHost:   host,
-		contextKeyPath:   path,
+		contextKeyHost:   req.host,
+		contextKeyPath:   req.path,
 		contextKeyType:   authTypeJWT,
 		contextKeyIssuer: sess.Issuer,
 	}
 
 	allowed, reason, err := srv.policyEngine.Check(
 		cedarpolicy.WithSubject(sess.Subject),
-		cedarpolicy.WithAction(method),
+		cedarpolicy.WithAction(req.method),
 		cedarpolicy.WithContextData(data),
 	)
 	if err != nil {

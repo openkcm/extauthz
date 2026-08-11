@@ -35,6 +35,16 @@ const (
 // Ensure Server implements the AuthorizationServer interface
 var _ envoyauth.AuthorizationServer = &Server{}
 
+// requestInfo is a request-scoped descriptor carrying the routing and tenant
+// information that every credential-check method needs.
+type requestInfo struct {
+	id       string
+	method   string
+	host     string
+	path     string
+	tenantID string
+}
+
 // Span and attribute names for the per-Check application span.
 const (
 	spanNameCheck     = "ext_authz.check"
@@ -63,6 +73,7 @@ func (srv *Server) Check(ctx context.Context, req *envoyauth.CheckRequest) (*env
 	method := httpreq.GetMethod()
 	host := httpreq.GetHost()
 	path := httpreq.GetPath()
+	tenantID, isSessionPath := srv.extractTenantID(path)
 
 	// Extract W3C trace context from the inbound HTTP headers carried by the
 	// CheckRequest. Envoy delivers header keys lower-cased, which is what the
@@ -77,6 +88,7 @@ func (srv *Server) Check(ctx context.Context, req *envoyauth.CheckRequest) (*env
 		"scheme", httpreq.GetScheme(),
 		"host", host,
 		"path", path,
+		"tenant_id", tenantID,
 	)
 
 	// Start the application span as a child of the extracted context. Span
@@ -93,6 +105,20 @@ func (srv *Server) Check(ctx context.Context, req *envoyauth.CheckRequest) (*env
 
 	slogctx.Debug(ctx, LogPrefixCheck+"called")
 
+	reqInfo := requestInfo{id: httpreq.GetId(), method: method, host: host, path: path, tenantID: tenantID}
+
+	if isSessionPath && tenantID == "" {
+		slogctx.Warn(ctx, LogPrefixSessionCookie+"failed to extract tenant ID from path", "sessionPathPrefixes", srv.sessionPathPrefixes)
+		span.SetAttributes(
+			attribute.String(spanAttrDecision, UNAUTHENTICATED.String()),
+			attribute.String(spanAttrAuthType, authTypeNone),
+		)
+		span.SetStatus(codes.Error, "missing tenant id in the path")
+		// Record this auth failure like every other non-ALLOWED path.
+		srv.recordDecision(ctx, checkResult{is: UNAUTHENTICATED, info: "missing tenant id in the path"}, reqInfo)
+		return respondUnauthenticated("missing tenant id in the path")
+	}
+
 	// Authenticate in the following order:
 	// 1. Client certificates
 	// 2. Bearer token in the authorization header
@@ -102,44 +128,44 @@ func (srv *Server) Check(ctx context.Context, req *envoyauth.CheckRequest) (*env
 
 	// 1. Client certificates (if any)
 	slogctx.Debug(ctx, LogPrefixClientCert+"checking for presence")
-	if clientCerts, found := extractClientCertificates(ctx, headers); !found {
-		slogctx.Debug(ctx, LogPrefixClientCert+"not found")
-	} else {
+	if clientCerts, found := extractClientCertificates(ctx, headers); found {
 		slogctx.Debug(ctx, LogPrefixClientCert+"found", "count", len(clientCerts))
 		for nr, part := range clientCerts {
 			slogctx.Debug(ctx, fmt.Sprintf(LogPrefixClientCert+"checking number %d", nr))
-			r := srv.checkClientCert(ctx, part, method, host, path)
+			r := srv.checkClientCert(ctx, part, reqInfo)
 			slogctx.Debug(ctx, LogPrefixClientCert+"access "+r.is.String(), "part", nr)
 			r.kind = authKindX509
 			result.merge(r)
 			result.withXFCCHeader = true
 		}
+	} else {
+		slogctx.Debug(ctx, LogPrefixClientCert+"not found")
 	}
 
 	// 2. Bearer token in the authorization header (if any)
 	slogctx.Debug(ctx, LogPrefixBearerToken+"checking for presence")
-	if bearerToken, found := extractBearerToken(ctx, headers); !found {
-		slogctx.Debug(ctx, LogPrefixBearerToken+"not found")
-	} else {
+	if bearerToken, found := extractBearerToken(ctx, headers); found {
 		slogctx.Debug(ctx, LogPrefixBearerToken+"found ... checking")
-		r := srv.checkJWTToken(ctx, bearerToken, method, host, path)
+		r := srv.checkJWTToken(ctx, bearerToken, reqInfo)
 		slogctx.Debug(ctx, LogPrefixBearerToken+"access "+r.is.String())
 		r.kind = authKindJWT
 		result.merge(r)
+	} else {
+		slogctx.Debug(ctx, LogPrefixBearerToken+"not found")
 	}
 
 	// 3. Session cookie (if any and only if session manager is configured)
 	if srv.sessionManager != nil {
 		slogctx.Debug(ctx, LogPrefixSessionCookie+"checking for presence")
-		if sessionCookie, tenantID, found := srv.extractSessionDetails(ctx, httpreq, path); !found {
-			slogctx.Debug(ctx, LogPrefixSessionCookie+"not found")
-		} else {
+		if sessionCookie, found := srv.extractSessionDetails(ctx, headers, reqInfo.tenantID); found {
 			slogctx.Debug(ctx, LogPrefixSessionCookie+"found ... checking")
 			csrfToken := headers[HeaderCSRFToken]
-			r := srv.checkSession(ctx, sessionCookie, tenantID, method, host, path, csrfToken)
+			r := srv.checkSession(ctx, sessionCookie, csrfToken, reqInfo)
 			slogctx.Debug(ctx, LogPrefixSessionCookie+"access "+r.is.String())
 			r.kind = authKindSession
 			result.merge(r)
+		} else {
+			slogctx.Debug(ctx, LogPrefixSessionCookie+"not found")
 		}
 	}
 
@@ -160,6 +186,8 @@ func (srv *Server) Check(ctx context.Context, req *envoyauth.CheckRequest) (*env
 	} else {
 		span.SetStatus(codes.Error, result.info)
 	}
+
+	srv.recordDecision(ctx, result, reqInfo)
 
 	// Prepare the response
 	switch result.is {
@@ -227,7 +255,12 @@ func extractBearerToken(ctx context.Context, headers map[string]string) (string,
 	return bearerToken, true
 }
 
-func (srv *Server) extractTenantID(path string) string {
+// extractTenantID returns the tenant ID embedded in the path and whether the
+// path matched one of the configured session path prefixes. The tenant ID is
+// the path segment immediately following the matched prefix. The boolean lets
+// callers distinguish "session-prefixed path with a missing tenant segment"
+// from "not a session path at all" (e.g. x509/JWT/registry traffic).
+func (srv *Server) extractTenantID(path string) (string, bool) {
 	// extract tenant ID from the path
 	for _, prefix := range srv.sessionPathPrefixes {
 		remainder, found := strings.CutPrefix(path, prefix)
@@ -235,30 +268,23 @@ func (srv *Server) extractTenantID(path string) string {
 			continue
 		}
 		parts := strings.SplitN(remainder, "/", 2)
-		return parts[0]
+		return parts[0], true
 	}
 
-	return ""
+	return "", false
 }
 
-func (srv *Server) extractSessionDetails(ctx context.Context, httpreq *envoyauth.AttributeContext_HttpRequest, path string) (*http.Cookie, string, bool) {
-	headers := httpreq.GetHeaders()
-	tenantID := srv.extractTenantID(path)
-	if tenantID == "" {
-		slogctx.Debug(ctx, LogPrefixSessionCookie+"failed to extract tenant ID from path", "sessionPathPrefixes", srv.sessionPathPrefixes)
-		return nil, "", false
-	}
-
+func (srv *Server) extractSessionDetails(ctx context.Context, headers map[string]string, tenantID string) (*http.Cookie, bool) {
 	// extract the tenant specific session cookie
 	cookieHeader, found := headers[HeaderCookie]
 	if !found {
 		slogctx.Debug(ctx, LogPrefixSessionCookie+"no cookie header found", "headers", mapKeys(headers))
-		return nil, "", false
+		return nil, false
 	}
 	cookies, err := http.ParseCookie(cookieHeader)
 	if err != nil {
 		slogctx.Debug(ctx, LogPrefixSessionCookie+"failed to parse cookie header", "error", err)
-		return nil, "", false
+		return nil, false
 	}
 	sessionCookieName := SessionCookiePrefix + tenantID
 	var sessionCookie *http.Cookie
@@ -273,10 +299,10 @@ func (srv *Server) extractSessionDetails(ctx context.Context, httpreq *envoyauth
 	// return if no session cookie found
 	if sessionCookie == nil {
 		slogctx.Debug(ctx, LogPrefixSessionCookie+"tenant specific session cookie not found", "name", sessionCookieName)
-		return nil, "", false
+		return nil, false
 	}
 
-	return sessionCookie, tenantID, true
+	return sessionCookie, true
 }
 
 // splitCertHeader splits the XFCC header on , in case there are multiple certificates.

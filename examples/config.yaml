@@ -53,6 +53,48 @@ clientData:
   # Signing client data
   signingKeyIDFilePath: ./keyId
 
+# Audit sink (common-sdk github.com/openkcm/common-sdk/pkg/commoncfg.Audit).
+# When configured, extauthz sends audit log events (unauthenticated bursts and
+# unauthorised requests) to this OTLP logs endpoint (the ALS collector). Leave
+# the whole block out to disable audit delivery (events become no-ops).
+#
+# audit:
+#   endpoint: http://als-collector:4317/v1/logs
+#   httpClient:
+#     timeout: 10s
+#     # In production authenticate to the collector, e.g.:
+#     # mtls:
+#     #   cert: { source: file, file: { path: /etc/extauthz-audit/tls.crt } }
+#     #   certKey: { source: file, file: { path: /etc/extauthz-audit/tls.key } }
+#   # Optional literal string of extra properties added to every OTLP log record.
+#   # additionalProperties: "{ service: extauthz }"
+
+# Valkey-backed detection of unauthenticated request bursts.
+# When rateDetection.enabled is true, extauthz counts UNAUTHENTICATED
+# results per identity (issuer where present, otherwise a coarse per-tenant
+# bucket) in a Valkey, and emits a single audit event per window when the
+# threshold is crossed.
+# Unauthorised (denied / tenant-blocked) requests are audited immediately and do
+# not require Valkey. Requires the audit sink above for events to be delivered.
+#
+# valkey:
+#   address:
+#     value: valkey:6379       # SourceRef: source defaults to "embedded"; use
+#                              # source: file / env for fileRef / env var
+#   prefix: extauthz
+#   secretRef:
+#     type: insecure           # use mtls in production
+#   rateDetection:
+#     enabled: true
+#     threshold: 50            # N unauthenticated requests ...
+#     window: 1m               # ... within this window trips one event
+#     cooldown: 1m             # suppress repeat events per identity/window;
+#                              # should be >= window (defaults to window if unset)
+#     countUnknown: false      # count requests with no credentials at all
+#     queueSize: 1024          # bounded async audit dispatch queue
+#     workers: 4
+#     dispatchTimeout: 10s     # per-job timeout (Valkey observe + audit send)
+
 # Telemetry / OpenTelemetry (commented out by default).
 #
 # Enabling any of telemetry.traces, telemetry.logs, or non-Prometheus
@@ -66,8 +108,8 @@ clientData:
 #   traces:
 #     enabled: true
 #     protocol: grpc            # one of: grpc, http
-#     host:                     # SourceRef; embedded or fileRef
-#       embedded: otel-collector:4317
+#     host:                     # SourceRef; source defaults to "embedded"
+#       value: otel-collector:4317
 #     secretRef:
 #       type: insecure          # use mtls / apiToken / oauth2 / basic in prod
 #   logs:

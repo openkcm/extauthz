@@ -643,7 +643,7 @@ func TestCheckClientCert(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			srv := setupTestServer(t, cedarpolicies, tc.trustedSubjects)
-			result := srv.checkClientCert(t.Context(), tc.certHeader, "GET", "our.service.com", "/foo/bar")
+			result := srv.checkClientCert(t.Context(), tc.certHeader, requestInfo{method: "GET", host: "our.service.com", path: "/foo/bar"})
 
 			require.Equal(t, tc.wantCheckResultCode, result.is, "unexpected result code, info: %s", result.info)
 
@@ -686,7 +686,7 @@ func TestCheckClientCertHeaderParsing(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			srv := setupTestServer(t, cedarpolicies, map[string]string{"CN=minime": "minime-region"})
-			result := srv.checkClientCert(t.Context(), tc.certHeader, "GET", "our.service.com", "/foo/bar")
+			result := srv.checkClientCert(t.Context(), tc.certHeader, requestInfo{method: "GET", host: "our.service.com", path: "/foo/bar"})
 
 			require.Equal(t, tc.wantCheckResultCode, result.is, "unexpected result code, info: %s", result.info)
 		})
@@ -732,7 +732,7 @@ func TestCheckClientCertSubjectValidation(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			srv := setupTestServer(t, cedarpolicies, tc.trustedSubjects)
-			result := srv.checkClientCert(t.Context(), tc.certHeader, "GET", "our.service.com", "/foo/bar")
+			result := srv.checkClientCert(t.Context(), tc.certHeader, requestInfo{method: "GET", host: "our.service.com", path: "/foo/bar"})
 
 			require.Equal(t, tc.wantCheckResultCode, result.is, "unexpected result code, info: %s", result.info)
 		})
@@ -750,7 +750,7 @@ func TestCheckClientCertPolicyEngineErrors(t *testing.T) {
 
 		result := srv.checkClientCert(t.Context(),
 			"Hash=123;Subject=\"CN=minime\";Cert="+validCert,
-			"GET", "our.service.com", "/foo/bar")
+			requestInfo{method: "GET", host: "our.service.com", path: "/foo/bar"})
 
 		require.Equal(t, DENIED, result.is, "expected DENIED from policy engine, info: %s", result.info)
 	})
@@ -775,7 +775,7 @@ func TestCheckClientCertWithSpecialCharacters(t *testing.T) {
 
 		result := srv.checkClientCert(t.Context(),
 			"Hash=123;Cert="+specialCert,
-			"GET", "our.service.com", "/foo/bar")
+			requestInfo{method: "GET", host: "our.service.com", path: "/foo/bar"})
 
 		require.Equal(t, ALLOWED, result.is, "expected ALLOWED, info: %s", result.info)
 	})
@@ -793,7 +793,7 @@ func TestCheckClientCertWithSpecialCharacters(t *testing.T) {
 
 		result := srv.checkClientCert(t.Context(),
 			"Hash=123;Cert="+spaceCert,
-			"GET", "our.service.com", "/foo/bar")
+			requestInfo{method: "GET", host: "our.service.com", path: "/foo/bar"})
 
 		require.Equal(t, ALLOWED, result.is, "expected ALLOWED, info: %s", result.info)
 	})
@@ -811,7 +811,7 @@ func TestCheckClientCertWithSpecialCharacters(t *testing.T) {
 
 		result := srv.checkClientCert(t.Context(),
 			"Hash=123;Cert="+hashCert,
-			"GET", "our.service.com", "/foo/bar")
+			requestInfo{method: "GET", host: "our.service.com", path: "/foo/bar"})
 
 		require.Equal(t, ALLOWED, result.is, "expected ALLOWED, info: %s", result.info)
 	})
@@ -864,7 +864,7 @@ func TestCheckClientCertCertificateWithNoEmail(t *testing.T) {
 
 		result := srv.checkClientCert(t.Context(),
 			"Hash=123;Subject=\"CN=noemail\";Cert="+noEmailCert,
-			"GET", "our.service.com", "/foo/bar")
+			requestInfo{method: "GET", host: "our.service.com", path: "/foo/bar"})
 
 		require.Equal(t, ALLOWED, result.is, "expected ALLOWED, info: %s", result.info)
 		require.Equal(t, "CN=noemail", result.subject)
@@ -1006,7 +1006,7 @@ func TestCheckClientCertCore(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			srv := setupTestServer(t, tc.policy, tc.trustedSubjects)
 
-			result := srv.checkClientCertCore(t.Context(), tc.certInfo, tc.headerSubject, "GET", "our.service.com", "/foo/bar")
+			result := srv.checkClientCertCore(t.Context(), tc.certInfo, tc.headerSubject, requestInfo{method: "GET", host: "our.service.com", path: "/foo/bar"})
 
 			require.Equal(t, tc.wantCheckResultCode, result.is, "unexpected result code, info: %s", result.info)
 
@@ -1070,7 +1070,7 @@ func TestCheckClientCertCorePolicyEngineError(t *testing.T) {
 		notAfter:  time.Now().Add(5 * time.Minute),
 	}
 
-	result := srv.checkClientCertCore(t.Context(), info, "CN=testuser", "GET", "our.service.com", "/foo/bar")
+	result := srv.checkClientCertCore(t.Context(), info, "CN=testuser", requestInfo{method: "GET", host: "our.service.com", path: "/foo/bar"})
 
 	require.Equal(t, UNAUTHENTICATED, result.is, "expected UNAUTHENTICATED, got %v", result.is)
 	require.Contains(t, result.info, "Error from policy engine")

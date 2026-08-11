@@ -2,24 +2,31 @@ package business
 
 import (
 	"context"
+	"crypto/tls"
+	"errors"
 	"fmt"
 
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
 	"github.com/openkcm/common-sdk/pkg/commongrpc"
 	"github.com/openkcm/common-sdk/pkg/commonhttp"
 	"github.com/openkcm/common-sdk/pkg/oidc"
+	"github.com/valkey-io/valkey-go"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 
+	otlpaudit "github.com/openkcm/common-sdk/pkg/otlp/audit"
 	slogctx "github.com/veqryn/slog-context"
 
+	"github.com/openkcm/extauthz/internal/auditqueue"
 	"github.com/openkcm/extauthz/internal/clientdata"
 	"github.com/openkcm/extauthz/internal/config"
 	"github.com/openkcm/extauthz/internal/extauthz"
 	"github.com/openkcm/extauthz/internal/handler"
+	"github.com/openkcm/extauthz/internal/metric"
 	"github.com/openkcm/extauthz/internal/oauth2client"
 	"github.com/openkcm/extauthz/internal/policies/cedarpolicy"
+	"github.com/openkcm/extauthz/internal/ratestore"
 	"github.com/openkcm/extauthz/internal/session"
 )
 
@@ -77,6 +84,53 @@ func createExtAuthZServer(ctx context.Context, cfg *config.Config) (*extauthz.Se
 
 	opts = append(opts, extauthz.WithCSRFSecret(csrfSecret))
 
+	// The audit pipeline is only wired when audit delivery is configured (a
+	// non-empty endpoint) or rate detection is enabled. Otherwise extauthz runs
+	// with the no-op audit logger and rate store and starts no worker goroutines.
+	//
+	// NOTE: cfg.Audit cannot be compared against the zero value to detect
+	// "configured", because commoncfg.Audit embeds an HTTPClient whose Timeout
+	// carries a struct default (10s) that the config loader always applies. The
+	// endpoint is the meaningful signal for whether audit delivery is wanted.
+	auditConfigured := cfg.Audit.Endpoint != ""
+	if auditConfigured || cfg.Valkey.RateDetection.Enabled {
+		if auditConfigured {
+			auditLogger, err := otlpaudit.NewLogger(&cfg.Audit)
+			if err != nil {
+				return nil, fmt.Errorf("creating audit logger: %w", err)
+			}
+
+			opts = append(opts, extauthz.WithAuditLogger(auditLogger))
+		}
+
+		metrics, err := metric.New(nil)
+		if err != nil {
+			return nil, fmt.Errorf("creating audit metrics: %w", err)
+		}
+		opts = append(opts, extauthz.WithMetrics(metrics))
+
+		// Async dispatcher: keeps the Valkey round-trip and audit HTTP POST off
+		// the Check() hot path.
+		queue := auditqueue.New(auditqueue.Options{
+			Metrics:         metrics,
+			Size:            cfg.Valkey.RateDetection.QueueSize,
+			Workers:         cfg.Valkey.RateDetection.Workers,
+			DispatchTimeout: cfg.Valkey.RateDetection.DispatchTimeout,
+		})
+		opts = append(opts, extauthz.WithAuditQueue(queue))
+
+		if cfg.Valkey.RateDetection.Enabled {
+			rateStore, err := createRateStore(ctx, cfg)
+			if err != nil {
+				return nil, fmt.Errorf("creating rate store: %w", err)
+			}
+			opts = append(opts,
+				extauthz.WithRateStore(rateStore),
+				extauthz.WithCountUnknown(cfg.Valkey.RateDetection.CountUnknown),
+			)
+		}
+	}
+
 	// Create the ExtAuthZ server
 	srv, err := extauthz.NewServer(opts...)
 	if err != nil {
@@ -90,13 +144,22 @@ func transportCredentialsFromSecretRef(secref *commoncfg.SecretRef) (credentials
 	case commoncfg.InsecureSecretType:
 		return insecure.NewCredentials(), nil
 	case commoncfg.MTLSSecretType:
-		tlsConfig, err := commoncfg.LoadMTLSConfig(&secref.MTLS)
+		tlsConfig, err := tlsConfigFromSecretRef(secref)
 		if err != nil {
 			return nil, err
 		}
 		return credentials.NewTLS(tlsConfig), nil
 	}
 	return nil, fmt.Errorf("invalid secret type: %s", secref.Type)
+}
+
+// tlsConfigFromSecretRef returns the *tls.Config described by an mTLS SecretRef.
+// It centralises the MTLSSecretType -> LoadMTLSConfig interpretation so callers
+// needing a *tls.Config directly (the Valkey client) and callers needing gRPC
+// transport credentials share one definition of how a SecretRef maps to TLS.
+// Callers must check secref.Type == commoncfg.MTLSSecretType first.
+func tlsConfigFromSecretRef(secref *commoncfg.SecretRef) (*tls.Config, error) {
+	return commoncfg.LoadMTLSConfig(&secref.MTLS)
 }
 
 func createClientDataSigner(ctx context.Context, cfg *config.Config) (*clientdata.Signer, error) {
@@ -183,4 +246,78 @@ func createSessionManager(ctx context.Context, cfg *config.Config) (*session.Man
 		return nil, fmt.Errorf("failed to create session manager: %w", err)
 	}
 	return sm, nil
+}
+
+// createRateStore builds a Valkey-backed rate store for unauthenticated-burst
+// detection. Address/user/password are resolved from the configured SourceRefs;
+// TLS follows the same SecretRef convention as the session manager.
+func createRateStore(ctx context.Context, cfg *config.Config) (*ratestore.ValkeyStore, error) {
+	vc := &cfg.Valkey
+
+	address, err := commoncfg.LoadValueFromSourceRef(vc.Address)
+	if err != nil {
+		return nil, fmt.Errorf("loading valkey address: %w", err)
+	}
+	if len(address) == 0 {
+		return nil, errors.New("valkey address must not be empty when rate detection is enabled")
+	}
+
+	clientOpt := valkey.ClientOption{
+		InitAddress: []string{string(address)},
+	}
+
+	// User and password are optional: an unset SourceRef (empty Source) means
+	// no credential, not an error, so an insecure/no-auth Valkey is supported.
+	if vc.User.Source != "" {
+		user, err := commoncfg.LoadValueFromSourceRef(vc.User)
+		if err != nil {
+			return nil, fmt.Errorf("loading valkey user: %w", err)
+		}
+		if len(user) > 0 {
+			clientOpt.Username = string(user)
+		}
+	}
+
+	if vc.Password.Source != "" {
+		password, err := commoncfg.LoadValueFromSourceRef(vc.Password)
+		if err != nil {
+			return nil, fmt.Errorf("loading valkey password: %w", err)
+		}
+		if len(password) > 0 {
+			clientOpt.Password = string(password)
+		}
+	}
+
+	if vc.SecretRef.Type == commoncfg.MTLSSecretType {
+		tlsConfig, err := tlsConfigFromSecretRef(&vc.SecretRef)
+		if err != nil {
+			return nil, fmt.Errorf("loading valkey mTLS config: %w", err)
+		}
+		clientOpt.TLSConfig = tlsConfig
+	}
+
+	client, err := valkey.NewClient(clientOpt)
+	if err != nil {
+		return nil, fmt.Errorf("creating valkey client: %w", err)
+	}
+
+	slogctx.Info(ctx, "Using Valkey rate store for unauthenticated-burst detection",
+		"threshold", vc.RateDetection.Threshold,
+		"window", vc.RateDetection.Window,
+		"cooldown", vc.RateDetection.Cooldown,
+	)
+
+	store, err := ratestore.New(ratestore.Options{
+		Client:    client,
+		KeyPrefix: vc.Prefix,
+		Threshold: vc.RateDetection.Threshold,
+		Window:    vc.RateDetection.Window,
+		Cooldown:  vc.RateDetection.Cooldown,
+	})
+	if err != nil {
+		client.Close()
+		return nil, fmt.Errorf("creating valkey rate store: %w", err)
+	}
+
+	return store, nil
 }
