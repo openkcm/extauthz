@@ -36,8 +36,9 @@ const (
 	contextKeyIssuer = "issuer"
 
 	// Auth type values
-	authTypeX509 = "x509"
-	authTypeJWT  = "jwt"
+	authTypeX509    = "x509"
+	authTypeJWT     = "jwt"
+	authTypeSession = "session"
 )
 
 // sessionManagerInterface defines the interface for the session manager.
