@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.13.0](https://github.com/openkcm/extauthz/compare/v0.12.0...v0.13.0) (2026-08-17)
+
+
+### Features
+
+* send audit logs to ALS collector ([#336](https://github.com/openkcm/extauthz/issues/336)) ([50b06bf](https://github.com/openkcm/extauthz/commit/50b06bf5f6af6926364034587379f9cb91325237))
+
+
+### Bug Fixes
+
+* **deps:** bump actions/setup-go from 6 to 7 ([#331](https://github.com/openkcm/extauthz/issues/331)) ([392351a](https://github.com/openkcm/extauthz/commit/392351af752beba991f7c8c91bf73f3d0b72a88a))
+* **deps:** bump distroless/static-debian12 from `aef9602` to `f5b485e` ([#334](https://github.com/openkcm/extauthz/issues/334)) ([81ba3da](https://github.com/openkcm/extauthz/commit/81ba3dab2e9224edcfa9aef2757d3a5876d61f72))
+* **deps:** bump distroless/static-debian12 from `d093aa3` to `aef9602` ([#327](https://github.com/openkcm/extauthz/issues/327)) ([7eaa9e9](https://github.com/openkcm/extauthz/commit/7eaa9e98aa0628f7228d939ed24cdfeb86baca3b))
+* **deps:** bump github.com/containerd/containerd from 1.7.19 to 1.7.33 ([#329](https://github.com/openkcm/extauthz/issues/329)) ([ae432df](https://github.com/openkcm/extauthz/commit/ae432df71b07713977378facf4f6db92e9781ac5))
+* **deps:** bump the gomod-group group across 1 directory with 2 updates ([#332](https://github.com/openkcm/extauthz/issues/332)) ([70bdda3](https://github.com/openkcm/extauthz/commit/70bdda30f569d7e288457f44c637b6e1c505ea1c))
+* **deps:** bump the gomod-group group across 1 directory with 5 updates ([#326](https://github.com/openkcm/extauthz/issues/326)) ([702792e](https://github.com/openkcm/extauthz/commit/702792e10bfdedafec9f24b5ac3b570195b0f1d4))
+* **deps:** bump the gomod-group group with 3 updates ([#335](https://github.com/openkcm/extauthz/issues/335)) ([4a83ca1](https://github.com/openkcm/extauthz/commit/4a83ca199a1d2a881bec5ae0b590dea338fb53ea))
+* do not use go tool for installing k3d ([#333](https://github.com/openkcm/extauthz/issues/333)) ([89f3ab2](https://github.com/openkcm/extauthz/commit/89f3ab22d7faba74360d2c57ff4e23e34613a1aa))
+* helm tests ([#322](https://github.com/openkcm/extauthz/issues/322)) ([db23984](https://github.com/openkcm/extauthz/commit/db239847ba02c4ad61e7c7a317846de7a37ebc10))
+* set correct auth type label for session in Cedar policy context ([#343](https://github.com/openkcm/extauthz/issues/343)) ([2604847](https://github.com/openkcm/extauthz/commit/2604847dbab9d260a5afa61dca2d84091e62cfd8))
+* update indirect dependencies to tackle vulnerabilities ([#337](https://github.com/openkcm/extauthz/issues/337)) ([7414790](https://github.com/openkcm/extauthz/commit/7414790d97f5da1ab4af68095cc747e5c336dd52))
+
 ## [0.12.0](https://github.com/openkcm/extauthz/compare/v0.11.3...v0.12.0) (2026-07-01)
 
 
