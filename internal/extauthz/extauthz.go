@@ -313,5 +313,12 @@ func (s *Server) Close() error {
 		_ = s.rateStore.Close()
 	}
 
+	if closer, ok := s.sessionManager.(interface{ Close() error }); ok {
+		err := closer.Close()
+		if err != nil {
+			return oops.Hint("failed to close session manager gRPC connection").Wrap(err)
+		}
+	}
+
 	return nil
 }
