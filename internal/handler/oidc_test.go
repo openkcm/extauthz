@@ -19,6 +19,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-jose/go-jose/v4"
 	"github.com/gofrs/uuid/v5"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
@@ -1220,6 +1221,90 @@ func TestParseAndValidateTokenIntrospectionDisabled(t *testing.T) {
 		// the token is assumed to be active
 		err = hdl.ParseAndValidate(t.Context(), tokenString, "", &claims, false)
 		assert.NoError(t, err)
+	})
+}
+
+func TestCacheDoesNotExtendExpirationOnGet(t *testing.T) {
+	ctx := t.Context()
+
+	t.Run("signing key cache does not extend TTL on access", func(t *testing.T) {
+		// Use a short TTL to test expiration behavior
+		cacheTTL := 80 * time.Millisecond
+
+		hdl, err := NewOIDC(ctx,
+			WithSigningKeyCacheExpiration(cacheTTL),
+		)
+		assert.NoError(t, err)
+
+		// Manually insert an item into the signing key cache
+		cacheKey := "test-provider-key-id"
+		testKey := &jose.JSONWebKey{KeyID: "test-key"}
+		hdl.signingKeyCache.Set(cacheKey, testKey, cacheTTL)
+
+		// Verify item is in cache
+		item := hdl.signingKeyCache.Get(cacheKey)
+		assert.NotNil(t, item, "item should be in cache immediately after set")
+
+		// Strategy: Access the item repeatedly, keeping it "alive" for longer than the original TTL.
+		// If touch-on-hit is enabled, each Get() resets the TTL, so the item would survive.
+		// If touch-on-hit is disabled, the item expires at the original TTL regardless of Gets.
+		//
+		// Timeline (with 80ms TTL):
+		// T=0ms:   Set item (expires at T=80ms without touch, or resets on each Get with touch)
+		// T=30ms:  Get (with touch: expires at T=110ms)
+		// T=60ms:  Get (with touch: expires at T=140ms)
+		// T=90ms:  Get (with touch: expires at T=170ms)
+		// T=100ms: Check - WITHOUT touch: expired at T=80ms, WITH touch: still alive until T=170ms
+
+		time.Sleep(30 * time.Millisecond)
+		item = hdl.signingKeyCache.Get(cacheKey)
+		assert.NotNil(t, item, "item should be in cache at T=30ms")
+
+		time.Sleep(30 * time.Millisecond)
+		item = hdl.signingKeyCache.Get(cacheKey)
+		assert.NotNil(t, item, "item should be in cache at T=60ms")
+
+		time.Sleep(30 * time.Millisecond)
+		// At T=90ms: past original TTL of 80ms
+		// WITHOUT touch-on-hit: item expired at T=80ms, Get returns nil
+		// WITH touch-on-hit: item still alive (last Get at T=60ms extended to T=140ms)
+		item = hdl.signingKeyCache.Get(cacheKey)
+		assert.Nil(t, item, "item should have expired at original TTL (T=80ms), not extended by Get calls")
+	})
+
+	t.Run("introspection cache does not extend TTL on access", func(t *testing.T) {
+		// Use a short TTL to test expiration behavior
+		cacheTTL := 80 * time.Millisecond
+
+		hdl, err := NewOIDC(ctx,
+			WithIntrospectionCacheExpiration(cacheTTL),
+		)
+		assert.NoError(t, err)
+
+		// Manually insert an item into the introspection cache
+		cacheKey := sha256.Sum256([]byte("test-token"))
+		testIntrospection := oidc.Introspection{Active: true}
+		hdl.introspectionCache.Set(cacheKey, testIntrospection, cacheTTL)
+
+		// Verify item is in cache
+		item := hdl.introspectionCache.Get(cacheKey)
+		assert.NotNil(t, item, "item should be in cache immediately after set")
+
+		// Same strategy as above: access repeatedly past the original TTL
+		time.Sleep(30 * time.Millisecond)
+		item = hdl.introspectionCache.Get(cacheKey)
+		assert.NotNil(t, item, "item should be in cache at T=30ms")
+
+		time.Sleep(30 * time.Millisecond)
+		item = hdl.introspectionCache.Get(cacheKey)
+		assert.NotNil(t, item, "item should be in cache at T=60ms")
+
+		time.Sleep(30 * time.Millisecond)
+		// At T=90ms: past original TTL of 80ms
+		// WITHOUT touch-on-hit: item expired at T=80ms, Get returns nil
+		// WITH touch-on-hit: item still alive (last Get at T=60ms extended to T=140ms)
+		item = hdl.introspectionCache.Get(cacheKey)
+		assert.Nil(t, item, "item should have expired at original TTL (T=80ms), not extended by Get calls")
 	})
 }
 
