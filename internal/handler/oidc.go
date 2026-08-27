@@ -115,8 +115,14 @@ func NewOIDC(ctx context.Context, opts ...OIDCOption) (*OIDC, error) {
 		}
 	}
 
-	handler.signingKeyCache = ttlcache.New(ttlcache.WithTTL[string, *jose.JSONWebKey](handler.signingKeyCacheExpiration))
-	handler.introspectionCache = ttlcache.New(ttlcache.WithTTL[[32]byte, oidc.Introspection](handler.introspectionCacheExpiration))
+	handler.signingKeyCache = ttlcache.New(
+		ttlcache.WithTTL[string, *jose.JSONWebKey](handler.signingKeyCacheExpiration),
+		ttlcache.WithDisableTouchOnHit[string, *jose.JSONWebKey](),
+	)
+	handler.introspectionCache = ttlcache.New(
+		ttlcache.WithTTL[[32]byte, oidc.Introspection](handler.introspectionCacheExpiration),
+		ttlcache.WithDisableTouchOnHit[[32]byte, oidc.Introspection](),
+	)
 	go handler.signingKeyCache.Start()
 	go handler.introspectionCache.Start()
 	go func(ctx context.Context, h *OIDC) {
