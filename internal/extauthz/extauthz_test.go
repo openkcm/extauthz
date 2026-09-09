@@ -12,8 +12,8 @@ import (
 	"os"
 	"testing"
 	"time"
+	"uuid"
 
-	"github.com/gofrs/uuid/v5"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -68,7 +68,7 @@ func createURLEncodedPEMCert(notBefore, notAfter time.Time) (string, error) {
 
 func TestMain(m *testing.M) {
 	// create an RSA key pair
-	rsaKeyID = uuid.Must(uuid.NewV4()).String()
+	rsaKeyID = uuid.New().String()
 
 	rsaPrivateKeyLocal, err := rsa.GenerateKey(rand.Reader, 4096)
 	if err != nil {

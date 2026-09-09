@@ -1,15 +1,12 @@
 module github.com/openkcm/extauthz
 
-go 1.26.5
-
-toolchain go1.26.6
+go 1.27.1
 
 require (
 	github.com/cedar-policy/cedar-go v1.8.0
 	github.com/envoyproxy/go-control-plane/envoy v1.39.0
 	github.com/go-jose/go-jose/v4 v4.1.5
 	github.com/goccy/go-yaml v1.19.2
-	github.com/gofrs/uuid/v5 v5.5.1
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/go-cmp v0.7.0
 	github.com/jellydator/ttlcache/v3 v3.4.1
