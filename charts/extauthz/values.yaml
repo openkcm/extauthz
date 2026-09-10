@@ -231,7 +231,7 @@ config:
   status:
     enabled: true
     address: :8080
-    profiling: true
+    profiling: false
 
   # Based on github.com/openkcm/extauthz/pkg/config
   grpcServer:
