@@ -38,12 +38,10 @@ func startValkeyWithAddr(t *testing.T) (string, valkey.Client) {
 	ctx := context.Background()
 
 	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
-		ContainerRequest: testcontainers.ContainerRequest{
-			Image:        "valkey/valkey:8-alpine",
-			ExposedPorts: []string{"6379/tcp"},
-			WaitingFor:   wait.ForListeningPort("6379/tcp").WithStartupTimeout(60 * time.Second),
-		},
-		Started: true,
+		Image:        "valkey/valkey:8-alpine",
+		ExposedPorts: []string{"6379/tcp"},
+		WaitingFor:   wait.ForListeningPort("6379/tcp").WithStartupTimeout(60 * time.Second),
+		Started:      true,
 	})
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = container.Terminate(ctx) })

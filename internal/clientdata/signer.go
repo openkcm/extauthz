@@ -113,11 +113,9 @@ func (c *Signer) create(opts ...Option) (*auth.ClientData, error) {
 		return nil, fmt.Errorf("failed to get signing key ID: %w", err)
 	}
 	builder := &clientDataBuilder{
-		ClientData: auth.ClientData{
-			SignatureAlgorithm: auth.SignatureAlgorithmRS256,
-			KeyID:              signingKeyID,
-		},
-		signer: c,
+		SignatureAlgorithm: auth.SignatureAlgorithmRS256,
+		KeyID:              signingKeyID,
+		signer:             c,
 	}
 
 	for _, opt := range opts {
