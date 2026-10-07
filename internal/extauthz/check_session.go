@@ -70,7 +70,6 @@ func (srv *Server) checkSession(ctx context.Context, sessionCookie *http.Cookie,
 
 	// check the policies
 	slogctx.Debug(ctx, "Checking policies for session",
-		"subject", sess.Subject,
 		"issuer", sess.Issuer,
 		"method", req.method,
 		"host", req.host,
