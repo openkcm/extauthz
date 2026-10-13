@@ -3,6 +3,7 @@ package business
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
 	"github.com/stretchr/testify/require"
@@ -35,6 +36,26 @@ func TestCreateRateStore_AddressLoadError(t *testing.T) {
 
 	_, err := createRateStore(context.Background(), cfg)
 	require.ErrorContains(t, err, "loading valkey address")
+}
+
+// TestCreateRateStore_SentinelInvalidTopologyRefreshInterval asserts that the
+// sentinel fields (MasterSet and TopologyRefreshInterval) are plumbed from the
+// Valkey config into the valkey client's SentinelOption. A negative
+// TopologyRefreshInterval is rejected eagerly by valkey.NewClient, but only on
+// the sentinel path, which is taken only when MasterSet is set — so this error
+// confirms both fields are actually wired through.
+func TestCreateRateStore_SentinelInvalidTopologyRefreshInterval(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{}
+	cfg.Valkey.Address = commoncfg.SourceRef{Source: commoncfg.EmbeddedSourceValue, Value: "localhost:26379"}
+	cfg.Valkey.MasterSet = "mymaster"
+	cfg.Valkey.TopologyRefreshInterval = -time.Second
+	cfg.Valkey.RateDetection.Enabled = true
+
+	_, err := createRateStore(context.Background(), cfg)
+	require.ErrorContains(t, err, "creating valkey client")
+	require.ErrorContains(t, err, "TopologyRefreshInterval")
 }
 
 func TestTLSConfigFromSecretRef(t *testing.T) {

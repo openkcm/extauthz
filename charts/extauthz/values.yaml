@@ -293,17 +293,22 @@ config:
   # +docs:property
   # valkey:
   #   address:
-  #     value: valkey:6379       # SourceRef; source defaults to "embedded"
+  #     value: valkey:6379        # SourceRef; source defaults to "embedded". A comma-separated list of addresses. Multiple addresses may be added if valkey is running in a cluster mode.
   #   prefix: extauthz
   #   secretRef:
-  #     type: insecure           # use mtls in production
+  #     type: insecure            # use mtls in production
+  #   masterSet: ""               # If set, valkey connects to the sentinel cluster.
+  #   topologyRefreshInterval: 5s # A few seconds is a reasonable value; 5s works well.
+                                  # There is no benefit to a very small interval:
+                                  # it only adds load on the sentinels, and recovery
+                                  # just needs to catch a missed event, not react instantly.
   #   rateDetection:
   #     enabled: true
-  #     threshold: 50            # N unauthenticated requests ...
-  #     window: 1m               # ... within this window trips one event
-  #     cooldown: 1m             # suppress repeat events per identity/window;
-  #                              # should be >= window (defaults to window if unset)
-  #     countUnknown: false      # count requests with no credentials at all
-  #     queueSize: 1024          # bounded async audit dispatch queue
+  #     threshold: 50             # N unauthenticated requests ...
+  #     window: 1m                # ... within this window trips one event
+  #     cooldown: 1m              # suppress repeat events per identity/window;
+  #                               # should be >= window (defaults to window if unset)
+  #     countUnknown: false       # count requests with no credentials at all
+  #     queueSize: 1024           # bounded async audit dispatch queue
   #     workers: 4
-  #     dispatchTimeout: 10s     # per-job timeout (Valkey observe + audit send)
+  #     dispatchTimeout: 10s      # per-job timeout (Valkey observe + audit send)
