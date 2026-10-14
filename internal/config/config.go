@@ -51,6 +51,16 @@ type Valkey struct {
 	// request bursts. When disabled the whole feature is a no-op and Valkey is
 	// never contacted.
 	RateDetection RateDetection `yaml:"rateDetection"`
+
+	// MasterSet is the master set name. If MasterSet is set, valkey connects to the sentinel cluster.
+	MasterSet string `yaml:"masterSet"`
+	// TopologyRefreshInterval, when > 0, periodically reconciles this client's
+	// targets with the sentinels, in addition to reacting to +switch-master
+	// PUB/SUB events. Zero disables it (the default); a negative value is
+	// rejected.
+	//
+	// See [valkey.SentinelOption.TopologyRefreshInterval] for details.
+	TopologyRefreshInterval time.Duration `yaml:"topologyRefreshInterval"`
 }
 
 // RateDetection configures threshold-over-window detection of unauthenticated

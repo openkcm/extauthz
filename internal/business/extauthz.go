@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
 	"github.com/openkcm/common-sdk/pkg/commongrpc"
@@ -261,9 +262,10 @@ func createRateStore(ctx context.Context, cfg *config.Config) (*ratestore.Valkey
 	if len(address) == 0 {
 		return nil, errors.New("valkey address must not be empty when rate detection is enabled")
 	}
+	addressList := strings.Split(string(address), ",")
 
 	clientOpt := valkey.ClientOption{
-		InitAddress: []string{string(address)},
+		InitAddress: addressList,
 	}
 
 	// User and password are optional: an unset SourceRef (empty Source) means
@@ -294,6 +296,14 @@ func createRateStore(ctx context.Context, cfg *config.Config) (*ratestore.Valkey
 			return nil, fmt.Errorf("loading valkey mTLS config: %w", err)
 		}
 		clientOpt.TLSConfig = tlsConfig
+	}
+
+	clientOpt.Sentinel = valkey.SentinelOption{
+		MasterSet:               vc.MasterSet,
+		TopologyRefreshInterval: vc.TopologyRefreshInterval,
+		Username:                clientOpt.Username,
+		Password:                clientOpt.Password,
+		TLSConfig:               clientOpt.TLSConfig,
 	}
 
 	client, err := valkey.NewClient(clientOpt)
