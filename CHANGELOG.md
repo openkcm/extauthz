@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.14.0](https://github.com/openkcm/extauthz/compare/v0.13.0...v0.14.0) (2026-10-15)
+
+
+### Features
+
+* **valkey:** sentinel mode support ([#367](https://github.com/openkcm/extauthz/issues/367)) ([a9a3c28](https://github.com/openkcm/extauthz/commit/a9a3c28846d549fe39011a40a4b9db95e73df394))
+
+
+### Bug Fixes
+
+* cancel context on ServerOption failure in NewServer ([#339](https://github.com/openkcm/extauthz/issues/339)) ([67e9f03](https://github.com/openkcm/extauthz/commit/67e9f03cbfc9f6c4f3da0c5b4640b1c9aec59522))
+* **deps:** bump distroless/static-debian12 from `1b7b9f0` to `afa5c87` ([#352](https://github.com/openkcm/extauthz/issues/352)) ([686f724](https://github.com/openkcm/extauthz/commit/686f724840ea3fe76343e646aa25260bc2eae777))
+* **deps:** bump distroless/static-debian12 from `f5b485e` to `1b7b9f0` ([#346](https://github.com/openkcm/extauthz/issues/346)) ([028d069](https://github.com/openkcm/extauthz/commit/028d069347d788bca2aed5553c64c5a7edf792cf))
+* **deps:** bump github.com/moby/go-archive from 0.2.0 to 0.3.0 ([#350](https://github.com/openkcm/extauthz/issues/350)) ([e2d7d74](https://github.com/openkcm/extauthz/commit/e2d7d74652ade9d6e80b092447a602cddd06186a))
+* **deps:** bump golang from 1.26 to 1.27 in the docker-group group ([#351](https://github.com/openkcm/extauthz/issues/351)) ([0d6d7df](https://github.com/openkcm/extauthz/commit/0d6d7dfba3494932569a940c080b92f6dd11d1f0))
+* **deps:** bump the gomod-group group across 1 directory with 15 updates ([#348](https://github.com/openkcm/extauthz/issues/348)) ([428cbbc](https://github.com/openkcm/extauthz/commit/428cbbcbcfc90093d0e3fa13330ea23e585f4ec2))
+* **deps:** bump the gomod-group group across 1 directory with 7 updates ([#356](https://github.com/openkcm/extauthz/issues/356)) ([9b68692](https://github.com/openkcm/extauthz/commit/9b68692e557ba8ef50bbabb16618971f561ab31f))
+* **deps:** bump the gomod-group group across 1 directory with 9 updates ([#368](https://github.com/openkcm/extauthz/issues/368)) ([815ed1f](https://github.com/openkcm/extauthz/commit/815ed1f60f1af94922c3af7b69a02ab715bfa614))
+* **deps:** bump the gomod-group group with 2 updates ([#358](https://github.com/openkcm/extauthz/issues/358)) ([db0b5d4](https://github.com/openkcm/extauthz/commit/db0b5d4feeec4b93b73c0d54afa4fa44f06d0a9b))
+* **deps:** bump the gomod-group group with 3 updates ([#361](https://github.com/openkcm/extauthz/issues/361)) ([b913cbd](https://github.com/openkcm/extauthz/commit/b913cbd6242414ba03cc0d3f8f781324893d25c4))
+* **deps:** bump the gomod-group group with 4 updates ([#363](https://github.com/openkcm/extauthz/issues/363)) ([d4e9781](https://github.com/openkcm/extauthz/commit/d4e97813d7cfb9654a3b0be31562bf4ec364eec0))
+* **deps:** bump the gomod-group group with 5 updates ([#362](https://github.com/openkcm/extauthz/issues/362)) ([a9cc575](https://github.com/openkcm/extauthz/commit/a9cc5750195b3caf062f2b447cae03d530928df0))
+* **deps:** bump the gomod-group group with 8 updates ([#357](https://github.com/openkcm/extauthz/issues/357)) ([630e7ac](https://github.com/openkcm/extauthz/commit/630e7ac8f258543c1c46090c6fd0a081b9dcf7cd))
+* disable exhaustruct_v5 linter ([#355](https://github.com/openkcm/extauthz/issues/355)) ([52cd294](https://github.com/openkcm/extauthz/commit/52cd2945a68ef04ee698ee500daf00c78b90003f))
+* disable profiling endpoint by default ([#359](https://github.com/openkcm/extauthz/issues/359)) ([b6a3a8f](https://github.com/openkcm/extauthz/commit/b6a3a8f4902223c94227bd2df63226bd8b657853))
+* do not extend cache TTL on access ([#354](https://github.com/openkcm/extauthz/issues/354)) ([7127953](https://github.com/openkcm/extauthz/commit/71279536c9be2e2341f5ecd2fc03a18ea1e936ba))
+* set toolchain=go1.26.6 ([#349](https://github.com/openkcm/extauthz/issues/349)) ([92dd3b0](https://github.com/openkcm/extauthz/commit/92dd3b086a874ae330168492082bdc8f9c67f1ca))
+* update the README.md to include project details and security policy URL ([5afd061](https://github.com/openkcm/extauthz/commit/5afd061fad929c76fc7b431500e48a6d5c8bf0e7))
+
 ## [0.13.0](https://github.com/openkcm/extauthz/compare/v0.12.0...v0.13.0) (2026-08-17)
 
 
