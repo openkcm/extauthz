@@ -173,7 +173,6 @@ func (srv *Server) Check(ctx context.Context, req *envoyauth.CheckRequest) (*env
 	ctx = slogctx.WithGroup(ctx, "result")
 	slogctx.Debug(ctx, LogPrefixCheck+"overall result: access "+result.is.String(),
 		"info", result.info,
-		"subject", result.subject,
 	)
 
 	// Decorate the span with the post-merge decision and credential channel.
