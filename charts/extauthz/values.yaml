@@ -178,14 +178,18 @@ tmpVolume:
   # -- Size limit of the `/tmp` volume.
   sizeLimit: 64Mi
 
-# -- CPU and memory of the ExtAuthZ container. Requests are needed for the autoscaler
-# (`hpa`). No CPU limit is set by default, so request handling is not throttled.
+# -- CPU, memory and ephemeral storage of the ExtAuthZ container. Requests are needed for
+# the autoscaler (`hpa`). No CPU limit is set by default, so request handling is not
+# throttled. The ephemeral-storage limit covers the container's logs and the `/tmp` volume
+# (`tmpVolume.sizeLimit`); a pod that exceeds it is evicted.
 resources:
   requests:
     cpu: 100m
     memory: 128Mi
+    ephemeral-storage: 128Mi
   limits:
     memory: 512Mi
+    ephemeral-storage: 512Mi
 
 # -- Startup probe: gives ExtAuthZ time to load its policies and keys before the liveness
 # probe applies (here up to 60 seconds). Requires `config.status.enabled: true`.
