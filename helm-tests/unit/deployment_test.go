@@ -33,6 +33,8 @@ func TestDeployment(t *testing.T) {
 				"enableServiceLinks: false",
 				"runAsNonRoot: true",
 				"runAsUser: 65532",
+				"ephemeral-storage: 128Mi",
+				"ephemeral-storage: 512Mi",
 				"readOnlyRootFilesystem: true",
 				"path: /probe/liveness",
 				"path: /probe/readiness",
