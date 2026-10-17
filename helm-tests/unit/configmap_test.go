@@ -69,6 +69,41 @@ func TestConfigMap(t *testing.T) {
 				"workers: 4",
 			},
 		},
+		{
+			name:   "application block is built from the chart values",
+			values: "--set config.environment=staging --set config.labels.team=kms",
+			expected: []string{
+				"application:",
+				"name: " + appName,
+				"environment: staging",
+				"team: kms",
+			},
+			// The flat chart keys must not reach the ExtAuthZ configuration, which
+			// rejects unknown keys at startup.
+			unexpected: []string{
+				"\n    environment:",
+				"\n    labels:",
+			},
+		},
+		{
+			name:   "chart-only keys are not rendered into config.yaml",
+			values: "--set config.isImmutable=true",
+			expected: []string{
+				"immutable: true",
+			},
+			unexpected: []string{
+				"isImmutable",
+			},
+		},
+		{
+			name:   "all configuration sections are passed through",
+			values: "--set config.featureFlags.enabled=true --set config.csrfSecret.source=file --set config.csrfSecret.file.path=/etc/csrf/csrf_secret",
+			expected: []string{
+				"featureFlags:",
+				"csrfSecret:",
+				"path: /etc/csrf/csrf_secret",
+			},
+		},
 	}
 
 	for _, tt := range tests {

@@ -1,0 +1,52 @@
+OpenKCM ExtAuthZ is deployed as {{ include "extauthz.fullname" . }} in namespace {{ include "extauthz.namespace" . }}.
+{{- with .Values.service.ports }}
+ext_authz gRPC service (for Envoy Gateway):  {{ include "extauthz.fullname" $ }}.{{ include "extauthz.namespace" $ }}.svc:{{ (index . 0).port }}
+{{- end }}
+Configuration:                               ConfigMap {{ include "extauthz.configMapName" . }}
+
+The pods mount these volumes, which this chart does not create. They must exist in
+namespace {{ include "extauthz.namespace" . }} before the pods can start:
+{{- range .Values.extraVolumes }}
+{{- if .configMap }}
+  - ConfigMap {{ .configMap.name }}
+{{- else if .secret }}
+  - Secret {{ .secret.secretName }}
+{{- else if .projected }}
+{{- range .projected.sources }}
+{{- if .configMap }}
+  - ConfigMap {{ .configMap.name }}
+{{- else if .secret }}
+  - Secret {{ .secret.name }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
+
+Check the pods:
+  kubectl --namespace {{ include "extauthz.namespace" . }} get pods -l app.kubernetes.io/instance={{ .Release.Name }},app.kubernetes.io/name={{ include "extauthz.name" . }}
+{{- $cfg := .Values.config }}
+{{- $warnings := list }}
+{{- if not .Values.networkPolicy.enabled }}
+{{- $warnings = append $warnings "networkPolicy.enabled is false: the ext_authz gRPC API has no authentication of its own. Allow only Envoy Gateway to call it, with a NetworkPolicy or service mesh policy." }}
+{{- end }}
+{{- if and $cfg.sessionManager $cfg.sessionManager.enabled (not (and $cfg.csrfSecret (or $cfg.csrfSecret.value $cfg.csrfSecret.file $cfg.csrfSecret.env))) }}
+{{- $warnings = append $warnings "config.sessionManager is enabled but config.csrfSecret is not set. Set it to the same secret as Session Manager's csrfSecret (at least 32 bytes)." }}
+{{- end }}
+{{- if and $cfg.grpcServer $cfg.grpcServer.flags $cfg.grpcServer.flags.reflection }}
+{{- $warnings = append $warnings "config.grpcServer.flags.reflection is true. Switch it off in production." }}
+{{- end }}
+{{- if and $cfg.status $cfg.status.profiling }}
+{{- $warnings = append $warnings "config.status.profiling is true: profiling endpoints are served without authentication. Switch it off in production." }}
+{{- end }}
+{{- if and $cfg.logger (eq (toString $cfg.logger.level) "debug") }}
+{{- $warnings = append $warnings "config.logger.level is debug, which logs request details. Use info in production." }}
+{{- end }}
+{{- if $warnings }}
+
+WARNINGS:
+{{- range $warnings }}
+  - {{ . }}
+{{- end }}
+{{- end }}
+
+Documentation: https://openkcm.io/components/cmk/security/extauthz-config
