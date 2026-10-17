@@ -109,11 +109,15 @@ pod:
   # -- Additional labels for the pods.
   labels: {}
 
-  # -- Pod security context. The defaults run ExtAuthZ as a non-root user with the
-  # runtime's default seccomp profile. The published and the development images run
-  # as non-root.
+  # -- Pod security context. The defaults run ExtAuthZ as user and group 65532, the
+  # non-root user of the published image, with the runtime's default seccomp profile.
+  # `runAsUser` is set because Kubernetes enforces `runAsNonRoot` only for images
+  # with a numeric user; an image that names its user (`USER nonroot`) would be
+  # refused.
   securityContext:
     runAsNonRoot: true
+    runAsUser: 65532
+    runAsGroup: 65532
     seccompProfile:
       type: RuntimeDefault
 

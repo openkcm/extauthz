@@ -32,6 +32,7 @@ func TestDeployment(t *testing.T) {
 				"automountServiceAccountToken: false",
 				"enableServiceLinks: false",
 				"runAsNonRoot: true",
+				"runAsUser: 65532",
 				"readOnlyRootFilesystem: true",
 				"path: /probe/liveness",
 				"path: /probe/readiness",

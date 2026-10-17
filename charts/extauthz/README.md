@@ -126,7 +126,7 @@ are not production-ready.
 
 | Setting | Default |
 | --- | --- |
-| Pod | Non-root, `RuntimeDefault` seccomp profile, no ServiceAccount token, no Service environment variables |
+| Pod | Non-root (user and group 65532), `RuntimeDefault` seccomp profile, no ServiceAccount token, no Service environment variables |
 | Container | No privilege escalation, all capabilities dropped, read-only root filesystem, writable `/tmp` |
 | gRPC reflection | Off |
 | Profiling endpoints | Off |
