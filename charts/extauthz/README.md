@@ -119,7 +119,7 @@ are not production-ready.
 | `config.sessionManager` | disabled | Browser sessions through Session Manager |
 | `config.csrfSecret` | not set | Required with `sessionManager`; the same bytes as Session Manager's secret |
 | `config.audit`, `config.valkey` | not set | Audit events and burst detection |
-| `resources` | 100m CPU, 128Mi memory requested; 512Mi memory limit | |
+| `resources` | 100m CPU, 128Mi memory and 128Mi ephemeral storage requested; 512Mi memory and 512Mi ephemeral storage limits | |
 | `hpa.enabled` | `false` | Autoscale on CPU and memory |
 
 ## Security defaults
