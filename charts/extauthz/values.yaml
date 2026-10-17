@@ -1,183 +1,312 @@
-# Default values for extauthz.
-# This is a YAML-formatted file.
-# Declare variables to be passed into your templates.
+# Default values for the OpenKCM ExtAuthZ chart.
+#
+# ExtAuthZ is an Envoy ext_authz service. Envoy Gateway sends every protected request
+# to its gRPC API (port 9092). ExtAuthZ authenticates the caller (client certificate,
+# bearer token or browser session), evaluates Cedar policies, and on success adds a
+# signed `x-client-data` header for the backend (CMK). Its status server (port 8080 in
+# this chart) serves the probes.
+#
+# Layout of this file:
+#   1. Names and labels
+#   2. Workload: replicas, image, pod and container settings, probes, resources
+#   3. Networking: service, ports, network policy
+#   4. Volumes: the policies, trusted subjects and signing keys the pods mount
+#   5. Extension points: extra containers, environment variables
+#   6. config: the ExtAuthZ configuration, rendered into /etc/extauthz/config.yaml
+#
+# Full reference of the ExtAuthZ configuration:
+#   https://openkcm.io/components/cmk/security/extauthz-config
+#
+# Comments starting with "# --" document a value (helm-docs format).
 
-# Override the "name" value, which is used to annotate some of
-# the resources that are created by this Chart (using "app.kubernetes.io/name").
-# +docs:property
+###############################################################################
+# 1. Names and labels
+###############################################################################
+
+# -- Override the chart name. Used in resource names, in the `app.kubernetes.io/name`
+# label and as `application.name` in the configuration.
 nameOverride: ""
 
-# Override the "fullname" value. This value is used as part of
-# most of the names of the resources created by this Helm chart.
-# +docs:property
+# -- Override the full name of all resources. Default: `<release name>-extauthz`, or
+# the release name if it already contains `extauthz`.
 fullnameOverride: ""
 
-# This namespace allows you to define where the services are installed into.
-# If not set then they use the namespace of the release.
-# This is helpful when installing a chart dependency (sub chart).
+# -- Namespace for all resources. Empty: the namespace of the Helm release. Usually the
+# namespace of Envoy Gateway, for example `envoy-gateway-system`.
 namespace: ""
 
-# This sets the container image more information can be found here: https://kubernetes.io/docs/concepts/containers/images/
+# -- Labels added to every resource of the chart.
+commonLabels: {}
+
+###############################################################################
+# 2. Workload
+###############################################################################
+
+# -- Number of ExtAuthZ pods. Ignored when `hpa.enabled` is true. Every API request
+# passes ExtAuthZ, so use two or more in production.
+replicaCount: 1
+
+# -- Number of old ReplicaSets kept for `kubectl rollout undo`.
+revisionHistoryLimit: 10
+
+# -- Deployment update strategy. Empty uses the Kubernetes default (RollingUpdate with
+# 25% maxSurge and 25% maxUnavailable). For zero-downtime updates with few replicas:
+#   strategy:
+#     type: RollingUpdate
+#     rollingUpdate: { maxSurge: 1, maxUnavailable: 0 }
+strategy: {}
+
 image:
-  # The container registry to pull the image from.
-  # For example:
-  #   registry: ghcr.io/openkcm
-  #   repository: images/checker
-  # +docs:property
+  # -- Container registry of the image. Set to "" when `repository` contains the full
+  # image name.
   registry: ghcr.io/openkcm
 
-  # The container image
-  # +docs:property
-  repository: images/checker
+  # -- Image repository within `image.registry`. Release images are published as
+  # `ghcr.io/openkcm/extauthz/images/extauthz`.
+  repository: extauthz/images/extauthz
 
-  # Override the image tag to deploy by setting this variable.
-  # +docs:property
+  # -- Image tag, for example `v0.14.0`. **Required** unless `image.digest` is set; the
+  # chart does not fall back to the chart's appVersion.
   tag: ""
 
-  # Setting a digest will override any tag.
-  # +docs:property
-  # digest: sha256:0e072dddd1f7f8fc8909a2ca6f65e76c5f0d2fcfb8be47935ae3457e8bbceb20
+  # -- Image digest, for example `sha256:0e07…`. Takes precedence over `image.tag`.
+  digest: ""
 
-  # Kubernetes imagePullPolicy.
+  # -- Kubernetes image pull policy: `IfNotPresent`, `Always` or `Never`.
   pullPolicy: IfNotPresent
 
-  # # Setting the arguments for the container
-  # # +docs:property
-  # args:
-  #   - --graceful-shutdown=2
-  #   - --graceful-message=Graceful shutdown in %d seconds
+  # -- Override the container command, as a list or a single string. Empty uses the
+  # image's entrypoint.
+  command: []
 
-# This is for the secretes for pulling an image from a private repository more information can be found here: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
-imagePullSecrets:
-  - name: "registry-access"
+  # -- Arguments for ExtAuthZ. Supported flags:
+  #   --graceful-shutdown=<seconds>          wait after SIGTERM before exiting (default 1)
+  #   --graceful-shutdown-message=<format>   message printed during that wait
+  # Example: ["--graceful-shutdown=5"]
+  args: []
 
-# This section builds out the service account more information can be found here: https://kubernetes.io/docs/concepts/security/service-accounts/
+# -- Secrets with credentials for pulling the image from a private registry.
+# Example: `[{ name: registry-access }]`
+imagePullSecrets: []
+
 serviceAccount:
-  # Specifies whether a service account should be created
+  # -- Create a ServiceAccount for ExtAuthZ. If false, `serviceAccount.name` (or
+  # `default`) must exist.
   create: true
-  # Automatically mount a ServiceAccount's API credentials?
-  automount: true
-  # Annotations to add to the service account
+  # -- Mount the ServiceAccount token. ExtAuthZ does not call the Kubernetes API; the pod
+  # never mounts the token, whatever this value is.
+  automount: false
+  # -- Annotations for the ServiceAccount, for example for workload identity.
   annotations: {}
-  # The name of the service account to use.
-  # If not set and create is true, a name is generated using the fullname template
+  # -- Name of the ServiceAccount. Empty with `create: true`: the chart's full name.
   name: ""
 
 pod:
-  # This is for setting Kubernetes Annotations to a Pod.
-  # For more information checkout: https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations/
-  annotations: { }
+  # -- Annotations for the pods, for example for a service mesh. The chart always adds
+  # `checksum/config`, which restarts the pods when the configuration changes.
+  annotations: {}
 
-  # This is for setting Kubernetes Labels to a Pod.
-  # For more information checkout: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/
+  # -- Additional labels for the pods.
   labels: {}
 
-  securityContext: {}
-    # fsGroup: 2000
+  # -- Pod security context. The defaults run ExtAuthZ as a non-root user with the
+  # runtime's default seccomp profile. The published and the development images run
+  # as non-root.
+  securityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+
+  # -- Inject environment variables for the Services of the namespace. ExtAuthZ does not
+  # need them.
+  enableServiceLinks: false
+
+  # -- PriorityClass of the pods. ExtAuthZ is on the path of every API request; consider
+  # a high priority class.
+  priorityClassName: ""
+
+  # -- Seconds the pod has to shut down after SIGTERM. Null: the Kubernetes default
+  # (30). Keep it longer than `--graceful-shutdown`.
+  terminationGracePeriodSeconds: null
 
   disruptionBudget:
-    # Enable or disable the PodDisruptionBudget resource.
-    #
-    # This prevents downtime during voluntary disruptions such as during a Node upgrade.
-    # For example, the PodDisruptionBudget will block `kubectl drain`
-    # Pod is currently running.
+    # -- Create a PodDisruptionBudget, which limits how many pods voluntary disruptions
+    # such as node drains may take down at once.
     enabled: false
-
-    # This configures the minimum available pods for disruptions. It can either be set to
-    # an integer (e.g. 1) or a percentage value (e.g. 25%).
-    # It cannot be used if `maxUnavailable` is set.
-    # +docs:property
-    # +docs:type=unknown
+    # -- Minimum number (for example `1`) or percentage (for example `50%`) of pods that
+    # must stay available. Do not set together with `maxUnavailable`. With a single
+    # replica, `minAvailable: 1` blocks node drains.
     # minAvailable: 1
-
-    # This configures the maximum unavailable pods for disruptions. It can either be set to
-    # an integer (e.g. 1) or a percentage value (e.g. 25%).
-    # it cannot be used if `minAvailable` is set.
-    # +docs:property
-    # +docs:type=unknown
+    # -- Maximum number or percentage of pods that may be unavailable. Default when
+    # neither value is set: `1`.
     # maxUnavailable: 1
-  nodeSelector: { }
-  tolerations: [ ]
-  affinity: { }
+
+  # -- Node labels the pods must be scheduled on.
+  nodeSelector: {}
+
+  # -- Tolerations for node taints.
+  tolerations: []
+
+  # -- Affinity rules, for example to place pods on different nodes.
+  affinity: {}
+
+  # -- Topology spread constraints, for example across zones:
+  #   - maxSkew: 1
+  #     topologyKey: topology.kubernetes.io/zone
+  #     whenUnsatisfiable: ScheduleAnyway
+  #     labelSelector:
+  #       matchLabels: { app.kubernetes.io/name: extauthz }
   topologySpreadConstraints: []
 
-securityContext: {}
-#  allowPrivilegeEscalation: false
-#  capabilities:
-#    drop:
-#      - ALL
-#  readOnlyRootFilesystem: true
-#  privileged: false
-#  runAsNonRoot: true
-#  runAsGroup: 65532
-#  runAsUser: 65532
-#  seccompProfile:
-#    type: RuntimeDefault
+# -- Container security context. The defaults forbid privilege escalation, drop all Linux
+# capabilities and make the root filesystem read-only; `/tmp` is a writable emptyDir (see
+# `tmpVolume`).
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
 
-# This is for setting up a service more information can be found here: https://kubernetes.io/docs/concepts/services-networking/service/
+tmpVolume:
+  # -- Mount a writable emptyDir at `/tmp`. Needed with a read-only root filesystem.
+  enabled: true
+  # -- Size limit of the `/tmp` volume.
+  sizeLimit: 64Mi
+
+# -- CPU and memory of the ExtAuthZ container. Requests are needed for the autoscaler
+# (`hpa`). No CPU limit is set by default, so request handling is not throttled.
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    memory: 512Mi
+
+# -- Startup probe: gives ExtAuthZ time to load its policies and keys before the liveness
+# probe applies (here up to 60 seconds). Requires `config.status.enabled: true`.
+startupProbe:
+  httpGet:
+    path: /probe/liveness
+    port: http-status
+  periodSeconds: 2
+  failureThreshold: 30
+
+# -- Liveness probe: restarts the container when the process no longer responds.
+livenessProbe:
+  httpGet:
+    path: /probe/liveness
+    port: http-status
+  periodSeconds: 10
+  timeoutSeconds: 2
+  failureThreshold: 3
+
+# -- Readiness probe: ExtAuthZ is ready when its gRPC health service responds. Requires
+# `config.grpcServer.flags.health: true`.
+readinessProbe:
+  httpGet:
+    path: /probe/readiness
+    port: http-status
+  periodSeconds: 10
+  timeoutSeconds: 2
+  failureThreshold: 3
+
+hpa:
+  # -- Create a HorizontalPodAutoscaler. Replaces `replicaCount`. Needs
+  # `resources.requests` for the metrics used.
+  enabled: false
+  # -- Minimum number of pods.
+  minReplicas: 1
+  # -- Maximum number of pods.
+  maxReplicas: 100
+  # -- Target average CPU utilization in percent of the request. Null disables the CPU
+  # metric.
+  targetCPUUtilizationPercentage: 80
+  # -- Target average memory utilization in percent of the request. Null disables the
+  # memory metric.
+  targetMemoryUtilizationPercentage: 80
+  # -- Scaling behavior (stabilization windows and policies) of the autoscaler.
+  behavior: {}
+
+###############################################################################
+# 3. Networking
+###############################################################################
+
 service:
-  # Labels to add to the service
+  # -- Additional labels for the Service.
   labels: {}
-  # Annotations to add to the service
+  # -- Annotations for the Service.
   annotations: {}
-  # This sets the service type more information can be found here: https://kubernetes.io/docs/concepts/services-networking/service/#publishing-services-service-types
+  # -- Service type. Keep `ClusterIP`: only Envoy Gateway calls ExtAuthZ.
   type: ClusterIP
-  # This sets the ports more information can be found here: https://kubernetes.io/docs/concepts/services-networking/service/#field-spec-ports
+  # -- Ports of the Service. The first port is the ext_authz gRPC API; reference it in
+  # Envoy Gateway's SecurityPolicy (`extAuth.grpc.backendRefs`). `appProtocol: grpc` lets
+  # service meshes handle the traffic as gRPC.
   ports:
     - name: grpc
       protocol: TCP
       port: 9092
       targetPort: 9092
+      appProtocol: grpc
     - name: http-status
       protocol: TCP
       port: 8080
       targetPort: 8080
 
-resources: {}
-  # We usually recommend not to specify default resources and to leave this as a conscious
-  # choice for the user. This also increases chances charts run on environments with little
-  # resources, such as Minikube. If you do want to specify resources, uncomment the following
-  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
-  # limits:
-  #   cpu: 100m
-  #   memory: 128Mi
-  # requests:
-  #   cpu: 100m
-  #   memory: 128Mi
+# -- Ports of the ExtAuthZ container. They must match `config.grpcServer.address` and
+# `config.status.address`. The probes and the network policy refer to them by name.
+extraPorts:
+  - name: grpc
+    protocol: TCP
+    containerPort: 9092
+  - name: http-status
+    protocol: TCP
+    containerPort: 8080
 
-# # This is to setup the liveness and readiness probes more information can be found here: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
-# livenessProbe:
-#   httpGet:
-#     path: /probe/healthz
-#     port: http-status
-#     scheme: HTTP
-#     failureThreshold: 1
-#     periodSeconds: 10
-# readinessProbe:
-#   httpGet:
-#     path: /probe/healthz
-#     port: http-status
-#     scheme: HTTP
-#     failureThreshold: 1
-#     periodSeconds: 10
-
-# This section is for setting up autoscaling more information can be found here: https://kubernetes.io/docs/concepts/workloads/autoscaling/
-hpa:
+networkPolicy:
+  # -- Create a NetworkPolicy for the ExtAuthZ pods. **Recommended**: the gRPC API trusts
+  # the client certificate information (XFCC) it is given, so only Envoy Gateway may call
+  # it. When enabled, only the peers listed below can reach the pods; everything else is
+  # denied. Outgoing traffic (identity providers, Session Manager, Valkey) is not
+  # restricted.
   enabled: false
-  minReplicas: 1
-  maxReplicas: 100
-  targetCPUUtilizationPercentage: 80
-  targetMemoryUtilizationPercentage: 80
+  grpc:
+    # -- Peers allowed to call the gRPC API (port `grpc`): the Envoy Gateway proxies.
+    # NetworkPolicy peer syntax, for example:
+    #   - podSelector:
+    #       matchLabels: { app.kubernetes.io/name: envoy }
+    # Empty: no peer can reach the gRPC API.
+    from: []
+  status:
+    # -- Peers allowed to reach the status port (`http-status`), for example your metrics
+    # collector. Kubelet probes are usually not affected.
+    from: []
+  # -- Additional ingress rules, in NetworkPolicy syntax.
+  extraIngress: []
 
-# Additional containers on the output Deployment definition.
-extraContainers: []
+###############################################################################
+# 4. Volumes
+#
+# ExtAuthZ reads its Cedar policies, the trusted client certificate subjects and the
+# client data signing keys from files. By default the pods mount them from these
+# objects, which you create in the release namespace (the chart does not):
+#
+#   ConfigMap extauthz-trusted-subjects     → /etc/extauthz-mtls      (key trustedSubjects.yaml)
+#   ConfigMaps extauthz-systems-policies,
+#              extauthz-users-policies       → /etc/extauthz-policies  (*.cedar files)
+#   Secret extauthz-signing-keys-secret      → /etc/extauthz-signing   (keyId, <keyId>.pem)
+#
+# The paths match `config.mtls.trustedSubjectsYaml`, `config.cedar.policyPath` and
+# `config.clientData.signingKeyIDFilePath`. The pods do not start until the objects exist.
+# Setting `extraVolumes` or `extraVolumeMounts` replaces the whole list, so repeat these
+# entries when you add your own, for example the CSRF secret.
+###############################################################################
 
-# Additional ens on the output Deployment definition.
-extraEnvs: []
-# Additional envsFrom on the output Deployment definition.
-extraEnvsFrom: []
-
-# Additional volumes on the output Deployment definition.
+# -- Volumes added to the pod. Add the CSRF secret and identity provider credentials here:
+#   - name: csrf-secret
+#     secret:
+#       secretName: csrf-secret
+#       items: [{ key: csrf_secret, path: csrf_secret }]
 extraVolumes:
   - name: extauthz-trusted-subjects-volume
     configMap:
@@ -195,7 +324,11 @@ extraVolumes:
         - secret:
             name: extauthz-signing-keys-secret
 
-# Additional volumeMounts on the output Deployment definition.
+# -- Volume mounts added to the ExtAuthZ container. Do not mount anything at
+# `/etc/extauthz` itself; it holds the configuration.
+#   - name: csrf-secret
+#     mountPath: /etc/credentials/csrf-secret
+#     readOnly: true
 extraVolumeMounts:
   - name: extauthz-trusted-subjects-volume
     mountPath: /etc/extauthz-mtls
@@ -207,108 +340,194 @@ extraVolumeMounts:
     mountPath: /etc/extauthz-signing
     readOnly: true
 
-# Additional ports on the output Deployment definition.
-extraPorts:
-  - name: grpc
-    protocol: TCP
-    containerPort: 9092
-  - name: http-status
-    protocol: TCP
-    containerPort: 8080
+configMap:
+  # -- Make the configuration ConfigMap immutable. The chart then adds a hash of the
+  # configuration to its name, so a changed configuration creates a new ConfigMap during
+  # the upgrade. (`config.isImmutable` from older values files is still honoured.)
+  immutable: false
+  # -- Annotations for the configuration ConfigMap.
+  annotations: {}
 
-# Application configuration: using a flat structure following
-# https://helm.sh/docs/chart_best_practices/values/#flat-or-nested-values
+###############################################################################
+# 5. Extension points
+###############################################################################
+
+# -- Init containers added to the pod.
+extraInitContainers: []
+
+# -- Containers added to the pod, after the ExtAuthZ container.
+extraContainers: []
+
+# -- Environment variables added to the ExtAuthZ container. ExtAuthZ does not read
+# configuration overrides from the environment; use them with value references
+# (`source: env`), for example for the collector address.
+extraEnvs: []
+
+# -- Sources of environment variables (ConfigMaps or Secrets) for the container.
+extraEnvsFrom: []
+
+###############################################################################
+# 6. ExtAuthZ configuration
+#
+# Everything under `config` is written to /etc/extauthz/config.yaml, except the chart
+# keys `environment`, `labels` and `isImmutable`, which become `application.environment`
+# and `application.labels`. ExtAuthZ rejects unknown keys at startup ("has invalid
+# keys"), so only use the keys below. Key names are case-insensitive. The configuration
+# is read once at startup; the chart restarts the pods when it changes.
+#
+# Values marked "value reference" take one of:
+#   { source: embedded, value: "…" }
+#   { source: env, env: VARIABLE_NAME }
+#   { source: file, file: { path: /path, format: binary } }
+#   { source: file, file: { path: /path.json, format: json, jsonPath: "$.field" } }
+###############################################################################
 config:
-  # Based on github.com/openkcm/common-sdk/pkg/commoncfg
-  environment: development
+  # -- Environment name (`application.environment`), attached to logs, traces, metrics and
+  # audit events.
+  environment: production
 
-  # Logger configuration
-  logger:
-    level: debug # one of: debug, info, warn, error
-    format: json # one of: json, text
+  # -- Additional attributes (`application.labels`) attached to logs, traces and metrics.
+  labels: {}
 
-  # Status server configuration
-  status:
-    enabled: true
-    address: :8080
-    profiling: false
-
-  # Based on github.com/openkcm/extauthz/pkg/config
-  grpcServer:
-    address: :9092
-    flags:
-      health: true
-
+  # Optional feature gates.
   featureGates:
+    # -- Add the caller type (`user`, `technical-user` or `system`) to the client data.
     enrich-header-with-client-type: true
+    # -- Add the region from the trusted subjects file to the client data of client
+    # certificate callers.
     enrich-header-with-client-region: true
 
+  logger:
+    # -- Log level: `debug`, `info`, `warn` or `error`. `debug` logs request details,
+    # including the client data; use it only for troubleshooting.
+    level: info
+    # -- Log format: `json` or `text`.
+    format: json
+
+  status:
+    # -- Serve the status endpoints (`/probe/liveness`, `/probe/readiness`, `/version`
+    # and, if enabled, `/metrics`). Needed by the probes.
+    enabled: true
+    # -- Listen address of the status server. Must match the `http-status` container
+    # port. (ExtAuthZ's own default is `:8888`.)
+    address: :8080
+    # -- Serve Go profiling endpoints on the status port, without authentication. Keep
+    # false in production.
+    profiling: false
+
+  grpcServer:
+    # -- Listen address of the ext_authz gRPC API. Must match the `grpc` container port.
+    address: :9092
+    flags:
+      # -- Serve the gRPC health service. **Keep true**: the readiness probe uses it.
+      health: true
+      # -- Serve gRPC server reflection. Keep false in production.
+      reflection: false
+    # Further settings and their defaults: maxRecvMsgSize (125829120), efPolMinTime
+    # (180s), efPolPermitWithoutStream (false), attributes.maxConnectionIdle (1800s),
+    # attributes.maxConnectionAge (1800s), attributes.maxConnectionAgeGrace (300s),
+    # attributes.time (120m), attributes.timeout (20s).
+
   cedar:
+    # -- Directory with the Cedar policy files. Every file ending in `.cedar` directly in
+    # this directory is loaded; subdirectories are ignored. No policy means every request
+    # is denied.
     policyPath: /etc/extauthz-policies
 
-  # Client Certificate handling
   mtls:
+    # -- Path of the trusted subjects file: the client certificate subjects that may call
+    # through Envoy, and their regions. **Required**; startup fails if it is missing or
+    # invalid. Subjects are written in RFC 2253 format without spaces after commas.
     trustedSubjectsYaml: /etc/extauthz-mtls/trustedSubjects.yaml
 
-  # JWT Token handling
   jwt:
+    # -- Claims that hold the token issuer, tried in order.
     issuerClaimKeys:
       - iss
-    providers:
-      - issuer: https://my.oidc.jwt.provider.com/
-        audiences:
-          - my-audience
+    # -- Statically trusted token issuers, for technical users and automation. Each entry:
+    #   issuer: exactly as in the token's iss claim, including a trailing "/"
+    #   issuerURI: discovery base URL, if issuer is not a URL (default: issuer)
+    #   jwksURI: signing keys URL (default: from discovery)
+    #   audiences: accepted aud values; if empty, the audience is NOT checked
+    #   disableTokenIntrospection: skip token introspection (default false)
+    # Tenant identity providers are not listed here: they come from Session Manager.
+    # Example:
+    #   providers:
+    #     - issuer: https://idp.example.com/realms/platform
+    #       audiences: [cmk-api]
+    providers: []
+    # Optional: `httpClient` (timeout and credentials for introspection at static
+    # providers) and `oauth2` (client authentication for introspection at tenant identity
+    # providers). See the configuration reference.
 
+  # -- Path prefixes whose next path segment is the tenant ID, for example
+  # `/cmk/v1/<tenant>/…`. Session cookies and tenant identity providers are only used on
+  # these paths, and only when `sessionManager.enabled` is true.
   sessionPathPrefixes: ["/cmk/v1/"]
+
   sessionManager:
-    enabled: true
-    address: localhost:5555
-    secretRef:
-      type: insecure
+    # -- Check browser sessions and use tenant identity providers through Session Manager.
+    # Needed for the CMK UI. When enabled, set `address`, `secretRef` and `csrfSecret`.
+    enabled: false
+    # Example:
+    #   enabled: true
+    #   address: session-manager.services.svc.cluster.local:9091   # Session Manager gRPC
+    #   secretRef:
+    #     type: mtls        # or insecure inside a service mesh with mutual TLS
+    #     mtls:
+    #       cert:     { source: file, file: { path: /etc/credentials/sm/tls.crt, format: binary } }
+    #       certKey:  { source: file, file: { path: /etc/credentials/sm/tls.key, format: binary } }
+    #       serverCa: { source: file, file: { path: /etc/credentials/sm/ca.crt, format: binary } }
+
+  # CSRF secret; value reference. **Must contain exactly the same bytes as Session
+  # Manager's `sessionManager.csrfSecret`**, at least 32 bytes and without a trailing
+  # newline. Needed when `sessionManager.enabled` is true. Example, with the Secret
+  # mounted through `extraVolumes`:
+  # csrfSecret:
+  #   source: file
+  #   file: { path: /etc/credentials/csrf-secret/csrf_secret, format: binary }
 
   clientData:
-    # Signing client data
+    # -- Path of the file that contains the ID of the active signing key. Its directory
+    # holds the RSA private keys as `<key ID>.pem`. CMK verifies the signature with the
+    # public key of the same name.
     signingKeyIDFilePath: /etc/extauthz-signing/keyId
 
-  # Audit sink (github.com/openkcm/common-sdk/pkg/commoncfg.Audit). When set,
-  # extauthz sends audit log events (unauthenticated bursts and unauthorised
-  # requests) to this OTLP logs endpoint (the ALS collector). Omit to disable.
-  # +docs:property
+  # Audit events (OTLP/HTTP logs) for unauthorized requests and bursts of unauthenticated
+  # requests. Omitted by default: no audit events are sent.
   # audit:
-  #   endpoint: http://als-collector:4317/v1/logs
+  #   endpoint: http://otel-collector:4318/v1/logs
   #   httpClient:
   #     timeout: 10s
-  #     # Authenticate to the collector in production, e.g. mtls:
   #     # mtls:
-  #     #   cert: { source: file, file: { path: /etc/extauthz-audit/tls.crt } }
-  #     #   certKey: { source: file, file: { path: /etc/extauthz-audit/tls.key } }
-  #   # additionalProperties: "{ service: extauthz }"
+  #     #   cert:    { source: file, file: { path: /etc/credentials/audit/tls.crt, format: binary } }
+  #     #   certKey: { source: file, file: { path: /etc/credentials/audit/tls.key, format: binary } }
+  #   additionalProperties: "{ service: extauthz }"
 
-  # Valkey-backed, cross-pod detection of unauthenticated request bursts. When
-  # rateDetection.enabled is true, extauthz counts UNAUTHENTICATED results per
-  # identity in a shared Valkey and emits a single audit event per window when
-  # the threshold is crossed. Requires the audit sink above for delivery. Omit
-  # the block (or set rateDetection.enabled: false) to disable; unauthorised
-  # requests are still audited immediately without Valkey.
-  # +docs:property
+  # Detection of bursts of unauthenticated requests across pods, counted in Valkey.
+  # Requires `audit` for delivery. Omitted by default.
   # valkey:
-  #   address:
-  #     value: valkey:6379        # SourceRef; source defaults to "embedded". A comma-separated list of addresses. Multiple addresses may be added if valkey is running in a cluster mode.
+  #   address: { value: valkey:6379 }   # value reference; comma-separated for a cluster
   #   prefix: extauthz
-  #   secretRef:
-  #     type: insecure            # use mtls in production
-  #   masterSet: ""               # If set, valkey connects to the sentinel cluster.
-  #   topologyRefreshInterval: 5s # A few seconds is a reasonable value; 5s works well.
-                                  # There is no benefit to a very small interval:
-                                  # it only adds load on the sentinels, and recovery
-                                  # just needs to catch a missed event, not react instantly.
+  #   secretRef: { type: mtls, mtls: { … } }   # only mtls enables TLS
+  #   masterSet: ""                      # Sentinel master set; switches to Sentinel
+  #   topologyRefreshInterval: 5s        # Sentinel topology refresh; 0 disables it
   #   rateDetection:
   #     enabled: true
-  #     threshold: 50             # N unauthenticated requests ...
-  #     window: 1m                # ... within this window trips one event
-  #     cooldown: 1m              # suppress repeat events per identity/window;
-  #                               # should be >= window (defaults to window if unset)
-  #     countUnknown: false       # count requests with no credentials at all
-  #     queueSize: 1024           # bounded async audit dispatch queue
+  #     threshold: 50          # unauthenticated requests per identity and window
+  #     window: 1m
+  #     cooldown: 1m           # at least as long as window (default: window)
+  #     countUnknown: false    # also count requests without any credentials
+  #     queueSize: 1024        # audit queue; events are dropped when it is full
   #     workers: 4
-  #     dispatchTimeout: 10s      # per-job timeout (Valkey observe + audit send)
+  #     dispatchTimeout: 10s
+
+  # OpenTelemetry export of logs, traces and metrics. Same structure as in the other
+  # OpenKCM services; see the configuration reference. Omitted by default.
+  # telemetry:
+  #   metrics:
+  #     enabled: true
+  #     protocol: grpc
+  #     host: { source: env, env: OTEL_HOST }
+  #     secretRef: { type: insecure }
+  #     prometheus: { enabled: true }
