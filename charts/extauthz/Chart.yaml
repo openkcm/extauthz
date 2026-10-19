@@ -17,6 +17,6 @@ keywords:
 # Version of the chart. Increment it for every change to the chart.
 # Versions follow Semantic Versioning (https://semver.org/).
 version: 0.15.0
-# Version of ExtAuthZ this chart was last tested with. The image itself is selected with
-# image.tag or image.digest; this value is only used for the version label when no tag is set.
+# ExtAuthZ release this chart is made for: the tag of its image, and the default of image.tag.
+# The workflow update-app-versions opens a pull request when openkcm/extauthz has a newer release.
 appVersion: "v0.14.0"

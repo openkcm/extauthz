@@ -52,8 +52,7 @@ matching paths under `config`.
 
 ```yaml
 # extauthz-values.yaml
-image:
-  tag: v0.14.0
+# image.tag defaults to the chart's appVersion; set it only to deploy another version.
 
 replicaCount: 2
 
@@ -110,7 +109,7 @@ are not production-ready.
 
 | Value | Default | Description |
 | --- | --- | --- |
-| `image.tag` / `image.digest` | – | **Required.** The ExtAuthZ version to deploy |
+| `image.tag` / `image.digest` | chart's `appVersion` | The ExtAuthZ version to deploy. Leave both empty to deploy the version this chart release is made for |
 | `image.repository` | `extauthz/images/extauthz` | Under `ghcr.io/openkcm` |
 | `replicaCount` | `1` | Use two or more in production; every API request passes ExtAuthZ |
 | `networkPolicy.enabled` | `false` | **Recommended.** Allow only Envoy Gateway to call the gRPC API |
@@ -153,10 +152,12 @@ under `config` restarts them during `helm upgrade`. Changes to the ConfigMaps an
 Secrets you manage yourself need a restart:
 `kubectl rollout restart deployment/<release>-extauthz`.
 
-Everything under `config` is written to `config.yaml`; only `config.environment`
-and `config.labels` become `application.environment` and `application.labels`.
-ExtAuthZ rejects unknown keys at startup, so a misspelled key stops the pods
-instead of being ignored.
+[templates/configmap.yaml](templates/configmap.yaml) writes `config.yaml` with one
+section per setting: `config.environment` and `config.labels` become
+`application.environment` and `application.labels`; `featureGates`, `logger`, `status`,
+`telemetry`, `grpcServer`, `cedar`, `mtls`, `jwt`, `clientData`, `audit`, `valkey`,
+`sessionPathPrefixes`, `sessionManager` and `csrfSecret` are written as they are. Other
+keys under `config` are not written, so check a key's spelling when it has no effect.
 
 ## Upgrading from 0.14.x
 
@@ -166,7 +167,6 @@ instead of being ignored.
 | No `imagePullSecrets` by default (was `registry-access`) | Set `imagePullSecrets` if you pull from a private registry |
 | `replicas` comes from `replicaCount` and is omitted when `hpa.enabled` is true (was `hpa.minReplicas`, only with the autoscaler) | Set `replicaCount`; with the autoscaler, upgrades no longer reset the replica count |
 | The ConfigMap is named after the release (`<release>-extauthz-config`) | None; for a release named `extauthz` the name stays `extauthz-config` |
-| All keys under `config` are rendered, not only a fixed list | Remove keys that are not ExtAuthZ settings; `featureFlags` and others now take effect |
 | `config.sessionManager` is disabled by default (was enabled with `localhost:5555`) | Configure it explicitly, with `csrfSecret` |
 | `config.jwt.providers` is empty by default (was a placeholder issuer) | Configure your issuers |
 | New security defaults, probes and resource requests | Override `securityContext`, `pod.securityContext`, the probes and `resources` if needed |
@@ -179,7 +179,6 @@ instead of being ignored.
 
 | Symptom | Cause |
 | --- | --- |
-| `Either image.tag or image.digest must be set` | Set `image.tag` or `image.digest` |
 | Pods stay in `ContainerCreating` | A ConfigMap or Secret from [Objects you create](#objects-you-create) is missing |
 | Pod exits with `has invalid keys` | A key under `config` is not an ExtAuthZ setting |
 | Pod exits with an error about trusted subjects | `trustedSubjects.yaml` is missing or invalid |

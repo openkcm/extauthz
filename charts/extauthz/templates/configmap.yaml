@@ -13,4 +13,89 @@ metadata:
 immutable: {{ include "extauthz.configImmutable" . | eq "true" }}
 data:
   config.yaml: |-
-    {{- include "extauthz.config" . | nindent 4 }}
+    # Based on github.com/openkcm/common-sdk/pkg/commoncfg
+    application:
+      name: {{ include "extauthz.name" . }}
+      {{- with .Values.config.environment }}
+      environment: {{ . | quote }}
+      {{- end }}
+      {{- with .Values.config.labels }}
+      labels:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+
+    {{- with .Values.config.featureGates }}
+    featureGates:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+
+    {{- with .Values.config.logger }}
+    logger:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+
+    {{- with .Values.config.status }}
+    status:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+
+    {{- with .Values.config.telemetry }}
+    telemetry:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+
+    # Based on github.com/openkcm/extauthz/internal/config
+    {{- with .Values.config.grpcServer }}
+    grpcServer:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+
+    # Cedar configuration
+    {{- with .Values.config.cedar }}
+    cedar:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+
+    # Client Certificate handling
+    {{- with .Values.config.mtls }}
+    mtls:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+
+    # JWT Token handling
+    {{- with .Values.config.jwt }}
+    jwt:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+
+    {{- with .Values.config.clientData }}
+    clientData:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+
+    # Audit sink (common-sdk Audit)
+    {{- with .Values.config.audit }}
+    audit:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+
+    # Valkey unauthenticated-burst rate detection
+    {{- with .Values.config.valkey }}
+    valkey:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+
+    {{- with .Values.config.sessionPathPrefixes }}
+    sessionPathPrefixes:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+
+    {{- with .Values.config.sessionManager }}
+    sessionManager:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+
+    {{- with .Values.config.csrfSecret }}
+    csrfSecret:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}

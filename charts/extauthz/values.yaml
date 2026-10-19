@@ -65,8 +65,8 @@ image:
   # `ghcr.io/openkcm/extauthz/images/extauthz`.
   repository: extauthz/images/extauthz
 
-  # -- Image tag, for example `v0.14.0`. **Required** unless `image.digest` is set; the
-  # chart does not fall back to the chart's appVersion.
+  # -- Image tag, for example `v0.14.0`. Empty: the chart's appVersion, the ExtAuthZ version
+  # this chart release is made for and that its OCM component references.
   tag: ""
 
   # -- Image digest, for example `sha256:0e07…`. Takes precedence over `image.tag`.
@@ -377,11 +377,12 @@ extraEnvsFrom: []
 ###############################################################################
 # 6. ExtAuthZ configuration
 #
-# Everything under `config` is written to /etc/extauthz/config.yaml, except the chart
-# keys `environment`, `labels` and `isImmutable`, which become `application.environment`
-# and `application.labels`. ExtAuthZ rejects unknown keys at startup ("has invalid
-# keys"), so only use the keys below. Key names are case-insensitive. The configuration
-# is read once at startup; the chart restarts the pods when it changes.
+# templates/configmap.yaml writes these settings to /etc/extauthz/config.yaml, one section
+# per key: `environment` and `labels` become `application.environment` and
+# `application.labels`, and featureGates, logger, status, telemetry, grpcServer, cedar,
+# mtls, jwt, clientData, audit, valkey, sessionPathPrefixes, sessionManager and csrfSecret
+# are written as they are. Other keys under `config` are not written. The configuration is
+# read once at startup; the chart restarts the pods when it changes.
 #
 # Values marked "value reference" take one of:
 #   { source: embedded, value: "…" }

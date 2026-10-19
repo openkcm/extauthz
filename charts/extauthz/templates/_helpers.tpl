@@ -81,15 +81,20 @@ Name of the service account to use.
 {{- end }}
 
 {{/*
-Image reference. Either image.tag or image.digest must be set; there is no fallback to appVersion.
-A digest takes precedence over a tag.
+Image reference: registry and repository, then the digest if set, else the tag. The tag
+defaults to the chart's appVersion, the image version this chart release is made for.
+Call it with (tuple .Values.image .Chart.AppVersion).
 */}}
 {{- define "extauthz.image" -}}
-{{- with index . 0 -}}
-{{- if not (or .digest .tag) -}}{{ fail "Either image.tag or image.digest must be set" }}{{- end -}}
-{{- if .registry -}}{{ printf "%s/%s" .registry .repository }}{{- else -}}{{- .repository -}}{{- end -}}
-{{- if .digest -}}{{ printf "@%s" (toString .digest) }}{{- else -}}{{ printf ":%s" (toString .tag) }}{{- end -}}
-{{- end }}
+{{- $image := index . 0 -}}
+{{- $appVersion := index . 1 -}}
+{{- $repository := $image.repository -}}
+{{- if $image.registry -}}{{- $repository = printf "%s/%s" $image.registry $image.repository -}}{{- end -}}
+{{- if $image.digest -}}
+{{- printf "%s@%s" $repository (toString $image.digest) -}}
+{{- else -}}
+{{- printf "%s:%s" $repository (toString ($image.tag | default $appVersion)) -}}
+{{- end -}}
 {{- end }}
 
 {{/*
@@ -103,28 +108,15 @@ true
 {{- end }}
 
 {{/*
-The ExtAuthZ configuration as rendered into config.yaml.
-- application: built from config.environment and config.labels (the chart's flat values),
-  with the chart name as application name; config.application overrides single fields.
-- Everything else under config is passed through. Chart-only keys are removed, because
-  ExtAuthZ rejects unknown keys at startup.
-*/}}
-{{- define "extauthz.config" -}}
-{{- $application := dict "name" (include "extauthz.name" .) }}
-{{- with .Values.config.environment }}{{- $_ := set $application "environment" . }}{{- end }}
-{{- with .Values.config.labels }}{{- $_ := set $application "labels" . }}{{- end }}
-{{- with .Values.config.application }}{{- $application = mergeOverwrite $application (deepCopy .) }}{{- end }}
-{{- $rest := omit .Values.config "environment" "labels" "isImmutable" "application" }}
-{{- toYaml (merge (dict "application" $application) $rest) }}
-{{- end }}
-
-{{/*
-Name of the configuration ConfigMap. An immutable ConfigMap gets a content hash in its
-name, so that a changed configuration creates a new ConfigMap instead of failing the upgrade.
+Name of the configuration ConfigMap. An immutable ConfigMap gets a hash in its name, so that
+a changed configuration creates a new ConfigMap instead of failing the upgrade. config.yaml
+(templates/configmap.yaml) is made of the values under config, the chart name and the chart
+version, so the hash covers these.
 */}}
 {{- define "extauthz.configMapName" -}}
 {{- if include "extauthz.configImmutable" . -}}
-{{- printf "%s-config-%s" (include "extauthz.fullname" . | trunc 45 | trimSuffix "-") (include "extauthz.config" . | sha256sum | trunc 10) }}
+{{- $hash := printf "%s\n%s\n%s" .Chart.Version (include "extauthz.name" .) (toYaml .Values.config) | sha256sum | trunc 10 }}
+{{- printf "%s-config-%s" (include "extauthz.fullname" . | trunc 45 | trimSuffix "-") $hash }}
 {{- else -}}
 {{- printf "%s-config" (include "extauthz.fullname" . | trunc 56 | trimSuffix "-") }}
 {{- end -}}

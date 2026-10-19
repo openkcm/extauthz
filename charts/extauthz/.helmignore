@@ -21,3 +21,6 @@
 .idea/
 *.tmproj
 .vscode/
+
+# Not part of the published chart: values for chart-testing installs and local development.
+values-dev.yaml

@@ -75,7 +75,7 @@ func TestConfigMap(t *testing.T) {
 			expected: []string{
 				"application:",
 				"name: " + appName,
-				"environment: staging",
+				`environment: "staging"`,
 				"team: kms",
 			},
 			// The flat chart keys must not reach the ExtAuthZ configuration, which
@@ -96,12 +96,25 @@ func TestConfigMap(t *testing.T) {
 			},
 		},
 		{
-			name:   "all configuration sections are passed through",
-			values: "--set config.featureFlags.enabled=true --set config.csrfSecret.source=file --set config.csrfSecret.file.path=/etc/csrf/csrf_secret",
+			name:   "optional configuration sections are written when set",
+			values: "--set config.audit.endpoint=http://collector:4318/v1/logs --set config.valkey.prefix=extauthz --set config.csrfSecret.source=file --set config.csrfSecret.file.path=/etc/csrf/csrf_secret",
 			expected: []string{
-				"featureFlags:",
+				"audit:",
+				"endpoint: http://collector:4318/v1/logs",
+				"valkey:",
+				"prefix: extauthz",
 				"csrfSecret:",
 				"path: /etc/csrf/csrf_secret",
+			},
+		},
+		{
+			// templates/configmap.yaml lists the ExtAuthZ settings; other keys are not
+			// written, because ExtAuthZ rejects unknown keys at startup.
+			name:   "keys that are not ExtAuthZ settings are not written",
+			values: "--set config.featureFlags.enabled=true --set config.unknown=x",
+			unexpected: []string{
+				"featureFlags",
+				"unknown",
 			},
 		},
 	}
