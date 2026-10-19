@@ -1,0 +1,25 @@
+# Documented examples in values.yaml that are alternatives to those in
+# all-config-values.yaml (another form of the same setting), part 3. Loaded by TestConfigLoad.
+config:
+  jwt:
+    # httpClient with a client certificate and transport limits
+    httpClient:
+      timeout: 5s
+      mtls:
+        cert: { source: file, file: { path: /etc/credentials/idp/tls.crt, format: binary } }
+        certKey: { source: file, file: { path: /etc/credentials/idp/tls.key, format: binary } }
+      transportAttributes:
+        tlsHandshakeTimeout: 5s
+        responseHeaderTimeout: 5s
+        idleConnTimeout: 90s
+        maxIdleConns: 100
+        maxIdleConnsPerHost: 10
+        maxConnsPerHost: 50
+        disableKeepAlives: false
+        disableCompression: false
+        expectContinueTimeout: 1s
+    # oauth2 with a client certificate only
+    oauth2:
+      mtls:
+        cert: { source: file, file: { path: /etc/credentials/oidc/tls.crt, format: binary } }
+        certKey: { source: file, file: { path: /etc/credentials/oidc/tls.key, format: binary } }

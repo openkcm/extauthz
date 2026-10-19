@@ -1,0 +1,37 @@
+# Documented examples in values.yaml that are alternatives to those in
+# all-config-values.yaml (another form of the same setting), part 2. Loaded by TestConfigLoad.
+config:
+  jwt:
+    # httpClient with OAuth2 client authentication
+    httpClient:
+      oauth2Auth:
+        credentials:
+          clientID: { value: extauthz }
+          authMethod: basic
+          clientSecret: { source: env, env: IDP_CLIENT_SECRET }
+    # oauth2 with a client assertion (private_key_jwt)
+    oauth2:
+      credentials:
+        authMethod: private
+        clientAssertion:
+          source: file
+          file: { path: /etc/credentials/tenant-introspection/assertion.jwt, format: binary }
+        clientAssertionType:
+          value: urn:ietf:params:oauth:client-assertion-type:jwt-bearer
+
+  # csrfSecret from one field of a mounted JSON file
+  csrfSecret:
+    source: file
+    file: { path: /etc/credentials/session.json, format: json, jsonPath: "$.csrfSecret" }
+
+  # valkey with the credentials from one JSON file
+  valkey:
+    address: { source: file, file: { path: /etc/credentials/valkey/address, format: binary } }
+    user:
+      source: file
+      file: { path: /etc/credentials/valkey.json, format: json, jsonPath: "$.user" }
+    password:
+      source: file
+      file: { path: /etc/credentials/valkey.json, format: json, jsonPath: "$.password" }
+    rateDetection:
+      enabled: true

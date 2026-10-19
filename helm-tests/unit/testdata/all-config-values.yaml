@@ -1,9 +1,14 @@
-# Every section under `config` that values.yaml documents, with its optional settings filled.
-# TestConfigLoad loads the rendered config.yaml with ExtAuthZ's configuration loader, which
-# rejects unknown keys. Keep this file in sync with the examples in values.yaml.
+# Every section under `config` that values.yaml documents, with the documented examples
+# uncommented. TestConfigLoad loads the rendered config.yaml with ExtAuthZ's configuration
+# loader, which rejects unknown keys. Keep this file in sync with the examples in values.yaml.
+# Examples that exclude these ones (another form of the same setting) are in
+# config-alternatives-*.yaml.
 config:
   environment: staging
   labels: { team: kms }
+
+  application:
+    name: extauthz-eu10
 
   featureGates:
     enrich-header-with-client-type: true
@@ -12,6 +17,16 @@ config:
   logger:
     level: debug
     format: text
+    source: true
+    formatter:
+      time:
+        type: pattern
+        pattern: "2006-01-02T15:04:05.000Z07:00"
+      fields:
+        level: level
+        masking:
+          pii: [subject]
+          other: { payload: "[masked]" }
 
   status:
     enabled: true
@@ -19,21 +34,27 @@ config:
     profiling: false
 
   telemetry:
-    logs:
-      enabled: true
-      protocol: grpc
-      host: { source: env, env: OTEL_HOST }
-      secretRef: { type: insecure }
     traces:
       enabled: true
       protocol: grpc
       host: { source: env, env: OTEL_HOST }
-      secretRef: { type: insecure }
-    metrics:
+      secretRef:
+        type: mtls
+        mtls:
+          cert: { source: file, file: { path: /etc/credentials/otel/tls.crt, format: binary } }
+          certKey: { source: file, file: { path: /etc/credentials/otel/tls.key, format: binary } }
+          serverCa: { source: file, file: { path: /etc/credentials/otel/ca.crt, format: binary } }
+    logs:
       enabled: true
       protocol: grpc
       host: { source: env, env: OTEL_HOST }
-      secretRef: { type: insecure }
+      secretRef:
+        type: basic
+        basic:
+          username: { source: env, env: OTEL_USER }
+          password: { source: env, env: OTEL_PASSWORD }
+    metrics:
+      enabled: true
       prometheus: { enabled: true }
 
   grpcServer:
@@ -50,6 +71,15 @@ config:
       maxConnectionAgeGrace: 300s
       time: 120m
       timeout: 20s
+    client:
+      attributes:
+        keepaliveTime: 80s
+        keepaliveTimeout: 40s
+      pool:
+        initialCapacity: 1
+        maxCapacity: 1
+        idleTimeout: 5s
+        maxLifeDuration: 60s
 
   cedar:
     policyPath: /etc/extauthz-policies
@@ -61,19 +91,27 @@ config:
     issuerClaimKeys: [iss]
     providers:
       - issuer: https://idp.example.com/realms/platform
-        issuerURI: https://idp.example.com/realms/platform
-        jwksURI: https://idp.example.com/realms/platform/protocol/openid-connect/certs
         audiences: [cmk-api]
-        disableTokenIntrospection: false
+      - issuer: automation
+        issuerURI: https://idp.example.com/realms/automation
+        jwksURI: https://idp.example.com/realms/automation/protocol/openid-connect/certs
+        audiences: [cmk-api, cmk-automation]
+        disableTokenIntrospection: true
     httpClient:
       timeout: 5s
       basicAuth:
-        username: { source: file, file: { path: /etc/credentials/idp/client-id, format: binary } }
-        password: { source: file, file: { path: /etc/credentials/idp/client-secret, format: binary } }
+        username:
+          source: file
+          file: { path: /etc/credentials/idp/client-id, format: binary }
+        password:
+          source: file
+          file: { path: /etc/credentials/idp/client-secret, format: binary }
     oauth2:
       credentials:
         authMethod: post
-        clientSecret: { source: file, file: { path: /etc/credentials/tenant-introspection/client-secret, format: binary } }
+        clientSecret:
+          source: file
+          file: { path: /etc/credentials/tenant-introspection/client-secret, format: binary }
 
   sessionPathPrefixes: ["/cmk/v1/"]
 
@@ -86,6 +124,11 @@ config:
         cert:     { source: file, file: { path: /etc/credentials/sm/tls.crt, format: binary } }
         certKey:  { source: file, file: { path: /etc/credentials/sm/tls.key, format: binary } }
         serverCa: { source: file, file: { path: /etc/credentials/sm/ca.crt, format: binary } }
+        attributes:
+          serverName: session-manager.services.svc.cluster.local
+    attributes:
+      keepaliveTime: 80s
+      keepaliveTimeout: 40s
 
   csrfSecret:
     source: file
@@ -95,13 +138,14 @@ config:
     signingKeyIDFilePath: /etc/extauthz-signing/keyId
 
   audit:
-    endpoint: http://otel-collector:4318/v1/logs
+    endpoint: https://otel-collector:4318/v1/logs
     httpClient:
       timeout: 10s
       mtls:
-        cert:    { source: file, file: { path: /etc/credentials/audit/tls.crt, format: binary } }
-        certKey: { source: file, file: { path: /etc/credentials/audit/tls.key, format: binary } }
-    additionalProperties: "{ service: extauthz }"
+        cert:     { source: file, file: { path: /etc/credentials/audit/tls.crt, format: binary } }
+        certKey:  { source: file, file: { path: /etc/credentials/audit/tls.key, format: binary } }
+        serverCa: { source: file, file: { path: /etc/credentials/audit/ca.crt, format: binary } }
+    additionalProperties: "{ service: extauthz, region: eu10 }"
 
   valkey:
     address: { value: valkey:6379 }
@@ -113,8 +157,8 @@ config:
     secretRef:
       type: mtls
       mtls:
-        cert:     { source: file, file: { path: /etc/credentials/valkey/tls.crt, format: binary } }
-        certKey:  { source: file, file: { path: /etc/credentials/valkey/tls.key, format: binary } }
+        cert: { source: file, file: { path: /etc/credentials/valkey/tls.crt, format: binary } }
+        certKey: { source: file, file: { path: /etc/credentials/valkey/tls.key, format: binary } }
         serverCa: { source: file, file: { path: /etc/credentials/valkey/ca.crt, format: binary } }
     masterSet: mymaster
     topologyRefreshInterval: 5s

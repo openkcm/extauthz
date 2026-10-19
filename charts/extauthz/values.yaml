@@ -409,23 +409,57 @@ extraEnvsFrom: []
 # instead of being ignored; `labels` and `featureGates` accept any name. The configuration
 # is read once at startup; the chart restarts the pods when it changes.
 #
-# Values marked "value reference" take one of:
-#   { source: embedded, value: "…" }
-#   { source: env, env: VARIABLE_NAME }
-#   { source: file, file: { path: /path, format: binary } }
-#   { source: file, file: { path: /path.json, format: json, jsonPath: "$.field" } }
+# Keys that are not set here have ExtAuthZ's defaults, given in the comments. Commented-out
+# blocks are examples: uncomment and adapt them. `featureFlags` is accepted but has no
+# effect in ExtAuthZ.
+#
+# Value references. Settings marked "value reference" take one of these forms:
+#   { source: embedded, value: "…" }      # the value itself. Stored in plain text in the
+#                                         # ConfigMap: do not use it for secrets
+#   { source: env, env: VARIABLE_NAME }   # an environment variable of the container
+#                                         # (extraEnvs, extraEnvsFrom)
+#   { source: file, file: { path: /etc/credentials/valkey/password, format: binary } }
+#                                         # the whole file as it is: a trailing newline is part
+#                                         # of the value. Mount Secrets with extraVolumes and
+#                                         # extraVolumeMounts. format: yaml reads the whole file
+#                                         # too
+#   { source: file, file: { path: /etc/credentials/valkey.json, format: json,
+#                           jsonPath: "$.password" } }
+#                                         # one string field of a JSON file
+# `source` defaults to `embedded`.
+#
+# Client certificates. Settings marked "client certificate" (`mtls`) take:
+#   cert: <value reference>        # client certificate (PEM)
+#   certKey: <value reference>     # its private key (PEM)
+#   serverCa: <value reference>    # CA that signed the server certificate
+#   rootCAs: [<value reference>]   # additional trusted CAs
+#   attributes:
+#     serverName: …                # expected server name, if it differs from the address
+# `cert` and `certKey` are required. Without `serverCa` and `rootCAs`, the system CAs of
+# the image are trusted.
+#
+# Durations are Go duration strings: `500ms`, `10s`, `5m`, `1h30m`.
 ###############################################################################
 config:
-  # -- Environment name (`application.environment`), attached to logs, traces, metrics and
-  # audit events.
+  # -- Environment name (`application.environment`), attached to logs, traces and metrics.
   environment: production
 
   # -- Additional attributes (`application.labels`) attached to logs, traces and metrics.
+  # Names are lower-cased when ExtAuthZ loads them. Example: `{ team: kms }`
   labels: {}
 
-  # Optional feature gates.
+  # Single fields of `application`, overriding the values the chart sets. `name` (default:
+  # the chart name, see `nameOverride`) is the service name in logs, traces and metrics.
+  # Example:
+  # application:
+  #   name: extauthz-eu10
+
+  # Feature gates: gate name → true or false. ExtAuthZ reads only these two; a gate that is
+  # not listed is false.
   featureGates:
-    # -- Add the caller type (`user`, `technical-user` or `system`) to the client data.
+    # -- Add the caller type to the client data: `system` (client certificate without an
+    # e-mail address), `technical-user` (client certificate with one) or `user` (bearer
+    # token or browser session).
     enrich-header-with-client-type: true
     # -- Add the region from the trusted subjects file to the client data of client
     # certificate callers.
@@ -437,66 +471,254 @@ config:
     level: info
     # -- Log format: `json` or `text`.
     format: json
+    # Further settings and their defaults:
+    #   source: false              # add the source file and line to each entry
+    #   formatter:
+    #     time:
+    #       type: unix             # unix (a number) or pattern
+    #       precision: 1us         # with unix: 1ns, 1us, 1ms or 1s
+    #       pattern: "Mon Jan 02 15:04:05 -0700 2006"   # with pattern: Go time layout, UTC
+    #     fields:                  # names of the standard fields
+    #       time: time
+    #       error: error
+    #       level: info            # the level is logged as field "info" unless renamed
+    #       message: msg
+    #       otel:                  # trace context, when telemetry is enabled
+    #         traceId: traceId
+    #         spanId: spanId
+    #       masking:
+    #         pii: []              # fields whose values are masked; the first 4 characters
+    #                              # of longer values are kept
+    #         other: {}            # field name → value that replaces it
+    # Example:
+    #   source: true
+    #   formatter:
+    #     time:
+    #       type: pattern
+    #       pattern: "2006-01-02T15:04:05.000Z07:00"
+    #     fields:
+    #       level: level
+    #       masking:
+    #         pii: [subject]
+    #         other: { payload: "[masked]" }
 
   status:
     # -- Serve the status endpoints (`/probe/liveness`, `/probe/readiness`, `/version`
-    # and, if enabled, `/metrics`). Needed by the probes.
+    # and, with `telemetry.metrics.prometheus.enabled`, `/metrics`). Needed by the probes.
+    # (ExtAuthZ's own default is false.)
     enabled: true
     # -- Listen address of the status server. Must match the `http-status` container
     # port. (ExtAuthZ's own default is `:8888`.)
     address: :8080
-    # -- Serve Go profiling endpoints on the status port, without authentication. Keep
-    # false in production.
+    # -- Serve Go profiling endpoints (`/debug/pprof/`) on the status port, without
+    # authentication. Keep false in production; enable it only for troubleshooting.
     profiling: false
+    # `timeout` is accepted but has no effect: the readiness check has a fixed timeout of 5s.
 
   grpcServer:
     # -- Listen address of the ext_authz gRPC API. Must match the `grpc` container port.
+    # The API has no TLS of its own: protect it with a service mesh with mutual TLS.
     address: :9092
     flags:
       # -- Serve the gRPC health service. **Keep true**: the readiness probe uses it.
       health: true
       # -- Serve gRPC server reflection. Keep false in production.
       reflection: false
-    # Further settings and their defaults: maxRecvMsgSize (125829120), efPolMinTime
-    # (180s), efPolPermitWithoutStream (false), attributes.maxConnectionIdle (1800s),
-    # attributes.maxConnectionAge (1800s), attributes.maxConnectionAgeGrace (300s),
-    # attributes.time (120m), attributes.timeout (20s).
+    # Further settings and their defaults:
+    #   maxRecvMsgSize: 125829120        # largest request message, in bytes
+    #   efPolMinTime: 180s               # shortest interval between client keepalive pings;
+    #                                    # clients that ping more often are disconnected
+    #   efPolPermitWithoutStream: false  # accept keepalive pings without running calls
+    #   attributes:
+    #     maxConnectionIdle: 1800s       # close connections without calls for this long
+    #     maxConnectionAge: 1800s        # close connections after this time (±10%)
+    #     maxConnectionAgeGrace: 300s    # time running calls get after maxConnectionAge
+    #     time: 120m                     # ping the client after this idle time (at least 1s)
+    #     timeout: 20s                   # close the connection if the ping is not answered
+    #   client:                          # client of the readiness check, which calls the
+    #     attributes:                    # health service at `address` without TLS (its own
+    #                                    # address and secretRef are ignored)
+    #       keepaliveTime: 80s           # ping after this idle time
+    #       keepaliveTimeout: 40s        # close the connection if the ping is not answered
+    #     pool:
+    #       initialCapacity: 1           # connections opened at startup
+    #       maxCapacity: 1               # connections kept at most
+    #       idleTimeout: 5s              # replace connections unused for this long
+    #       maxLifeDuration: 60s         # replace connections after this time
+    # `enabled` and `maxSendMsgSize` are accepted but have no effect.
 
   cedar:
-    # -- Directory with the Cedar policy files. Every file ending in `.cedar` directly in
-    # this directory is loaded; subdirectories are ignored. No policy means every request
-    # is denied.
+    # -- Directory with the Cedar policy files, read at startup. Every file ending in
+    # `.cedar` directly in this directory is loaded; subdirectories are ignored, and a
+    # policy that does not parse stops the startup. No policy means every request is denied.
+    # ExtAuthZ evaluates every authenticated request with:
+    #   principal  Subject::"<subject>": the certificate subject (RFC 2253), the token's
+    #              `sub` claim or the session's subject
+    #   action     Action::"<HTTP method>", for example Action::"GET"
+    #   resource   not set
+    #   context    host, path (as requested), type (`x509`, `jwt` or `session`) and issuer
+    #              (the certificate issuer in RFC 2253, the token's `iss` claim or the
+    #              session's issuer); for tokens also jwksURI (the `jku` header, or "")
+    # Example policy file:
+    #   permit (
+    #     principal is Subject,
+    #     action in [Action::"GET", Action::"POST"],
+    #     resource
+    #   ) when {
+    #     context.type == "jwt" &&
+    #     context.issuer == "https://idp.example.com/realms/platform" &&
+    #     context.path like "/cmk/v1/*"
+    #   };
     policyPath: /etc/extauthz-policies
 
   mtls:
     # -- Path of the trusted subjects file: the client certificate subjects that may call
     # through Envoy, and their regions. **Required**; startup fails if it is missing or
-    # invalid. Subjects are written in RFC 2253 format without spaces after commas.
+    # invalid. Read at startup. Format: region → list of subjects, each written as Envoy
+    # forwards it (RFC 2253: most specific attribute first, no spaces after commas):
+    #   eu10:
+    #     - CN=billing,OU=Clients,O=Example Corp,C=DE
+    #     - CN=reporting,OU=Clients,O=Example Corp,C=DE
+    #   us10:
+    #     - CN=billing,OU=Clients,O=Example Corp,C=US
+    # Client certificate callers whose subject is not listed are denied.
     trustedSubjectsYaml: /etc/extauthz-mtls/trustedSubjects.yaml
 
   jwt:
-    # -- Claims that hold the token issuer, tried in order.
+    # -- Claims that hold the token issuer, tried in order. An empty list means `[iss]`.
     issuerClaimKeys:
       - iss
-    # -- Statically trusted token issuers, for technical users and automation. Each entry:
-    #   issuer: exactly as in the token's iss claim, including a trailing "/"
-    #   issuerURI: discovery base URL, if issuer is not a URL (default: issuer)
-    #   jwksURI: signing keys URL (default: from discovery)
+    # -- Statically trusted token issuers, for technical users and automation. Tokens must
+    # be signed with RS256 and have `kid` and `exp`; their issuer, or their `jku` header if
+    # present, must be an https URL. Each entry:
+    #   issuer: exactly as in the token's issuer claim, including any trailing "/"
+    #   issuerURI: https base URL of the OpenID discovery document
+    #     (`<issuerURI>/.well-known/openid-configuration`), if issuer is not that URL.
+    #     Default: issuer
+    #   jwksURI: https URL of the signing keys (default: from discovery). An entry with
+    #     jwksURI is used only for tokens whose `jku` header has this URL
     #   audiences: accepted aud values; if empty, the audience is NOT checked
-    #   disableTokenIntrospection: skip token introspection (default false)
-    # Tenant identity providers are not listed here: they come from Session Manager.
+    #   disableTokenIntrospection: skip token introspection (default false). Tokens are also
+    #     not introspected when the discovery document has no `introspection_endpoint`
+    # Signing keys are cached for 5 minutes, introspection results of GET requests for 30
+    # seconds. Tenant identity providers are not listed here: they come from Session
+    # Manager.
     # Example:
     #   providers:
     #     - issuer: https://idp.example.com/realms/platform
     #       audiences: [cmk-api]
+    #     - issuer: automation
+    #       issuerURI: https://idp.example.com/realms/automation
+    #       jwksURI: https://idp.example.com/realms/automation/protocol/openid-connect/certs
+    #       audiences: [cmk-api, cmk-automation]
+    #       disableTokenIntrospection: true
     providers: []
-    # Optional: `httpClient` (timeout and credentials for introspection at static
-    # providers) and `oauth2` (client authentication for introspection at tenant identity
-    # providers). See the configuration reference.
+    # HTTP client for token introspection at the static providers. Discovery documents and
+    # signing keys are fetched without it. Settings:
+    #   timeout: request timeout (default 10s)
+    #   client authentication, one of (if several are set, the first in this order is used):
+    #     basicAuth: { username: <value reference>, password: <value reference> }
+    #     oauth2Auth: OAuth2 client authentication, as `oauth2` below, plus
+    #       credentials.clientID (value reference)
+    #     apiToken: <value reference>   # sent as `Authorization: Api-Token <token>`
+    #   mtls: client certificate
+    #   transportAttributes: tlsHandshakeTimeout, disableKeepAlives, disableCompression,
+    #     maxIdleConns, maxIdleConnsPerHost, maxConnsPerHost, idleConnTimeout,
+    #     responseHeaderTimeout, expectContinueTimeout (Go http.Transport settings; all
+    #     default to 0 or false: no limit or timeout, except maxIdleConnsPerHost 0 = 2)
+    # Example, with the client ID and secret mounted from a Secret:
+    #   httpClient:
+    #     timeout: 5s
+    #     basicAuth:
+    #       username:
+    #         source: file
+    #         file: { path: /etc/credentials/idp/client-id, format: binary }
+    #       password:
+    #         source: file
+    #         file: { path: /etc/credentials/idp/client-secret, format: binary }
+    # Example with an API token from an environment variable:
+    #   httpClient:
+    #     apiToken: { source: env, env: IDP_API_TOKEN }
+    # Example with OAuth2 client authentication:
+    #   httpClient:
+    #     oauth2Auth:
+    #       credentials:
+    #         clientID: { value: extauthz }
+    #         authMethod: basic
+    #         clientSecret: { source: env, env: IDP_CLIENT_SECRET }
+    # Example with a client certificate and transport limits:
+    #   httpClient:
+    #     timeout: 5s
+    #     mtls:
+    #       cert: { source: file, file: { path: /etc/credentials/idp/tls.crt, format: binary } }
+    #       certKey: { source: file, file: { path: /etc/credentials/idp/tls.key, format: binary } }
+    #     transportAttributes:
+    #       tlsHandshakeTimeout: 5s
+    #       responseHeaderTimeout: 5s
+    #       idleConnTimeout: 90s
+    #       maxIdleConns: 100
+    #       maxIdleConnsPerHost: 10
+    #       maxConnsPerHost: 50
+    #       disableKeepAlives: false
+    #       disableCompression: false
+    #       expectContinueTimeout: 1s
+    #
+    # Client authentication for token introspection at tenant identity providers (from
+    # Session Manager). ExtAuthZ uses the client ID that Session Manager returns for the
+    # tenant (`credentials.clientID` here is replaced by it) with these credentials.
+    # Needed when tenant identity providers have a client ID. Settings:
+    #   url: <value reference>; the token endpoint, used as audience of the client
+    #     assertion with authMethod jwt
+    #   credentials:
+    #     authMethod: post (default) | basic | jwt | private | none
+    #       post: client_id and client_secret in the request body
+    #       basic: client ID and clientSecret in the Authorization header
+    #       jwt: a client assertion signed with clientSecret (HS256)
+    #       private: the given clientAssertion and clientAssertionType
+    #       none: client_id only (public client)
+    #     clientSecret: <value reference>, for post, basic and jwt
+    #     clientAssertion: <value reference>, for private: the signed JWT
+    #     clientAssertionType: <value reference>, for private
+    #   mtls: client certificate; it can authenticate the client on its own
+    # Example:
+    #   oauth2:
+    #     credentials:
+    #       authMethod: post
+    #       clientSecret:
+    #         source: file
+    #         file: { path: /etc/credentials/tenant-introspection/client-secret, format: binary }
+    # Example with authMethod jwt:
+    #   oauth2:
+    #     url: { value: https://idp.example.com/oauth2/token }
+    #     credentials:
+    #       authMethod: jwt
+    #       clientSecret: { source: env, env: TENANT_CLIENT_SECRET }
+    # Example with a client assertion (private_key_jwt):
+    #   oauth2:
+    #     credentials:
+    #       authMethod: private
+    #       clientAssertion:
+    #         source: file
+    #         file: { path: /etc/credentials/tenant-introspection/assertion.jwt, format: binary }
+    #       clientAssertionType:
+    #         value: urn:ietf:params:oauth:client-assertion-type:jwt-bearer
+    # Example with a client certificate only:
+    #   oauth2:
+    #     mtls:
+    #       cert: { source: file, file: { path: /etc/credentials/oidc/tls.crt, format: binary } }
+    #       certKey: { source: file, file: { path: /etc/credentials/oidc/tls.key, format: binary } }
+    # Example for public clients:
+    #   oauth2:
+    #     credentials:
+    #       authMethod: none
 
   # -- Path prefixes whose next path segment is the tenant ID, for example
-  # `/cmk/v1/<tenant>/…`. Session cookies and tenant identity providers are only used on
-  # these paths, and only when `sessionManager.enabled` is true.
+  # `/cmk/v1/<tenant>/…` (a missing trailing `/` is added). Used only when
+  # `sessionManager.enabled` is true: on these paths ExtAuthZ checks the tenant's session
+  # cookie (`__Host-Http-SESSION-<tenant>`) with the CSRF token (`x-csrf-token` header),
+  # and bearer tokens that no static provider matches against the tenant's identity
+  # provider. A request on such a path without a tenant segment is rejected as
+  # unauthenticated. With an empty list, Session Manager is not used at all.
   sessionPathPrefixes: ["/cmk/v1/"]
 
   sessionManager:
@@ -505,15 +727,33 @@ config:
     # `secretRef` has no default (0.14.x used `{ type: insecure }`): the chart refuses to
     # render when `enabled` is true without it.
     enabled: false
+    # Settings:
+    #   address: host:port of Session Manager's gRPC API. Required
+    #   secretRef: connection security, one of
+    #     type: mtls        TLS with a client certificate (`mtls`). Use it in production
+    #     type: insecure    no TLS; only inside a service mesh with mutual TLS
+    #   attributes:
+    #     keepaliveTime: 80s       # ping Session Manager after this idle time
+    #     keepaliveTimeout: 40s    # close the connection if the ping is not answered
+    # `version` and `pool` are accepted but have no effect.
     # Example:
     #   enabled: true
     #   address: session-manager.services.svc.cluster.local:9091   # Session Manager gRPC
     #   secretRef:
-    #     type: mtls        # or insecure inside a service mesh with mutual TLS
+    #     type: mtls
     #     mtls:
     #       cert:     { source: file, file: { path: /etc/credentials/sm/tls.crt, format: binary } }
     #       certKey:  { source: file, file: { path: /etc/credentials/sm/tls.key, format: binary } }
     #       serverCa: { source: file, file: { path: /etc/credentials/sm/ca.crt, format: binary } }
+    #       attributes:
+    #         serverName: session-manager.services.svc.cluster.local
+    #   attributes:
+    #     keepaliveTime: 80s
+    #     keepaliveTimeout: 40s
+    # Example inside a service mesh with mutual TLS:
+    #   enabled: true
+    #   address: session-manager.services.svc.cluster.local:9091
+    #   secretRef: { type: insecure }
 
   # CSRF secret; value reference. **Must contain exactly the same bytes as Session
   # Manager's `sessionManager.csrfSecret`**, at least 32 bytes and without a trailing
@@ -522,52 +762,163 @@ config:
   # csrfSecret:
   #   source: file
   #   file: { path: /etc/credentials/csrf-secret/csrf_secret, format: binary }
+  # Example from an environment variable (`extraEnvs` with `valueFrom.secretKeyRef`):
+  # csrfSecret: { source: env, env: CSRF_SECRET }
+  # Example from one field of a mounted JSON file:
+  # csrfSecret:
+  #   source: file
+  #   file: { path: /etc/credentials/session.json, format: json, jsonPath: "$.csrfSecret" }
 
   clientData:
-    # -- Path of the file that contains the ID of the active signing key. Its directory
-    # holds the RSA private keys as `<key ID>.pem`. CMK verifies the signature with the
-    # public key of the same name.
+    # -- Path of the file that contains the ID of the active signing key. The same
+    # directory holds the RSA private keys as `<key ID>.pem` (PEM, PKCS #1 or PKCS #8).
+    # ExtAuthZ signs the client data with the active key (RS256) and sends the key ID with
+    # it; CMK verifies the signature with the public key of the same name.
     signingKeyIDFilePath: /etc/extauthz-signing/keyId
 
-  # Audit events (OTLP/HTTP logs) for unauthorized requests and bursts of unauthenticated
-  # requests. Omitted by default: no audit events are sent.
+  # Audit events (OTLP logs, sent as JSON over HTTP) for denied requests and, with
+  # `valkey.rateDetection`, for bursts of unauthenticated requests. Omitted by default: no
+  # audit events are sent. Settings:
+  #   endpoint: URL of the OTLP/HTTP logs endpoint. Events are sent only when it is set
+  #   httpClient: timeout (default 10s), client authentication (basicAuth, oauth2Auth or
+  #     apiToken), mtls and transportAttributes; the same settings as `jwt.httpClient`
+  #   additionalProperties: attributes added to every event, as a YAML map in a string
+  # Example:
   # audit:
-  #   endpoint: http://otel-collector:4318/v1/logs
+  #   endpoint: https://otel-collector:4318/v1/logs
   #   httpClient:
   #     timeout: 10s
-  #     # mtls:
-  #     #   cert:    { source: file, file: { path: /etc/credentials/audit/tls.crt, format: binary } }
-  #     #   certKey: { source: file, file: { path: /etc/credentials/audit/tls.key, format: binary } }
-  #   additionalProperties: "{ service: extauthz }"
+  #     mtls:
+  #       cert:     { source: file, file: { path: /etc/credentials/audit/tls.crt, format: binary } }
+  #       certKey:  { source: file, file: { path: /etc/credentials/audit/tls.key, format: binary } }
+  #       serverCa: { source: file, file: { path: /etc/credentials/audit/ca.crt, format: binary } }
+  #   additionalProperties: "{ service: extauthz, region: eu10 }"
+  # Example with an API token:
+  # audit:
+  #   endpoint: https://otel-collector:4318/v1/logs
+  #   httpClient:
+  #     apiToken: { source: env, env: AUDIT_API_TOKEN }
 
   # Detection of bursts of unauthenticated requests across pods, counted in Valkey.
-  # Requires `audit` for delivery. Omitted by default.
+  # ExtAuthZ counts unauthenticated requests per identity: the token issuer where it is
+  # known, otherwise the tenant of a session path (requests with neither are not counted).
+  # When one identity reaches `threshold` requests within `window`, a single audit event is
+  # sent for all pods. Requires `audit` for delivery. Omitted by default.
+  # Example:
   # valkey:
-  #   address: { value: valkey:6379 }   # value reference; comma-separated for a cluster
+  #   address: { value: valkey:6379 }    # value reference; host:port. Required with
+  #                                      # rateDetection. Comma-separated for a cluster or,
+  #                                      # with masterSet, the Sentinel addresses
   #   user: { value: extauthz }          # value reference; optional, for Valkey ACL users
   #   password:                          # value reference; optional
   #     source: file
   #     file: { path: /etc/credentials/valkey/password, format: binary }
-  #   prefix: extauthz
-  #   secretRef: { type: mtls, mtls: { … } }   # only mtls enables TLS
-  #   masterSet: ""                      # Sentinel master set; switches to Sentinel
-  #   topologyRefreshInterval: 5s        # Sentinel topology refresh; 0 disables it
+  #   prefix: extauthz                   # prefix of the keys ExtAuthZ writes (default "")
+  #   secretRef:                         # TLS with a client certificate. Only type mtls
+  #     type: mtls                       # enables TLS; omit secretRef for a connection
+  #     mtls:                            # without TLS
+  #       cert: { source: file, file: { path: /etc/credentials/valkey/tls.crt, format: binary } }
+  #       certKey: { source: file, file: { path: /etc/credentials/valkey/tls.key, format: binary } }
+  #       serverCa: { source: file, file: { path: /etc/credentials/valkey/ca.crt, format: binary } }
+  #   masterSet: mymaster                # Sentinel master set; connects through Sentinel
+  #                                      # (default "": no Sentinel)
+  #   topologyRefreshInterval: 5s        # with Sentinel: also re-read the topology at this
+  #                                      # interval (default 0: only on failover events)
   #   rateDetection:
-  #     enabled: true
-  #     threshold: 50          # unauthenticated requests per identity and window
-  #     window: 1m
-  #     cooldown: 1m           # at least as long as window (default: window)
+  #     enabled: true          # default false: Valkey is not used
+  #     threshold: 50          # unauthenticated requests per identity and window (default
+  #                            # 50, at least 1)
+  #     window: 1m             # counting window (default 1m, at least 1s)
+  #     cooldown: 1m           # no further event for the identity for this long; at least
+  #                            # as long as window (default: window)
   #     countUnknown: false    # also count requests without any credentials
   #     queueSize: 1024        # audit queue; events are dropped when it is full
-  #     workers: 4
-  #     dispatchTimeout: 10s
+  #     workers: 4             # number of senders draining the audit queue
+  #     dispatchTimeout: 10s   # time limit for one queued event (Valkey and audit call)
+  # queueSize, workers and dispatchTimeout also apply when only `audit` is set.
+  # Example with the address and credentials from environment variables, without
+  # Sentinel:
+  # valkey:
+  #   address: { source: env, env: VALKEY_ADDRESS }
+  #   user: { source: env, env: VALKEY_USER }
+  #   password: { source: env, env: VALKEY_PASSWORD }
+  #   rateDetection:
+  #     enabled: true
+  # Example with the credentials from one JSON file:
+  # valkey:
+  #   address: { source: file, file: { path: /etc/credentials/valkey/address, format: binary } }
+  #   user:
+  #     source: file
+  #     file: { path: /etc/credentials/valkey.json, format: json, jsonPath: "$.user" }
+  #   password:
+  #     source: file
+  #     file: { path: /etc/credentials/valkey.json, format: json, jsonPath: "$.password" }
+  #   rateDetection:
+  #     enabled: true
 
-  # OpenTelemetry export of logs, traces and metrics. Same structure as in the other
-  # OpenKCM services; see the configuration reference. Omitted by default.
+  # OpenTelemetry export of traces, metrics and logs. Omitted by default: nothing is
+  # exported. Settings of each of `traces`, `metrics` and `logs`:
+  #   enabled: export this signal (default false)
+  #   protocol: grpc or http (OTLP)
+  #   host: value reference; the collector as host:port, without scheme
+  #   url: with http only: the URL path, for example /v1/traces, /v1/metrics or /v1/logs.
+  #     Required with http (empty means the root path)
+  #   secretRef: connection security. Required. With grpc: insecure, mtls, api-token or
+  #     basic; with http: insecure, mtls or api-token
+  #     { type: insecure }                                  # no TLS
+  #     { type: mtls, mtls: { … } }                         # TLS with a client certificate
+  #     { type: api-token, apiToken: <value reference> }    # TLS; header
+  #                                                         # `Authorization: Api-Token …`
+  #     { type: basic, basic: { username: <value reference>, password: <value reference> } }
+  #                                                         # TLS; basic authentication
+  #   metrics.prometheus.enabled: serve the metrics at `/metrics` on the status port instead
+  #     of pushing them. Needs metrics.enabled; protocol, host and secretRef are then unused
+  #   dynatraceOneAgent: add the Dynatrace OneAgent metadata to the telemetry attributes
+  #     (default false)
+  # All traces are sampled. Exported logs are sent in addition to the container output,
+  # with the masking of `logger.formatter.fields.masking`.
+  # Example:
   # telemetry:
-  #   metrics:
+  #   traces:
   #     enabled: true
   #     protocol: grpc
   #     host: { source: env, env: OTEL_HOST }
-  #     secretRef: { type: insecure }
+  #     secretRef:
+  #       type: mtls
+  #       mtls:
+  #         cert: { source: file, file: { path: /etc/credentials/otel/tls.crt, format: binary } }
+  #         certKey: { source: file, file: { path: /etc/credentials/otel/tls.key, format: binary } }
+  #         serverCa: { source: file, file: { path: /etc/credentials/otel/ca.crt, format: binary } }
+  #   logs:
+  #     enabled: true
+  #     protocol: grpc
+  #     host: { source: env, env: OTEL_HOST }
+  #     secretRef:
+  #       type: basic
+  #       basic:
+  #         username: { source: env, env: OTEL_USER }
+  #         password: { source: env, env: OTEL_PASSWORD }
+  #   metrics:
+  #     enabled: true
   #     prometheus: { enabled: true }
+  # Example over http:
+  # telemetry:
+  #   traces:
+  #     enabled: true
+  #     protocol: http
+  #     host: { value: otel-collector:4318 }
+  #     url: /v1/traces
+  #     secretRef: { type: api-token, apiToken: { source: env, env: OTEL_API_TOKEN } }
+  #   metrics:
+  #     enabled: true
+  #     protocol: http
+  #     host: { value: otel-collector:4318 }
+  #     url: /v1/metrics
+  #     secretRef: { type: api-token, apiToken: { source: env, env: OTEL_API_TOKEN } }
+  #   logs:
+  #     enabled: true
+  #     protocol: http
+  #     host: { value: otel-collector:4318 }
+  #     url: /v1/logs
+  #     secretRef: { type: api-token, apiToken: { source: env, env: OTEL_API_TOKEN } }
+  #   dynatraceOneAgent: true

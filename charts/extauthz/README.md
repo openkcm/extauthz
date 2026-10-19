@@ -6,9 +6,10 @@ protected request to ExtAuthZ; ExtAuthZ authenticates the caller (client
 certificate, bearer token or browser session), evaluates Cedar policies, and adds
 signed client data for the backend.
 
-Every value is documented in [values.yaml](values.yaml). Every setting of ExtAuthZ
-itself, under `config`, is described in the
-[ExtAuthZ configuration reference](https://openkcm.io/components/cmk/security/extauthz-config).
+Every value is documented in [values.yaml](values.yaml), including every setting of
+ExtAuthZ itself under `config`, with its default and a commented example of each form.
+The [ExtAuthZ configuration reference](https://openkcm.io/components/cmk/security/extauthz-config)
+describes the settings in more depth.
 The [configuration guide](https://openkcm.io/components/cmk/security/configuration)
 shows the complete setup with Envoy Gateway, Session Manager and CMK.
 
@@ -118,6 +119,7 @@ are not production-ready.
 | `config.sessionManager` | disabled | Browser sessions through Session Manager |
 | `config.csrfSecret` | not set | Required with `sessionManager`; the same bytes as Session Manager's secret |
 | `config.audit`, `config.valkey` | not set | Audit events and burst detection |
+| `config.telemetry` | not set | OpenTelemetry export of traces, metrics and logs |
 | `resources` | 100m CPU, 128Mi memory and 128Mi ephemeral storage requested; 512Mi memory and 512Mi ephemeral storage limits | |
 | `hpa.enabled` | `false` | Autoscale on CPU and memory |
 | `lifecycle` | `{}` | A preStop `sleep` keeps terminating pods serving while Envoy Gateway stops sending them requests |
