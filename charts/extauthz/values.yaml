@@ -357,7 +357,7 @@ extraVolumes:
             name: extauthz-signing-keys-secret
 
 # -- Volume mounts added to the ExtAuthZ container. Do not mount anything at
-# `/etc/extauthz` itself; it holds the configuration.
+# `/etc/extauthz/config.yaml`, the configuration file, or over `/etc/extauthz`.
 #   - name: csrf-secret
 #     mountPath: /etc/credentials/csrf-secret
 #     readOnly: true

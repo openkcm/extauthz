@@ -18,7 +18,7 @@ shows the complete setup with Envoy Gateway, Session Manager and CMK.
 | Resource | Purpose |
 | --- | --- |
 | Deployment | The ExtAuthZ pods |
-| ConfigMap | The configuration, rendered from `config` and mounted at `/etc/extauthz` |
+| ConfigMap | The configuration, rendered from `config` and mounted as `/etc/extauthz/config.yaml` |
 | Service | ext_authz gRPC API (9092) and status endpoints (8080) inside the cluster |
 | ServiceAccount | Identity of the pods. ExtAuthZ does not call the Kubernetes API, so no token is mounted |
 | NetworkPolicy | Optional (`networkPolicy.enabled`): who may reach the pods |

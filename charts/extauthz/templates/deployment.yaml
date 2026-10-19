@@ -121,7 +121,8 @@ spec:
           {{- end }}
           volumeMounts:
             - name: config
-              mountPath: /etc/extauthz
+              mountPath: /etc/extauthz/config.yaml
+              subPath: config.yaml
               readOnly: true
             {{- if .Values.tmpVolume.enabled }}
             - name: tmp
