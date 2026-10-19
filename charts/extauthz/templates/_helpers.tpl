@@ -102,7 +102,7 @@ Whether the configuration ConfigMap is immutable. configMap.immutable is preferr
 config.isImmutable is still honoured for compatibility with older values files.
 */}}
 {{- define "extauthz.configImmutable" -}}
-{{- if or .Values.configMap.immutable .Values.config.isImmutable -}}
+{{- if or .Values.configMap.immutable (and (kindIs "map" .Values.config) .Values.config.isImmutable) -}}
 true
 {{- end -}}
 {{- end }}
