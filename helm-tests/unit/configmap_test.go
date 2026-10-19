@@ -75,7 +75,7 @@ func TestConfigMap(t *testing.T) {
 			expected: []string{
 				"application:",
 				"name: " + appName,
-				`environment: "staging"`,
+				"environment: staging",
 				"team: kms",
 			},
 			// The flat chart keys must not reach the ExtAuthZ configuration, which
@@ -108,13 +108,13 @@ func TestConfigMap(t *testing.T) {
 			},
 		},
 		{
-			// templates/configmap.yaml lists the ExtAuthZ settings; other keys are not
-			// written, because ExtAuthZ rejects unknown keys at startup.
-			name:   "keys that are not ExtAuthZ settings are not written",
+			// Every key under config is passed through, so a misspelled key reaches
+			// config.yaml and ExtAuthZ rejects it at startup instead of ignoring it.
+			name:   "all configuration sections are passed through",
 			values: "--set config.featureFlags.enabled=true --set config.unknown=x",
-			unexpected: []string{
-				"featureFlags",
-				"unknown",
+			expected: []string{
+				"featureFlags:",
+				"unknown: x",
 			},
 		},
 	}
@@ -150,5 +150,27 @@ func TestConfigMap(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// ExtAuthZ crashes at startup when Session Manager is enabled without secretRef, so the
+// chart refuses to render.
+func TestConfigMapSessionManagerWithoutSecretRef(t *testing.T) {
+	cmd := exec.CommandContext(t.Context(), "helm", "template", appName, path,
+		"-s", "templates/configmap.yaml",
+		"--set", "config.sessionManager.enabled=true",
+		"--set", "config.sessionManager.address=session-manager:9091",
+	)
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &out
+
+	err := cmd.Run()
+	if err == nil {
+		t.Fatalf("expected helm template to fail, but it succeeded.\nOutput: %s", out.String())
+	}
+
+	if !strings.Contains(out.String(), "config.sessionManager.secretRef is not set") {
+		t.Errorf("expected the error to name config.sessionManager.secretRef.\nOutput: %s", out.String())
 	}
 }

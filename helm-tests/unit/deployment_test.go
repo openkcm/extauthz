@@ -33,6 +33,7 @@ func TestDeployment(t *testing.T) {
 				"enableServiceLinks: false",
 				"runAsNonRoot: true",
 				"runAsUser: 65532",
+				"fsGroup: 65532",
 				"ephemeral-storage: 128Mi",
 				"ephemeral-storage: 512Mi",
 				"readOnlyRootFilesystem: true",
@@ -41,9 +42,10 @@ func TestDeployment(t *testing.T) {
 				"mountPath: /tmp",
 				"name: " + appName + "-config",
 			},
-			// No pull secret is configured by default.
+			// No pull secret and no lifecycle hook are configured by default.
 			unexpected: []string{
 				"imagePullSecrets:",
+				"lifecycle:",
 			},
 		},
 		{
@@ -128,6 +130,15 @@ func TestDeployment(t *testing.T) {
 				"annotations:",
 				"prometheus.io/port: 8080",
 				"prometheus.io/scrape: true",
+			},
+		},
+		{
+			name:   "preStop sleep",
+			values: "--set lifecycle.preStop.sleep.seconds=5",
+			expected: []string{
+				"lifecycle:",
+				"preStop:",
+				"seconds: 5",
 			},
 		},
 		{

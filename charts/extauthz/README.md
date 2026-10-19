@@ -120,12 +120,13 @@ are not production-ready.
 | `config.audit`, `config.valkey` | not set | Audit events and burst detection |
 | `resources` | 100m CPU, 128Mi memory and 128Mi ephemeral storage requested; 512Mi memory and 512Mi ephemeral storage limits | |
 | `hpa.enabled` | `false` | Autoscale on CPU and memory |
+| `lifecycle` | `{}` | A preStop `sleep` keeps terminating pods serving while Envoy Gateway stops sending them requests |
 
 ## Security defaults
 
 | Setting | Default |
 | --- | --- |
-| Pod | Non-root (user and group 65532), `RuntimeDefault` seccomp profile, no ServiceAccount token, no Service environment variables |
+| Pod | Non-root (user, group and `fsGroup` 65532), `RuntimeDefault` seccomp profile, no ServiceAccount token, no Service environment variables |
 | Container | No privilege escalation, all capabilities dropped, read-only root filesystem, writable `/tmp` |
 | gRPC reflection | Off |
 | Profiling endpoints | Off |
@@ -152,12 +153,11 @@ under `config` restarts them during `helm upgrade`. Changes to the ConfigMaps an
 Secrets you manage yourself need a restart:
 `kubectl rollout restart deployment/<release>-extauthz`.
 
-[templates/configmap.yaml](templates/configmap.yaml) writes `config.yaml` with one
-section per setting: `config.environment` and `config.labels` become
-`application.environment` and `application.labels`; `featureGates`, `logger`, `status`,
-`telemetry`, `grpcServer`, `cedar`, `mtls`, `jwt`, `clientData`, `audit`, `valkey`,
-`sessionPathPrefixes`, `sessionManager` and `csrfSecret` are written as they are. Other
-keys under `config` are not written, so check a key's spelling when it has no effect.
+Everything under `config` is written to `config.yaml` (helper `extauthz.config` in
+[templates/_helpers.tpl](templates/_helpers.tpl)). `config.environment` and `config.labels`
+become `application.environment` and `application.labels`, and `config.application`
+overrides single application fields. ExtAuthZ rejects unknown keys at startup, so a
+misspelled key stops the pods instead of being ignored.
 
 ## Upgrading from 0.14.x
 
@@ -165,9 +165,10 @@ keys under `config` are not written, so check a key's spelling when it has no ef
 | --- | --- |
 | Default image repository is now `extauthz/images/extauthz` (was `images/checker`) | If you set `image.repository` yourself, nothing changes |
 | No `imagePullSecrets` by default (was `registry-access`) | Set `imagePullSecrets` if you pull from a private registry |
-| `replicas` comes from `replicaCount` and is omitted when `hpa.enabled` is true (was `hpa.minReplicas`, only with the autoscaler) | Set `replicaCount`; with the autoscaler, upgrades no longer reset the replica count |
+| `replicas` comes from `replicaCount` and is omitted when `hpa.enabled` is true (was `hpa.minReplicas`, only with the autoscaler) | Set `replicaCount`. With the autoscaler, the upgrade to this version drops the Deployment to one replica once, unless you follow [Keeping the replica count](#keeping-the-replica-count); later upgrades no longer reset it |
 | The ConfigMap is named after the release (`<release>-extauthz-config`) | None; for a release named `extauthz` the name stays `extauthz-config` |
-| `config.sessionManager` is disabled by default (was enabled with `localhost:5555`) | Configure it explicitly, with `csrfSecret` |
+| All keys under `config` are rendered, not only a fixed list | Remove keys that are not ExtAuthZ settings: they now stop the pods at startup |
+| `config.sessionManager` is disabled by default (was enabled with `localhost:5555` and `secretRef: { type: insecure }`) | Configure `address`, `secretRef` and `csrfSecret` explicitly. The chart fails to render when `enabled` is true without `secretRef` |
 | `config.jwt.providers` is empty by default (was a placeholder issuer) | Configure your issuers |
 | New security defaults, probes and resource requests | Override `securityContext`, `pod.securityContext`, the probes and `resources` if needed |
 | `config.logger.level` defaults to `info`, `config.environment` to `production` | Set them explicitly if you rely on the old values |
@@ -175,12 +176,42 @@ keys under `config` are not written, so check a key's spelling when it has no ef
 | PodDisruptionBudget without `minAvailable` or `maxUnavailable` uses `maxUnavailable: 1` | Set `minAvailable` explicitly if you want the old behaviour |
 | `config.isImmutable` is replaced by `configMap.immutable` | The old key still works |
 
+### Keeping the replica count
+
+With `hpa.enabled`, the 0.14.x chart wrote `replicas` into the Deployment; this chart
+leaves it to the autoscaler. A client-side upgrade (Helm 3, or Helm 4 for a release
+installed with client-side apply) removes the field, so Kubernetes sets the Deployment to
+one replica and stops the other pods until the autoscaler scales it up again (to
+`hpa.minReplicas` at its next sync). No Helm flag prevents this with client-side apply;
+setting `hpa.minReplicas` to the current replica count for this upgrade only makes the
+autoscaler restore the count right after it.
+
+With Helm 4, let a second field manager take over the current replica count, then upgrade
+with server-side apply. The field stays because the second manager still owns it:
+
+```sh
+REPLICAS=$(kubectl -n envoy-gateway-system get deployment extauthz -o jsonpath='{.spec.replicas}')
+kubectl -n envoy-gateway-system apply --server-side --field-manager=handover-to-hpa --validate=false -f - <<EOF
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: extauthz
+spec:
+  replicas: ${REPLICAS}
+EOF
+helm upgrade extauthz ./charts/extauthz -n envoy-gateway-system -f extauthz-values.yaml --server-side=true
+```
+
+`--server-side=true` without the first step keeps the count only if the autoscaler has
+changed it since the last install or upgrade; otherwise Helm still owns the field and
+removes it.
+
 ## Troubleshooting
 
 | Symptom | Cause |
 | --- | --- |
 | Pods stay in `ContainerCreating` | A ConfigMap or Secret from [Objects you create](#objects-you-create) is missing |
-| Pod exits with `has invalid keys` | A key under `config` is not an ExtAuthZ setting |
+| Pod exits with `has invalid keys` | A key under `config` (for example `config.sessionManger` or `config.logger.levl`) is not an ExtAuthZ setting |
 | Pod exits with an error about trusted subjects | `trustedSubjects.yaml` is missing or invalid |
 | Every authenticated request gets `403` | No Cedar policy was loaded: check that the policy files end in `.cedar` and are directly in `config.cedar.policyPath` |
 | Browser requests fail with `CSRF token is not valid` | `config.csrfSecret` differs from Session Manager's secret, or is not set |

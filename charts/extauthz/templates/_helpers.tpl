@@ -108,15 +108,29 @@ true
 {{- end }}
 
 {{/*
-Name of the configuration ConfigMap. An immutable ConfigMap gets a hash in its name, so that
-a changed configuration creates a new ConfigMap instead of failing the upgrade. config.yaml
-(templates/configmap.yaml) is made of the values under config, the chart name and the chart
-version, so the hash covers these.
+The ExtAuthZ configuration as rendered into config.yaml.
+- application: built from config.environment and config.labels (the chart's flat values),
+  with the chart name as application name; config.application overrides single fields.
+- Everything else under config is passed through. Chart-only keys are removed, because
+  ExtAuthZ rejects unknown keys at startup.
+*/}}
+{{- define "extauthz.config" -}}
+{{- $application := dict "name" (include "extauthz.name" .) }}
+{{- with .Values.config.environment }}{{- $_ := set $application "environment" . }}{{- end }}
+{{- with .Values.config.labels }}{{- $_ := set $application "labels" . }}{{- end }}
+{{- with .Values.config.application }}{{- $application = mergeOverwrite $application (deepCopy .) }}{{- end }}
+{{- $rest := omit .Values.config "environment" "labels" "isImmutable" "application" }}
+{{- toYaml (merge (dict "application" $application) $rest) }}
+{{- end }}
+
+{{/*
+Name of the configuration ConfigMap. An immutable ConfigMap gets a hash of the configuration
+in its name, so that a changed configuration creates a new ConfigMap instead of failing the
+upgrade.
 */}}
 {{- define "extauthz.configMapName" -}}
 {{- if include "extauthz.configImmutable" . -}}
-{{- $hash := printf "%s\n%s\n%s" .Chart.Version (include "extauthz.name" .) (toYaml .Values.config) | sha256sum | trunc 10 }}
-{{- printf "%s-config-%s" (include "extauthz.fullname" . | trunc 45 | trimSuffix "-") $hash }}
+{{- printf "%s-config-%s" (include "extauthz.fullname" . | trunc 45 | trimSuffix "-") (include "extauthz.config" . | sha256sum | trunc 10) }}
 {{- else -}}
 {{- printf "%s-config" (include "extauthz.fullname" . | trunc 56 | trimSuffix "-") }}
 {{- end -}}

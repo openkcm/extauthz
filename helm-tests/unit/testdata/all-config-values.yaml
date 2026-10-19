@@ -1,0 +1,129 @@
+# Every section under `config` that values.yaml documents, with its optional settings filled.
+# TestConfigLoad loads the rendered config.yaml with ExtAuthZ's configuration loader, which
+# rejects unknown keys. Keep this file in sync with the examples in values.yaml.
+config:
+  environment: staging
+  labels: { team: kms }
+
+  featureGates:
+    enrich-header-with-client-type: true
+    enrich-header-with-client-region: true
+
+  logger:
+    level: debug
+    format: text
+
+  status:
+    enabled: true
+    address: :8080
+    profiling: false
+
+  telemetry:
+    logs:
+      enabled: true
+      protocol: grpc
+      host: { source: env, env: OTEL_HOST }
+      secretRef: { type: insecure }
+    traces:
+      enabled: true
+      protocol: grpc
+      host: { source: env, env: OTEL_HOST }
+      secretRef: { type: insecure }
+    metrics:
+      enabled: true
+      protocol: grpc
+      host: { source: env, env: OTEL_HOST }
+      secretRef: { type: insecure }
+      prometheus: { enabled: true }
+
+  grpcServer:
+    address: :9092
+    flags:
+      health: true
+      reflection: false
+    maxRecvMsgSize: 125829120
+    efPolMinTime: 180s
+    efPolPermitWithoutStream: false
+    attributes:
+      maxConnectionIdle: 1800s
+      maxConnectionAge: 1800s
+      maxConnectionAgeGrace: 300s
+      time: 120m
+      timeout: 20s
+
+  cedar:
+    policyPath: /etc/extauthz-policies
+
+  mtls:
+    trustedSubjectsYaml: /etc/extauthz-mtls/trustedSubjects.yaml
+
+  jwt:
+    issuerClaimKeys: [iss]
+    providers:
+      - issuer: https://idp.example.com/realms/platform
+        issuerURI: https://idp.example.com/realms/platform
+        jwksURI: https://idp.example.com/realms/platform/protocol/openid-connect/certs
+        audiences: [cmk-api]
+        disableTokenIntrospection: false
+    httpClient:
+      timeout: 5s
+      basicAuth:
+        username: { source: file, file: { path: /etc/credentials/idp/client-id, format: binary } }
+        password: { source: file, file: { path: /etc/credentials/idp/client-secret, format: binary } }
+    oauth2:
+      credentials:
+        authMethod: post
+        clientSecret: { source: file, file: { path: /etc/credentials/tenant-introspection/client-secret, format: binary } }
+
+  sessionPathPrefixes: ["/cmk/v1/"]
+
+  sessionManager:
+    enabled: true
+    address: session-manager.services.svc.cluster.local:9091
+    secretRef:
+      type: mtls
+      mtls:
+        cert:     { source: file, file: { path: /etc/credentials/sm/tls.crt, format: binary } }
+        certKey:  { source: file, file: { path: /etc/credentials/sm/tls.key, format: binary } }
+        serverCa: { source: file, file: { path: /etc/credentials/sm/ca.crt, format: binary } }
+
+  csrfSecret:
+    source: file
+    file: { path: /etc/credentials/csrf-secret/csrf_secret, format: binary }
+
+  clientData:
+    signingKeyIDFilePath: /etc/extauthz-signing/keyId
+
+  audit:
+    endpoint: http://otel-collector:4318/v1/logs
+    httpClient:
+      timeout: 10s
+      mtls:
+        cert:    { source: file, file: { path: /etc/credentials/audit/tls.crt, format: binary } }
+        certKey: { source: file, file: { path: /etc/credentials/audit/tls.key, format: binary } }
+    additionalProperties: "{ service: extauthz }"
+
+  valkey:
+    address: { value: valkey:6379 }
+    user: { value: extauthz }
+    password:
+      source: file
+      file: { path: /etc/credentials/valkey/password, format: binary }
+    prefix: extauthz
+    secretRef:
+      type: mtls
+      mtls:
+        cert:     { source: file, file: { path: /etc/credentials/valkey/tls.crt, format: binary } }
+        certKey:  { source: file, file: { path: /etc/credentials/valkey/tls.key, format: binary } }
+        serverCa: { source: file, file: { path: /etc/credentials/valkey/ca.crt, format: binary } }
+    masterSet: mymaster
+    topologyRefreshInterval: 5s
+    rateDetection:
+      enabled: true
+      threshold: 50
+      window: 1m
+      cooldown: 1m
+      countUnknown: false
+      queueSize: 1024
+      workers: 4
+      dispatchTimeout: 10s

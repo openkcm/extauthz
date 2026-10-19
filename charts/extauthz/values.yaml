@@ -65,8 +65,8 @@ image:
   # `ghcr.io/openkcm/extauthz/images/extauthz`.
   repository: extauthz/images/extauthz
 
-  # -- Image tag, for example `v0.14.0`. Empty: the chart's appVersion, the ExtAuthZ version
-  # this chart release is made for and that its OCM component references.
+  # -- Image tag, for example `v0.14.0`. Empty: the chart's appVersion, the ExtAuthZ release
+  # this chart deploys by default.
   tag: ""
 
   # -- Image digest, for example `sha256:0e07…`. Takes precedence over `image.tag`.
@@ -80,8 +80,12 @@ image:
   command: []
 
   # -- Arguments for ExtAuthZ. Supported flags:
-  #   --graceful-shutdown=<seconds>          wait after SIGTERM before exiting (default 1)
-  #   --graceful-shutdown-message=<format>   message printed during that wait
+  #   --graceful-shutdown=<seconds>          seconds to wait before the process exits (default 1)
+  #   --graceful-shutdown-message=<format>   message printed before that wait
+  # On SIGTERM, ExtAuthZ first stops its gRPC server (no new connections; running requests
+  # finish), then waits `--graceful-shutdown` seconds without serving anything, then exits.
+  # To keep serving while Envoy Gateway stops sending requests to a terminating pod, use a
+  # preStop sleep (`lifecycle`), not this flag.
   # Example: ["--graceful-shutdown=5"]
   args: []
 
@@ -113,11 +117,13 @@ pod:
   # non-root user of the published image, with the runtime's default seccomp profile.
   # `runAsUser` is set because Kubernetes enforces `runAsNonRoot` only for images
   # with a numeric user; an image that names its user (`USER nonroot`) would be
-  # refused.
+  # refused. `fsGroup` makes group 65532 the owner of the files in the pod's volumes, so
+  # ExtAuthZ can also read Secrets mounted with a restrictive `defaultMode` such as `0400`.
   securityContext:
     runAsNonRoot: true
     runAsUser: 65532
     runAsGroup: 65532
+    fsGroup: 65532
     seccompProfile:
       type: RuntimeDefault
 
@@ -129,8 +135,8 @@ pod:
   # a high priority class.
   priorityClassName: ""
 
-  # -- Seconds the pod has to shut down after SIGTERM. Null: the Kubernetes default
-  # (30). Keep it longer than `--graceful-shutdown`.
+  # -- Seconds the pod has to shut down, including the preStop hook (`lifecycle`). Null: the
+  # Kubernetes default (30). Keep it longer than the preStop sleep plus `--graceful-shutdown`.
   terminationGracePeriodSeconds: null
 
   disruptionBudget:
@@ -191,8 +197,11 @@ resources:
     memory: 512Mi
     ephemeral-storage: 512Mi
 
-# -- Startup probe: gives ExtAuthZ time to load its policies and keys before the liveness
-# probe applies (here up to 60 seconds). Requires `config.status.enabled: true`.
+# -- Startup probe: the liveness and readiness probes start only after it succeeds; here it
+# allows up to 60 seconds. `/probe/liveness` has no checks: it succeeds as soon as the status
+# server listens, which ExtAuthZ starts after reading its configuration and before loading its
+# policies and keys. The readiness probe tells when the gRPC API serves. Requires
+# `config.status.enabled: true`.
 startupProbe:
   httpGet:
     path: /probe/liveness
@@ -219,9 +228,21 @@ readinessProbe:
   timeoutSeconds: 2
   failureThreshold: 3
 
+# -- Lifecycle hooks of the ExtAuthZ container. Kubernetes sends SIGTERM only after the
+# preStop hook, so a preStop sleep keeps a terminating pod serving while Envoy Gateway and the
+# Service stop sending it requests. The image is distroless, without a shell or `sleep`
+# binary: use the `sleep` action (Kubernetes 1.30 or later), and keep
+# `pod.terminationGracePeriodSeconds` longer than the sleep plus `--graceful-shutdown`:
+#   lifecycle:
+#     preStop:
+#       sleep:
+#         seconds: 5
+lifecycle: {}
+
 hpa:
   # -- Create a HorizontalPodAutoscaler. Replaces `replicaCount`. Needs
-  # `resources.requests` for the metrics used.
+  # `resources.requests` for the metrics used. Upgrading from 0.14.x with the autoscaler:
+  # see "Keeping the replica count" in the README.
   enabled: false
   # -- Minimum number of pods.
   minReplicas: 1
@@ -249,7 +270,8 @@ service:
   type: ClusterIP
   # -- Ports of the Service. The first port is the ext_authz gRPC API; reference it in
   # Envoy Gateway's SecurityPolicy (`extAuth.grpc.backendRefs`). `appProtocol: grpc` lets
-  # service meshes handle the traffic as gRPC.
+  # service meshes handle the traffic as gRPC. `targetPort` is the container port number:
+  # change it together with `extraPorts` and the listen addresses under `config`.
   ports:
     - name: grpc
       protocol: TCP
@@ -262,7 +284,9 @@ service:
       targetPort: 8080
 
 # -- Ports of the ExtAuthZ container. They must match `config.grpcServer.address` and
-# `config.status.address`. The probes and the network policy refer to them by name.
+# `config.status.address`. The probes and the network policy refer to them by name, but
+# `service.ports[].targetPort` is numeric: when you change the listen addresses, change
+# `containerPort` here and `targetPort` there as well.
 extraPorts:
   - name: grpc
     protocol: TCP
@@ -377,12 +401,13 @@ extraEnvsFrom: []
 ###############################################################################
 # 6. ExtAuthZ configuration
 #
-# templates/configmap.yaml writes these settings to /etc/extauthz/config.yaml, one section
-# per key: `environment` and `labels` become `application.environment` and
-# `application.labels`, and featureGates, logger, status, telemetry, grpcServer, cedar,
-# mtls, jwt, clientData, audit, valkey, sessionPathPrefixes, sessionManager and csrfSecret
-# are written as they are. Other keys under `config` are not written. The configuration is
-# read once at startup; the chart restarts the pods when it changes.
+# Everything under `config` is written to /etc/extauthz/config.yaml (helper extauthz.config
+# in templates/_helpers.tpl), except the chart keys `environment`, `labels` and
+# `isImmutable`: `environment` and `labels` become `application.environment` and
+# `application.labels`, and `application` overrides single application fields. ExtAuthZ
+# rejects unknown keys at startup (`has invalid keys`), so a misspelled key stops the pods
+# instead of being ignored; `labels` and `featureGates` accept any name. The configuration
+# is read once at startup; the chart restarts the pods when it changes.
 #
 # Values marked "value reference" take one of:
 #   { source: embedded, value: "…" }
@@ -477,6 +502,8 @@ config:
   sessionManager:
     # -- Check browser sessions and use tenant identity providers through Session Manager.
     # Needed for the CMK UI. When enabled, set `address`, `secretRef` and `csrfSecret`.
+    # `secretRef` has no default (0.14.x used `{ type: insecure }`): the chart refuses to
+    # render when `enabled` is true without it.
     enabled: false
     # Example:
     #   enabled: true
@@ -517,6 +544,10 @@ config:
   # Requires `audit` for delivery. Omitted by default.
   # valkey:
   #   address: { value: valkey:6379 }   # value reference; comma-separated for a cluster
+  #   user: { value: extauthz }          # value reference; optional, for Valkey ACL users
+  #   password:                          # value reference; optional
+  #     source: file
+  #     file: { path: /etc/credentials/valkey/password, format: binary }
   #   prefix: extauthz
   #   secretRef: { type: mtls, mtls: { … } }   # only mtls enables TLS
   #   masterSet: ""                      # Sentinel master set; switches to Sentinel

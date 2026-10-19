@@ -22,5 +22,5 @@
 *.tmproj
 .vscode/
 
-# Not part of the published chart: values for chart-testing installs and local development.
+# Not part of the published chart: a values file for local development, if you create one.
 values-dev.yaml
