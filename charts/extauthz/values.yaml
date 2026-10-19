@@ -332,13 +332,48 @@ networkPolicy:
 # `config.clientData.signingKeyIDFilePath`. The pods do not start until the objects exist.
 # Setting `extraVolumes` or `extraVolumeMounts` replaces the whole list, so repeat these
 # entries when you add your own, for example the CSRF secret.
+#
+# Every key of these objects becomes a file of the same name. The format of each file, with
+# an example of its content, is described at the three keys under `config`. Create the
+# objects from local files with these names:
+#   kubectl -n <namespace> create configmap extauthz-trusted-subjects \
+#     --from-file=trustedSubjects.yaml
+#   kubectl -n <namespace> create configmap extauthz-systems-policies \
+#     --from-file=systems.cedar
+#   kubectl -n <namespace> create configmap extauthz-users-policies \
+#     --from-file=users.cedar
+#   kubectl -n <namespace> create secret generic extauthz-signing-keys-secret \
+#     --from-file=keyId --from-file=key-2026-10.pem
+# Both policy ConfigMaps are mounted into one directory: give their keys different names,
+# each ending in `.cedar`. A ConfigMap may hold several policy files. The same objects as
+# manifests, for example:
+#   apiVersion: v1
+#   kind: ConfigMap
+#   metadata:
+#     name: extauthz-trusted-subjects
+#     namespace: <namespace>
+#   data:
+#     trustedSubjects.yaml: |
+#       eu10:
+#         - CN=billing,OU=Clients,O=Example Corp,C=DE
+# Create the Secret with kubectl as above, so that no private key is written into a
+# manifest. ExtAuthZ reads these files at startup: after you change an object, restart it
+# with `kubectl -n <namespace> rollout restart deployment/<release>-extauthz`.
 ###############################################################################
 
-# -- Volumes added to the pod. Add the CSRF secret and identity provider credentials here:
+# -- Volumes added to the pod. Add the CSRF secret, client certificates and other
+# credentials here, and mount them with `extraVolumeMounts`. The pods can read Secrets
+# mounted with a restrictive `defaultMode` such as `0440` (see `pod.securityContext`).
+# Example entries, in addition to the ones below:
 #   - name: csrf-secret
 #     secret:
 #       secretName: csrf-secret
 #       items: [{ key: csrf_secret, path: csrf_secret }]
+#       defaultMode: 0440
+#   - name: sm-client-cert           # tls.crt, tls.key and ca.crt for Session Manager
+#     secret:
+#       secretName: sm-client-cert
+#       defaultMode: 0440
 extraVolumes:
   - name: extauthz-trusted-subjects-volume
     configMap:
@@ -357,9 +392,13 @@ extraVolumes:
             name: extauthz-signing-keys-secret
 
 # -- Volume mounts added to the ExtAuthZ container. Do not mount anything at
-# `/etc/extauthz/config.yaml`, the configuration file, or over `/etc/extauthz`.
+# `/etc/extauthz/config.yaml`, the configuration file, or over `/etc/extauthz`. Example
+# entries for the example volumes of `extraVolumes`:
 #   - name: csrf-secret
 #     mountPath: /etc/credentials/csrf-secret
+#     readOnly: true
+#   - name: sm-client-cert
+#     mountPath: /etc/credentials/sm
 #     readOnly: true
 extraVolumeMounts:
   - name: extauthz-trusted-subjects-volume
@@ -427,6 +466,15 @@ extraEnvsFrom: []
 #                           jsonPath: "$.password" } }
 #                                         # one string field of a JSON file
 # `source` defaults to `embedded`.
+# A file read with `format: binary` holds only the value: a password, client secret, API
+# token, host:port and so on. Create its Secret without a trailing newline, for example
+#   kubectl -n <namespace> create secret generic valkey-credentials \
+#     --from-literal=password='<password>'
+# (`--from-literal` adds no newline; `--from-file` keeps the file as it is), and mount it
+# with `extraVolumes` and `extraVolumeMounts`. With `format: json`, the file is a JSON
+# document and `jsonPath` selects one field of it, which must be a string, for example
+# `$.user` or `$.password` in /etc/credentials/valkey.json. Example content of valkey.json:
+#   { "user": "extauthz", "password": "<password>" }
 #
 # Client certificates. Settings marked "client certificate" (`mtls`) take:
 #   cert: <value reference>        # client certificate (PEM)
@@ -437,6 +485,16 @@ extraEnvsFrom: []
 #     serverName: …                # expected server name, if it differs from the address
 # `cert` and `certKey` are required. Without `serverCa` and `rootCAs`, the system CAs of
 # the image are trusted.
+# The files are PEM, read with `format: binary`. `cert`: one or more
+# `-----BEGIN CERTIFICATE-----` blocks, the client certificate first, then its intermediate
+# CAs. `certKey`: the private key, not encrypted, as one `-----BEGIN PRIVATE KEY-----`
+# (PKCS #8), `-----BEGIN RSA PRIVATE KEY-----` (PKCS #1) or `-----BEGIN EC PRIVATE KEY-----`
+# block. `serverCa` and each `rootCAs` entry: one or more CA certificates. The examples
+# below read them from a Secret with the keys tls.crt, tls.key and ca.crt:
+#   kubectl -n <namespace> create secret generic sm-client-cert \
+#     --from-file=tls.crt --from-file=tls.key --from-file=ca.crt
+# A Secret of type kubernetes.io/tls (`kubectl create secret tls`) has the keys tls.crt and
+# tls.key, and ca.crt when added. Mount it as shown at `extraVolumes`.
 #
 # Durations are Go duration strings: `500ms`, `10s`, `5m`, `1h30m`.
 ###############################################################################
@@ -596,27 +654,75 @@ config:
   # CMK API.
 
   cedar:
-    # -- Directory with the Cedar policy files, read at startup. Every file ending in
-    # `.cedar` directly in this directory is loaded; subdirectories are ignored, and a
-    # policy that does not parse stops the startup. No policy means every request is denied.
+    # -- Directory with the Cedar policy files, read at startup. Every file whose name ends
+    # in `.cedar` directly in this directory is loaded; other files and subdirectories are
+    # ignored, and a policy that does not parse stops the startup. A file holds any number of
+    # `permit` and `forbid` policies, each ending with `;`, and `//` comments. A request is
+    # allowed if at least one `permit` policy matches and no `forbid` policy does; with no
+    # policy, every request is denied. In the debug log, the policies are named
+    # `<file name>-<n>`, counted from 0 in each file (`systems.cedar-0`).
     # ExtAuthZ evaluates every authenticated request with:
-    #   principal  Subject::"<subject>": the certificate subject (RFC 2253), the token's
-    #              `sub` claim or the session's subject
+    #   principal  Subject::"<subject>": the certificate subject (as in the trusted subjects
+    #              file), the token's `sub` claim or the session's subject
     #   action     Action::"<HTTP method>", for example Action::"GET"
-    #   resource   not set
-    #   context    host, path (as requested), type (`x509`, `jwt` or `session`) and issuer
-    #              (the certificate issuer in RFC 2253, the token's `iss` claim or the
-    #              session's issuer); for tokens also jwksURI (the `jku` header, or "")
-    # Example policy file:
+    #   resource   not set: leave it unconstrained (`resource`)
+    #   context    strings: host and path as requested (the path with any query string),
+    #              type (`x509`, `jwt` or `session`) and issuer (the certificate issuer,
+    #              written like the subjects; the token's `iss` claim; the session's
+    #              issuer). For tokens also jwksURI (the `jku` header, or ""): check
+    #              `context.type == "jwt"` before you use it
+    # There are no entities and no schema: compare the principal with `==` or `in [ … ]`, and
+    # match paths with `like` and `*`. Example content of systems.cedar:
+    #   // Systems with a client certificate of the Example client CA. Write each subject as in
+    #   // trustedSubjects.yaml, but with every backslash doubled (\\), as Cedar strings require.
     #   permit (
-    #     principal is Subject,
+    #     principal == Subject::"CN=billing,OU=Clients,O=Example Corp,C=DE",
     #     action in [Action::"GET", Action::"POST"],
     #     resource
     #   ) when {
-    #     context.type == "jwt" &&
-    #     context.issuer == "https://idp.example.com/realms/platform" &&
+    #     context.type == "x509" &&
+    #     context.issuer == "CN=Example Client CA,O=Example Corp,C=DE" &&
     #     context.path like "/cmk/v1/*"
     #   };
+    #   // Read-only access for the reporting service and for the billing service in us10.
+    #   permit (
+    #     principal,
+    #     action == Action::"GET",
+    #     resource
+    #   ) when {
+    #     principal in [
+    #       Subject::"CN=reporting,OU=Clients,O=Example Corp,C=DE",
+    #       Subject::"CN=billing,OU=Clients,O=Example\\, Inc.,C=US"
+    #     ] &&
+    #     context.type == "x509" &&
+    #     context.issuer == "CN=Example Client CA,O=Example Corp,C=DE" &&
+    #     context.path like "/cmk/v1/*"
+    #   };
+    #   // A technical user with tokens of a statically trusted identity provider
+    #   // (config.jwt.providers), identified by the sub claim of its tokens.
+    #   permit (
+    #     principal == Subject::"automation-client",
+    #     action in [Action::"GET", Action::"POST", Action::"DELETE"],
+    #     resource
+    #   ) when {
+    #     context.type == "jwt" &&
+    #     context.issuer == "https://idp.example.com/realms/automation" &&
+    #     context.path like "/cmk/v1/*"
+    #   };
+    # Example content of users.cedar:
+    #   // Users of the CMK UI: browser sessions through Session Manager, on tenant paths.
+    #   permit (
+    #     principal is Subject,
+    #     action in [
+    #       Action::"GET", Action::"POST", Action::"PUT", Action::"PATCH", Action::"DELETE"
+    #     ],
+    #     resource
+    #   ) when {
+    #     context.type == "session" &&
+    #     context.path like "/cmk/v1/*"
+    #   };
+    # Provide the files with the ConfigMaps extauthz-systems-policies and
+    # extauthz-users-policies (see "4. Volumes").
     policyPath: /etc/extauthz-policies
 
   # ---------------------------------------------------------------------------
@@ -631,14 +737,25 @@ config:
   mtls:
     # -- Path of the trusted subjects file: the client certificate subjects that may call
     # through Envoy, and their regions. **Required**; startup fails if it is missing or
-    # invalid. Read at startup. Format: region → list of subjects, each written as Envoy
-    # forwards it (RFC 2253: most specific attribute first, no spaces after commas):
+    # invalid. Read at startup. Format: YAML, region → list of subjects. A region is any
+    # name; ExtAuthZ passes it to CMK in the client data (`enrich-header-with-client-region`).
+    # List each subject in one region only.
+    # Write each subject as Envoy forwards it (RFC 2253): the most specific attribute first,
+    # separated by commas without spaces; `,` `+` `"` `\` `<` `>` `;` and `=` in a value are
+    # escaped with `\`; put a subject that contains `\` in single quotes. ExtAuthZ also reads
+    # the subject from the certificate and requires both to be equal: use certificates whose
+    # subject has only the attributes CN, OU, O, L, ST, C, DC and UID, with ASCII values.
+    # `openssl x509 -noout -subject -nameopt RFC2253 -in client.crt` prints a subject in this
+    # form (after `subject=`) unless a value contains `=`.
+    # Example content of trustedSubjects.yaml:
     #   eu10:
     #     - CN=billing,OU=Clients,O=Example Corp,C=DE
     #     - CN=reporting,OU=Clients,O=Example Corp,C=DE
     #   us10:
-    #     - CN=billing,OU=Clients,O=Example Corp,C=US
-    # Client certificate callers whose subject is not listed are denied.
+    #     - 'CN=billing,OU=Clients,O=Example\, Inc.,C=US'
+    # Client certificate callers whose subject is not listed are denied; listed ones still
+    # need a Cedar policy that permits the request. Provide the file with the ConfigMap
+    # extauthz-trusted-subjects (see "4. Volumes").
     trustedSubjectsYaml: /etc/extauthz-mtls/trustedSubjects.yaml
 
   # ---------------------------------------------------------------------------
@@ -848,9 +965,17 @@ config:
   # creates the tokens with the same secret, so both must have the same value.
 
   # CSRF secret; value reference. **Must contain exactly the same bytes as Session
-  # Manager's `sessionManager.csrfSecret`**, at least 32 bytes and without a trailing
-  # newline. Needed when `sessionManager.enabled` is true. Example, with the Secret
-  # mounted through `extraVolumes`:
+  # Manager's `sessionManager.csrfSecret`**, at least 32 bytes (Session Manager does not
+  # start with fewer) and without a trailing newline. Needed when `sessionManager.enabled`
+  # is true. Create it once, for example as 64 random hex characters, and store the same
+  # value for Session Manager in its namespace:
+  #   CSRF_SECRET="$(openssl rand -hex 32)"
+  #   kubectl -n <namespace> create secret generic csrf-secret \
+  #     --from-literal=csrf_secret="$CSRF_SECRET"
+  #   kubectl -n <Session Manager namespace> create secret generic csrf-secret \
+  #     --from-literal=csrf_secret="$CSRF_SECRET"
+  # Example, with the Secret mounted through `extraVolumes` and `extraVolumeMounts` (see
+  # their examples):
   # csrfSecret:
   #   source: file
   #   file: { path: /etc/credentials/csrf-secret/csrf_secret, format: binary }
@@ -870,10 +995,34 @@ config:
   # matching public key, so it can trust the header without authenticating the caller again.
 
   clientData:
-    # -- Path of the file that contains the ID of the active signing key. The same
-    # directory holds the RSA private keys as `<key ID>.pem` (PEM, PKCS #1 or PKCS #8).
-    # ExtAuthZ signs the client data with the active key (RS256) and sends the key ID with
-    # it; CMK verifies the signature with the public key of the same name.
+    # -- Path of the file that contains the ID of the active signing key. **Required**; its
+    # directory must exist at startup. ExtAuthZ signs the client data with the RSA private
+    # key `<key ID>.pem` of the same directory (RS256) and sends the key ID with it; CMK
+    # verifies the signature with the public key of the same name. Files in the directory:
+    #   keyId            the key ID, for example `key-2026-10`: letters, digits, `-`, `_` and
+    #                    `.`, without `.pem`. Whitespace around it, such as a trailing
+    #                    newline, is ignored
+    #   key-2026-10.pem  the private key of that ID: RSA (use 2048 bits or more), PEM, not
+    #                    encrypted, as one `-----BEGIN PRIVATE KEY-----` (PKCS #8) or
+    #                    `-----BEGIN RSA PRIVATE KEY-----` (PKCS #1) block
+    #   key-2026-04.pem  further keys, for example the previous one, may stay; ExtAuthZ uses
+    #                    only the key named in keyId
+    # Example content of keyId:
+    #   key-2026-10
+    # Create a key pair. The private key goes into the Secret extauthz-signing-keys-secret
+    # (see "4. Volumes"), the public key under the same name into the directory of CMK's
+    # `config.clientData.signingKeysPath` (see the CMK chart), for example:
+    #   openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:3072 -out key-2026-10.pem
+    #   openssl pkey -in key-2026-10.pem -pubout -out key-2026-10.pub.pem
+    #   kubectl -n <CMK namespace> create secret generic cmk-client-data-public-keys \
+    #     --from-file=key-2026-10.pem=key-2026-10.pub.pem
+    # To rotate the key, give CMK the new public key first and keep the old one; then add the
+    # new private key to the Secret, write its ID into keyId and restart ExtAuthZ:
+    #   kubectl -n <namespace> create secret generic extauthz-signing-keys-secret \
+    #     --from-file=keyId --from-file=key-2026-10.pem --from-file=key-2026-04.pem \
+    #     --dry-run=client -o yaml | kubectl apply -f -
+    #   kubectl -n <namespace> rollout restart deployment/<release>-extauthz
+    # When all ExtAuthZ pods use the new key, remove the old key on both sides.
     signingKeyIDFilePath: /etc/extauthz-signing/keyId
 
   # ---------------------------------------------------------------------------

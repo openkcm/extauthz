@@ -38,8 +38,26 @@ exist:
 | Secret `extauthz-signing-keys-secret` | `/etc/extauthz-signing` | `keyId` and the RSA private key `<keyId>.pem` for signing client data |
 | Secret with the CSRF secret, if you enable `config.sessionManager` | Your choice, through `extraVolumes` | The same secret as Session Manager's |
 
-Examples are in the repository's [examples](../../examples) directory. To use
-other names or paths, override `extraVolumes`, `extraVolumeMounts` and the
+[values.yaml](values.yaml) describes the format of each file, with an example of its
+content, at the matching key: `config.mtls.trustedSubjectsYaml`, `config.cedar.policyPath`,
+`config.clientData.signingKeyIDFilePath` and `config.csrfSecret`. Every key of these
+objects becomes a file of the same name. Create them from local files with these names:
+
+```sh
+NS=envoy-gateway-system
+kubectl -n $NS create configmap extauthz-trusted-subjects --from-file=trustedSubjects.yaml
+kubectl -n $NS create configmap extauthz-systems-policies --from-file=systems.cedar
+kubectl -n $NS create configmap extauthz-users-policies --from-file=users.cedar
+kubectl -n $NS create secret generic extauthz-signing-keys-secret \
+  --from-file=keyId --from-file=key-2026-10.pem
+CSRF_SECRET="$(openssl rand -hex 32)"
+kubectl -n $NS create secret generic csrf-secret --from-literal=csrf_secret="$CSRF_SECRET"
+```
+
+`keyId` contains the key ID (`key-2026-10`), and `key-2026-10.pem` the RSA private key
+in PEM. Give CMK the matching public key as `key-2026-10.pem` in its
+`config.clientData.signingKeysPath` directory, and Session Manager the same CSRF secret.
+To use other names or paths, override `extraVolumes`, `extraVolumeMounts` and the
 matching paths under `config`.
 
 ## Prerequisites
@@ -216,6 +234,9 @@ removes it.
 | Pod exits with `has invalid keys` | A key under `config` (for example `config.sessionManger` or `config.logger.levl`) is not an ExtAuthZ setting |
 | Pod exits with an error about trusted subjects | `trustedSubjects.yaml` is missing or invalid |
 | Every authenticated request gets `403` | No Cedar policy was loaded: check that the policy files end in `.cedar` and are directly in `config.cedar.policyPath` |
+| Certificate callers get `403` | Subject not listed exactly as in the certificate, or no policy |
+| Allowed requests get `500` | No `<key ID>.pem` for `keyId`, or not an unencrypted RSA PEM key |
+| CMK rejects allowed requests | CMK lacks the public key `<key ID>.pem` for the ID in `keyId` |
 | Browser requests fail with `CSRF token is not valid` | `config.csrfSecret` differs from Session Manager's secret, or is not set |
 
 ## Uninstall
