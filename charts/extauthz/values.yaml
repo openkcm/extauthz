@@ -441,6 +441,14 @@ extraEnvsFrom: []
 # Durations are Go duration strings: `500ms`, `10s`, `5m`, `1h30m`.
 ###############################################################################
 config:
+  # ---------------------------------------------------------------------------
+  # application: environment, labels and name of ExtAuthZ in its logs, traces and metrics.
+  # ---------------------------------------------------------------------------
+
+  # Names this ExtAuthZ installation in everything it emits, so that the logs, traces and
+  # metrics of several installations or regions can be told apart in a shared backend. Optional;
+  # the defaults are enough for a single installation.
+
   # -- Environment name (`application.environment`), attached to logs, traces and metrics.
   environment: production
 
@@ -454,6 +462,14 @@ config:
   # application:
   #   name: extauthz-eu10
 
+  # ---------------------------------------------------------------------------
+  # featureGates: optional fields of the client data.
+  # ---------------------------------------------------------------------------
+
+  # For every request it allows, ExtAuthZ adds the client data, a signed header that describes
+  # the caller and that CMK reads to know who calls. The gates switch optional fields of it on
+  # or off.
+
   # Feature gates: gate name → true or false. ExtAuthZ reads only these two; a gate that is
   # not listed is false.
   featureGates:
@@ -464,6 +480,14 @@ config:
     # -- Add the region from the trusted subjects file to the client data of client
     # certificate callers.
     enrich-header-with-client-region: true
+
+  # ---------------------------------------------------------------------------
+  # logger: logs on standard output.
+  # ---------------------------------------------------------------------------
+
+  # ExtAuthZ logs its decisions and errors to standard output, where the log collection of the
+  # cluster picks them up. These settings control the level of detail, the format and field
+  # names, and the masking of personal data before the logs leave the pod.
 
   logger:
     # -- Log level: `debug`, `info`, `warn` or `error`. `debug` logs request details,
@@ -502,6 +526,14 @@ config:
     #         pii: [subject]
     #         other: { payload: "[masked]" }
 
+  # ---------------------------------------------------------------------------
+  # status: status server for the probes, version and metrics.
+  # ---------------------------------------------------------------------------
+
+  # A small HTTP server next to the gRPC API. Kubernetes calls its probe endpoints to decide
+  # whether a pod is alive and ready for traffic, so it must stay enabled. It also serves the
+  # build version and, with Prometheus enabled, the metrics.
+
   status:
     # -- Serve the status endpoints (`/probe/liveness`, `/probe/readiness`, `/version`
     # and, with `telemetry.metrics.prometheus.enabled`, `/metrics`). Needed by the probes.
@@ -514,6 +546,14 @@ config:
     # authentication. Keep false in production; enable it only for troubleshooting.
     profiling: false
     # `timeout` is accepted but has no effect: the readiness check has a fixed timeout of 5s.
+
+  # ---------------------------------------------------------------------------
+  # grpcServer: gRPC server of the Envoy external authorization API.
+  # ---------------------------------------------------------------------------
+
+  # Envoy calls ExtAuthZ through this server, with the Envoy external authorization API, for
+  # every request it routes to CMK, and forwards or rejects the request based on the answer.
+  # These settings control the listen address, message sizes and how long connections are kept.
 
   grpcServer:
     # -- Listen address of the ext_authz gRPC API. Must match the `grpc` container port.
@@ -547,6 +587,14 @@ config:
     #       maxLifeDuration: 60s         # replace connections after this time
     # `enabled` and `maxSendMsgSize` are accepted but have no effect.
 
+  # ---------------------------------------------------------------------------
+  # cedar: authorization policies, written in Cedar.
+  # ---------------------------------------------------------------------------
+
+  # Once a caller is authenticated, the Cedar policies decide whether it may make the request. A
+  # request is allowed only if a policy permits it, so the policies are the access rules of the
+  # CMK API.
+
   cedar:
     # -- Directory with the Cedar policy files, read at startup. Every file ending in
     # `.cedar` directly in this directory is loaded; subdirectories are ignored, and a
@@ -571,6 +619,15 @@ config:
     #   };
     policyPath: /etc/extauthz-policies
 
+  # ---------------------------------------------------------------------------
+  # mtls: callers that authenticate with a client certificate (trusted subjects).
+  # ---------------------------------------------------------------------------
+
+  # One of the ways a caller authenticates: with a client certificate that Envoy has verified
+  # and forwards. ExtAuthZ accepts it only if the certificate subject is listed in the trusted
+  # subjects file, which also gives the caller its region. Systems and services that call CMK
+  # use this way.
+
   mtls:
     # -- Path of the trusted subjects file: the client certificate subjects that may call
     # through Envoy, and their regions. **Required**; startup fails if it is missing or
@@ -583,6 +640,15 @@ config:
     #     - CN=billing,OU=Clients,O=Example Corp,C=US
     # Client certificate callers whose subject is not listed are denied.
     trustedSubjectsYaml: /etc/extauthz-mtls/trustedSubjects.yaml
+
+  # ---------------------------------------------------------------------------
+  # jwt: callers that authenticate with a bearer token, and their identity providers.
+  # ---------------------------------------------------------------------------
+
+  # The other way a caller authenticates: with a bearer token (OAuth 2.0 / OpenID Connect) from
+  # an identity provider. ExtAuthZ checks the signature and the claims of the token against the
+  # providers configured here and, on tenant paths, against the identity provider of the tenant
+  # that Session Manager knows.
 
   jwt:
     # -- Claims that hold the token issuer, tried in order. An empty list means `[iss]`.
@@ -712,6 +778,14 @@ config:
     #     credentials:
     #       authMethod: none
 
+  # ---------------------------------------------------------------------------
+  # sessionPathPrefixes: paths that carry a tenant ID and accept tenant sessions.
+  # ---------------------------------------------------------------------------
+
+  # Marks the API paths that belong to a tenant, where the path segment after the prefix is the
+  # tenant ID. Only on these paths does ExtAuthZ accept the browser session of a user and tokens
+  # of the identity provider of the tenant.
+
   # -- Path prefixes whose next path segment is the tenant ID, for example
   # `/cmk/v1/<tenant>/…` (a missing trailing `/` is added). Used only when
   # `sessionManager.enabled` is true: on these paths ExtAuthZ checks the tenant's session
@@ -720,6 +794,16 @@ config:
   # provider. A request on such a path without a tenant segment is rejected as
   # unauthenticated. With an empty list, Session Manager is not used at all.
   sessionPathPrefixes: ["/cmk/v1/"]
+
+  # ---------------------------------------------------------------------------
+  # sessionManager: Session Manager, which checks sessions and maps tenants to their identity
+  # providers.
+  # ---------------------------------------------------------------------------
+
+  # Connects ExtAuthZ to Session Manager, which keeps the browser sessions of the users and
+  # knows the identity provider of each tenant. Needed for users who sign in through the CMK UI
+  # and for tokens of tenant identity providers; without it, only client certificates and the
+  # providers under `jwt` work.
 
   sessionManager:
     # -- Check browser sessions and use tenant identity providers through Session Manager.
@@ -755,6 +839,14 @@ config:
     #   address: session-manager.services.svc.cluster.local:9091
     #   secretRef: { type: insecure }
 
+  # ---------------------------------------------------------------------------
+  # csrfSecret: secret of the CSRF tokens of sessions, the same as Session Manager's.
+  # ---------------------------------------------------------------------------
+
+  # Protects browser sessions against cross-site request forgery: a request with a session
+  # cookie must carry a CSRF token, which ExtAuthZ checks with this secret. Session Manager
+  # creates the tokens with the same secret, so both must have the same value.
+
   # CSRF secret; value reference. **Must contain exactly the same bytes as Session
   # Manager's `sessionManager.csrfSecret`**, at least 32 bytes and without a trailing
   # newline. Needed when `sessionManager.enabled` is true. Example, with the Secret
@@ -769,12 +861,28 @@ config:
   #   source: file
   #   file: { path: /etc/credentials/session.json, format: json, jsonPath: "$.csrfSecret" }
 
+  # ---------------------------------------------------------------------------
+  # clientData: signing of the client data that ExtAuthZ adds to allowed requests.
+  # ---------------------------------------------------------------------------
+
+  # For every request it allows, ExtAuthZ adds the client data, a header that describes the
+  # caller, and signs it with the key configured here. CMK verifies the signature with the
+  # matching public key, so it can trust the header without authenticating the caller again.
+
   clientData:
     # -- Path of the file that contains the ID of the active signing key. The same
     # directory holds the RSA private keys as `<key ID>.pem` (PEM, PKCS #1 or PKCS #8).
     # ExtAuthZ signs the client data with the active key (RS256) and sends the key ID with
     # it; CMK verifies the signature with the public key of the same name.
     signingKeyIDFilePath: /etc/extauthz-signing/keyId
+
+  # ---------------------------------------------------------------------------
+  # audit: audit events as OTLP/HTTP log records.
+  # ---------------------------------------------------------------------------
+
+  # Sends audit events of security decisions to an OpenTelemetry collector, for an audit trail
+  # outside the cluster. Without an endpoint, no audit events are sent; the decisions are still
+  # logged.
 
   # Audit events (OTLP logs, sent as JSON over HTTP) for denied requests and, with
   # `valkey.rateDetection`, for bursts of unauthenticated requests. Omitted by default: no
@@ -798,6 +906,14 @@ config:
   #   endpoint: https://otel-collector:4318/v1/logs
   #   httpClient:
   #     apiToken: { source: env, env: AUDIT_API_TOKEN }
+
+  # ---------------------------------------------------------------------------
+  # valkey: detection of request bursts, counted in Valkey.
+  # ---------------------------------------------------------------------------
+
+  # Detects bursts of requests without valid credentials across all ExtAuthZ pods, counted in a
+  # shared Valkey, and reports them as audit events. Optional; it needs `audit` to deliver the
+  # events.
 
   # Detection of bursts of unauthenticated requests across pods, counted in Valkey.
   # ExtAuthZ counts unauthenticated requests per identity: the token issuer where it is
@@ -855,6 +971,14 @@ config:
   #     file: { path: /etc/credentials/valkey.json, format: json, jsonPath: "$.password" }
   #   rateDetection:
   #     enabled: true
+
+  # ---------------------------------------------------------------------------
+  # telemetry: OpenTelemetry export of traces, metrics and logs.
+  # ---------------------------------------------------------------------------
+
+  # Exports traces, metrics and logs to an OpenTelemetry collector, or serves the metrics for
+  # Prometheus, to monitor ExtAuthZ. Without it, nothing is exported; the logs on standard
+  # output are not affected.
 
   # OpenTelemetry export of traces, metrics and logs. Omitted by default: nothing is
   # exported. Settings of each of `traces`, `metrics` and `logs`:
