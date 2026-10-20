@@ -17,6 +17,8 @@
 # Full reference of the ExtAuthZ configuration:
 #   https://openkcm.io/components/cmk/security/extauthz-config
 #
+# Overview, upgrade notes and troubleshooting: README.md of this chart.
+#
 # Comments starting with "# --" document a value (helm-docs format).
 
 ###############################################################################
