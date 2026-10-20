@@ -23,17 +23,17 @@ func TestServiceAccount(t *testing.T) {
 				"kind: ServiceAccount",
 				"name: " + appName,
 				"namespace: default",
-				"automountServiceAccountToken: true",
+				"automountServiceAccountToken: false",
 			},
 		},
 		{
-			name:   "custom values - automount disabled",
-			values: "--set serviceAccount.automount=false --namespace foo",
+			name:   "custom values - automount enabled",
+			values: "--set serviceAccount.automount=true --namespace foo",
 			expected: []string{
 				"kind: ServiceAccount",
 				"name: " + appName,
 				"namespace: foo",
-				"automountServiceAccountToken: false",
+				"automountServiceAccountToken: true",
 			},
 		},
 		{
