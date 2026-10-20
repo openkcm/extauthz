@@ -86,7 +86,6 @@ func (srv *Server) checkJWTToken(ctx context.Context, bearerToken string, req re
 
 	// check the policies
 	slogctx.Debug(ctx, "Checking policies for JWT",
-		"subject", claims.Subject,
 		"issuer", claims.Issuer,
 		"jwksURI", header.JKU,
 		"method", req.method,
