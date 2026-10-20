@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.14.1](https://github.com/openkcm/extauthz/compare/v0.14.0...v0.14.1) (2026-10-20)
+
+
+### Bug Fixes
+
+* add notify openkcm/charts ([2dc9357](https://github.com/openkcm/extauthz/commit/2dc93570a80414ef42e28567a483df3ce8735904))
+* chart refactoring and documenting ([#370](https://github.com/openkcm/extauthz/issues/370)) ([dd387c8](https://github.com/openkcm/extauthz/commit/dd387c888b67dd9c83697791cc9407a98c2d3dc8))
+* **deps:** bump the gomod-group group with 4 updates ([#371](https://github.com/openkcm/extauthz/issues/371)) ([f586fbc](https://github.com/openkcm/extauthz/commit/f586fbc0fca32dbc1dce2bc6d3266c1433e55315))
+* remove user ID from debug log statements ([#365](https://github.com/openkcm/extauthz/issues/365)) ([a0f268f](https://github.com/openkcm/extauthz/commit/a0f268f44147a740d8c98d9ca2026634b0e607d0))
+
 ## [0.14.0](https://github.com/openkcm/extauthz/compare/v0.13.0...v0.14.0) (2026-10-15)
 
 
