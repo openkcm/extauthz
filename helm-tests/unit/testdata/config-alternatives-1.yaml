@@ -1,0 +1,78 @@
+# Documented examples in values.yaml that are alternatives to those in
+# all-config-values.yaml (another form of the same setting), part 1. Loaded by TestConfigLoad.
+config:
+  # logger: the documented defaults
+  logger:
+    source: false
+    formatter:
+      time:
+        type: unix
+        precision: 1us
+        pattern: "Mon Jan 02 15:04:05 -0700 2006"
+      fields:
+        time: time
+        error: error
+        level: info
+        message: msg
+        otel:
+          traceId: traceId
+          spanId: spanId
+        masking:
+          pii: []
+          other: {}
+
+  jwt:
+    # httpClient with an API token from an environment variable
+    httpClient:
+      apiToken: { source: env, env: IDP_API_TOKEN }
+    # oauth2 with authMethod jwt
+    oauth2:
+      url: { value: https://idp.example.com/oauth2/token }
+      credentials:
+        authMethod: jwt
+        clientSecret: { source: env, env: TENANT_CLIENT_SECRET }
+
+  # sessionManager inside a service mesh with mutual TLS
+  sessionManager:
+    enabled: true
+    address: session-manager.services.svc.cluster.local:9091
+    secretRef: { type: insecure }
+
+  # csrfSecret from an environment variable
+  csrfSecret: { source: env, env: CSRF_SECRET }
+
+  # audit with an API token
+  audit:
+    endpoint: https://otel-collector:4318/v1/logs
+    httpClient:
+      apiToken: { source: env, env: AUDIT_API_TOKEN }
+
+  # valkey with the address and credentials from environment variables, without Sentinel
+  valkey:
+    address: { source: env, env: VALKEY_ADDRESS }
+    user: { source: env, env: VALKEY_USER }
+    password: { source: env, env: VALKEY_PASSWORD }
+    rateDetection:
+      enabled: true
+
+  # telemetry over http
+  telemetry:
+    traces:
+      enabled: true
+      protocol: http
+      host: { value: otel-collector:4318 }
+      url: /v1/traces
+      secretRef: { type: api-token, apiToken: { source: env, env: OTEL_API_TOKEN } }
+    metrics:
+      enabled: true
+      protocol: http
+      host: { value: otel-collector:4318 }
+      url: /v1/metrics
+      secretRef: { type: api-token, apiToken: { source: env, env: OTEL_API_TOKEN } }
+    logs:
+      enabled: true
+      protocol: http
+      host: { value: otel-collector:4318 }
+      url: /v1/logs
+      secretRef: { type: api-token, apiToken: { source: env, env: OTEL_API_TOKEN } }
+    dynatraceOneAgent: true

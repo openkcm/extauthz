@@ -1,0 +1,5 @@
+eu10:
+  - CN=billing,OU=Clients,O=Example Corp,C=DE
+  - CN=reporting,OU=Clients,O=Example Corp,C=DE
+us10:
+  - 'CN=billing,OU=Clients,O=Example\, Inc.,C=US'

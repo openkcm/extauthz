@@ -1,3 +1,4 @@
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -6,18 +7,25 @@ metadata:
   labels:
     {{- include "extauthz.labels" . | nindent 4 }}
 spec:
-  {{- if .Values.hpa.enabled }}
-  replicas: {{ .Values.hpa.minReplicas }}
+  {{- if not .Values.hpa.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
+  {{- with .Values.strategy }}
+  strategy:
+    {{- toYaml . | nindent 4 }}
   {{- end }}
   selector:
     matchLabels:
       {{- include "extauthz.selectorLabels" . | nindent 6 }}
   template:
     metadata:
-      {{- with .Values.pod.annotations }}
       annotations:
+        # Restart the pods when the configuration changes.
+        checksum/config: {{ include "extauthz.config" . | sha256sum }}
+        {{- with .Values.pod.annotations }}
         {{- toYaml . | nindent 8 }}
-      {{- end }}
+        {{- end }}
       labels:
         {{- include "extauthz.labels" . | nindent 8 }}
         {{- with .Values.pod.labels }}
@@ -29,30 +37,47 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       serviceAccountName: {{ include "extauthz.serviceAccountName" . }}
+      # ExtAuthZ does not call the Kubernetes API.
       automountServiceAccountToken: false
+      enableServiceLinks: {{ .Values.pod.enableServiceLinks }}
+      {{- with .Values.pod.priorityClassName }}
+      priorityClassName: {{ . }}
+      {{- end }}
+      {{- with .Values.pod.terminationGracePeriodSeconds }}
+      terminationGracePeriodSeconds: {{ . }}
+      {{- end }}
       {{- with .Values.pod.securityContext }}
       securityContext:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- with .Values.extraInitContainers }}
+      initContainers:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
-        {{- with .Values.extraContainers }}
-          {{- toYaml . | nindent 8 }}
-        {{- end }}
         - name: {{ include "extauthz.name" . }}
-          {{- with .Values.securityContext }}
-          securityContext:
-            {{- toYaml . | nindent 12 }}
-          {{- end }}
-          image: "{{ template "extauthz.image" (tuple .Values.image) }}"
+          image: "{{ template "extauthz.image" (tuple .Values.image .Chart.AppVersion) }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- with .Values.image.command }}
+          command:
+            {{- if kindIs "string" . }}
+            - {{ . | quote }}
+            {{- else }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- end }}
           {{- with .Values.image.args }}
           args:
             {{- toYaml . | nindent 12 }}
           {{- end }}
+          {{- with .Values.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.extraPorts }}
           ports:
-            {{- with .Values.extraPorts }}
-              {{- toYaml . | nindent 12 }}
-            {{- end }}
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           env:
             - name: MY_POD_IP
               valueFrom:
@@ -68,18 +93,26 @@ spec:
                 fieldRef:
                   fieldPath: status.hostIP
             {{- with .Values.extraEnvs }}
-              {{- toYaml . | nindent 12 }}
+            {{- toYaml . | nindent 12 }}
             {{- end }}
           {{- with .Values.extraEnvsFrom }}
           envFrom:
-          {{- . | toYaml | nindent 12 }}
+            {{- toYaml . | nindent 12 }}
           {{- end }}
-          livenessProbe:
+          {{- with .Values.startupProbe }}
+          startupProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           {{- with .Values.livenessProbe }}
+          livenessProbe:
             {{- toYaml . | nindent 12 }}
           {{- end }}
           {{- with .Values.readinessProbe }}
           readinessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.lifecycle }}
+          lifecycle:
             {{- toYaml . | nindent 12 }}
           {{- end }}
           {{- with .Values.resources }}
@@ -87,19 +120,34 @@ spec:
             {{- toYaml . | nindent 12 }}
           {{- end }}
           volumeMounts:
-            - name: {{ include "extauthz.name" . }}-config-volume
-              mountPath: /etc/extauthz
+            - name: config
+              mountPath: /etc/extauthz/config.yaml
+              subPath: config.yaml
               readOnly: true
-          {{- with .Values.extraVolumeMounts }}
+            {{- if .Values.tmpVolume.enabled }}
+            - name: tmp
+              mountPath: /tmp
+            {{- end }}
+            {{- with .Values.extraVolumeMounts }}
             {{- toYaml . | nindent 12 }}
-          {{- end }}
-      volumes:
-        - name: {{ include "extauthz.name" . }}-config-volume
-          configMap:
-            name: {{ include "extauthz.name" . }}-config
-      {{- with .Values.extraVolumes }}
+            {{- end }}
+        {{- with .Values.extraContainers }}
         {{- toYaml . | nindent 8 }}
-      {{- end }}
+        {{- end }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "extauthz.configMapName" . }}
+        {{- if .Values.tmpVolume.enabled }}
+        - name: tmp
+          emptyDir:
+            {{- with .Values.tmpVolume.sizeLimit }}
+            sizeLimit: {{ . }}
+            {{- end }}
+        {{- end }}
+        {{- with .Values.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
       {{- with .Values.pod.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
@@ -110,9 +158,9 @@ spec:
       {{- end }}
       {{- with .Values.pod.topologySpreadConstraints }}
       topologySpreadConstraints:
-        {{- toYaml . | nindent 6 }}
+        {{- toYaml . | nindent 8 }}
       {{- end }}
       {{- with .Values.pod.tolerations }}
       tolerations:
-        {{- toYaml . | nindent 6 }}
+        {{- toYaml . | nindent 8 }}
       {{- end }}

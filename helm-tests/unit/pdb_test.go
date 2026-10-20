@@ -24,7 +24,9 @@ func TestPodDisruptionBudget(t *testing.T) {
 				"kind: PodDisruptionBudget",
 				"name: " + appName,
 				"namespace: default",
-				"minAvailable: 1",
+				// Without minAvailable or maxUnavailable, the chart uses
+				// maxUnavailable: 1, which never blocks node drains.
+				"maxUnavailable: 1",
 			},
 		},
 		{

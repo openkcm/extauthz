@@ -1,14 +1,14 @@
 /////////////////////////////////////////
 // Technical system based on x509
 permit (
-	principal == Subject::"CN=TechSys01, OU=MyUnit, O=MyOrg, C=DE",
+	principal == Subject::"CN=TechSys01,OU=MyUnit,O=MyOrg,C=DE",
 	action in [Action::"GET", Action::"POST", Action::"DELETE"],
 	resource
 ) when {
 	context.type == "x509" &&
 	context.host == "myorg.com" &&
 	context.path like "/api/*" &&
-	context.issuer == "CN=MyCA, OU=MyUnit, O=MyOrg, C=DE"
+	context.issuer == "CN=MyCA,OU=MyUnit,O=MyOrg,C=DE"
 };
 
 /////////////////////////////////////////

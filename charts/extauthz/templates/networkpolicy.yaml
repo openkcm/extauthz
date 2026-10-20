@@ -1,0 +1,37 @@
+{{- if .Values.networkPolicy.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "extauthz.fullname" . }}
+  namespace: {{ include "extauthz.namespace" . }}
+  labels:
+    {{- include "extauthz.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "extauthz.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+  ingress:
+    {{- with .Values.networkPolicy.grpc.from }}
+    # ext_authz gRPC API: only the listed callers (Envoy Gateway).
+    - ports:
+        - port: grpc
+          protocol: TCP
+      from:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+    {{- with .Values.networkPolicy.status.from }}
+    # Status endpoints (metrics). Probes from the kubelet are not affected by
+    # NetworkPolicies on most network plugins.
+    - ports:
+        - port: http-status
+          protocol: TCP
+      from:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+    {{- with .Values.networkPolicy.extraIngress }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+{{- end }}

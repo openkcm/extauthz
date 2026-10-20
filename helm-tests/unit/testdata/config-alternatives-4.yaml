@@ -1,0 +1,8 @@
+# Documented examples in values.yaml that are alternatives to those in
+# all-config-values.yaml (another form of the same setting), part 4. Loaded by TestConfigLoad.
+config:
+  jwt:
+    # oauth2 for public clients
+    oauth2:
+      credentials:
+        authMethod: none

@@ -228,15 +228,7 @@ func TestHelmInstall(t *testing.T) {
 	}
 	defer kubectlDelete(ctx, t, userPolicies)
 
-	keyIDFile := "../../examples/keyIDFileConfigmap.yaml"
-	err = kubectlApply(ctx, t, keyIDFile)
-	if err != nil {
-		logClusterStatus(t, namespace)
-		t.Fatalf("failed to apply keyID file: %v", err)
-	}
-	defer kubectlDelete(ctx, t, keyIDFile)
-
-	// Generate a private key for the signing key secret
+	// Generate a private key for the signing key secret, which also holds the key ID
 	privateKey, err := rsa.GenerateKey(rand.Reader, 4096)
 	if err != nil {
 		t.Fatalf("failed to generate private key: %v", err)
