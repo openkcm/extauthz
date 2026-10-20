@@ -25,39 +25,39 @@ jobs:
   # Tells github.com/openkcm/charts about the release. Its workflow "Update app versions" then
   # opens the pull request that moves the extauthz chart to the new image (appVersion). Only
   # releases of the form vX.Y.Z are sent.
-  charts:
-    name: Notify openkcm/charts
-    needs: released
-    runs-on: ubuntu-latest
-    permissions: {}
-    steps:
-      - name: Find the release
-        id: release
-        env:
-          VERSION: ${{ github.ref_type == 'tag' && github.ref_name || inputs.version }}
-        run: |
-          if [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          else
-            echo "::notice::'$VERSION' is not a release of the form vX.Y.Z; openkcm/charts is not notified."
-          fi
-
-      - name: Generate a token for openkcm/charts
-        id: token
-        if: steps.release.outputs.version != ''
-        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
-        with:
-          app-id: ${{ secrets.APP_PUSH_TAG_ID }}
-          private-key: ${{ secrets.APP_PUSH_TAG_PRIVATE_KEY }}
-          owner: openkcm
-          repositories: charts
-          permission-contents: write
-
-      - name: Send the release to openkcm/charts
-        if: steps.release.outputs.version != ''
-        env:
-          GH_TOKEN: ${{ steps.token.outputs.token }}
-          VERSION: ${{ steps.release.outputs.version }}
-        run: |
-          gh api repos/openkcm/charts/dispatches -f event_type=service-released \
+#  charts:
+#    name: Notify openkcm/charts
+#    needs: released
+#    runs-on: ubuntu-latest
+#    permissions: {}
+#    steps:
+#      - name: Find the release
+#        id: release
+#        env:
+#          VERSION: ${{ github.ref_type == 'tag' && github.ref_name || inputs.version }}
+#        run: |
+#          if [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+#            echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+#          else
+#            echo "::notice::'$VERSION' is not a release of the form vX.Y.Z; openkcm/charts is not notified."
+#          fi
+#
+#      - name: Generate a token for openkcm/charts
+#        id: token
+#        if: steps.release.outputs.version != ''
+#        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+#        with:
+#          app-id: ${{ secrets.APP_PUSH_TAG_ID }}
+#          private-key: ${{ secrets.APP_PUSH_TAG_PRIVATE_KEY }}
+#          owner: openkcm
+#          repositories: charts
+#          permission-contents: write
+#
+#      - name: Send the release to openkcm/charts
+#        if: steps.release.outputs.version != ''
+#        env:
+#          GH_TOKEN: ${{ steps.token.outputs.token }}
+#          VERSION: ${{ steps.release.outputs.version }}
+#        run: |
+#          gh api repos/openkcm/charts/dispatches -f event_type=service-released \
             -f 'client_payload[chart]=extauthz' -f "client_payload[version]=$VERSION"
