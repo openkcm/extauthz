@@ -71,7 +71,7 @@ func TestNetworkPolicy(t *testing.T) {
 
 			// Only look at the NetworkPolicy document.
 			output := ""
-			for _, doc := range strings.Split(out.String(), "\n---\n") {
+			for doc := range strings.SplitSeq(out.String(), "\n---\n") {
 				if strings.Contains(doc, "kind: NetworkPolicy") {
 					output = doc
 				}

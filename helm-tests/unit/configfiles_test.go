@@ -15,6 +15,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/hex"
 	"encoding/pem"
+	"maps"
 	"math/big"
 	"net"
 	"net/url"
@@ -349,9 +350,7 @@ func TestCedarPolicyFiles(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			data := map[string]string{"path": tt.path}
-			for k, v := range tt.context {
-				data[k] = v
-			}
+			maps.Copy(data, tt.context)
 			allowed, diagnostic, err := engine.Check(
 				cedarpolicy.WithSubject(tt.principal),
 				cedarpolicy.WithAction(tt.action),
@@ -401,9 +400,7 @@ func TestSigningKeyFiles(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			files := map[string][]byte{"keyId": tt.keyID}
-			for name, content := range keys {
-				files[name] = content
-			}
+			maps.Copy(files, keys)
 			dir := t.TempDir()
 			writeVolume(t, dir, files)
 
@@ -601,7 +598,7 @@ func startExtAuthZ(t *testing.T, cfg *config.Config) envoyauth.AuthorizationClie
 			t.Fatalf("ExtAuthZ did not start: %v", mainErr)
 		default:
 		}
-		conn, err := net.DialTimeout("tcp", address, time.Second)
+		conn, err := (&net.Dialer{Timeout: time.Second}).DialContext(t.Context(), "tcp", address)
 		if err == nil {
 			_ = conn.Close()
 			break
@@ -693,7 +690,7 @@ func readTestdata(t *testing.T, name string) []byte {
 
 func freeAddress(t *testing.T) string {
 	t.Helper()
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	listener, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
