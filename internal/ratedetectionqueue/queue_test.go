@@ -1,4 +1,4 @@
-package auditqueue
+package ratedetectionqueue
 
 import (
 	"context"
