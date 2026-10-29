@@ -11,7 +11,7 @@ import (
 
 	envoyauth "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
 
-	"github.com/openkcm/extauthz/internal/auditqueue"
+	"github.com/openkcm/extauthz/internal/ratedetectionqueue"
 )
 
 // fakeRateStore is a controllable RateStore for testing recordDecision.
@@ -44,12 +44,14 @@ type captureLogger struct {
 	err  error
 }
 
-func (c *captureLogger) SendEvent(_ context.Context, logs plog.Logs) error {
+func (c *captureLogger) SendEvent(logs plog.Logs) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.logs = append(c.logs, logs)
 	return c.err
 }
+
+func (c *captureLogger) Close(_ context.Context) error { return nil }
 
 func (c *captureLogger) count() int {
 	c.mu.Lock()
@@ -313,10 +315,10 @@ func TestAuditServerOptions_RejectNil(t *testing.T) {
 	t.Parallel()
 
 	tests := map[string]ServerOption{
-		"audit logger": WithAuditLogger(nil),
-		"rate store":   WithRateStore(nil),
-		"audit queue":  WithAuditQueue(nil),
-		"metrics":      WithMetrics(nil),
+		"audit logger":         WithAuditLogger(nil),
+		"rate store":           WithRateStore(nil),
+		"rate detection queue": WithRateDetectionQueue(nil),
+		"metrics":              WithMetrics(nil),
 	}
 	for name, opt := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -327,21 +329,21 @@ func TestAuditServerOptions_RejectNil(t *testing.T) {
 }
 
 // submit branch is exercised; the queue is drained on Close.
-func TestRecordDecision_AsyncQueueDispatch(t *testing.T) {
+func TestRecordDecision_AsyncRateDetection(t *testing.T) {
 	t.Parallel()
-	rs := &fakeRateStore{}
+	rs := &fakeRateStore{fire: true}
 	logger := &captureLogger{}
-	queue := auditqueue.New(auditqueue.Options{Size: 8, Workers: 1})
+	queue := ratedetectionqueue.New(ratedetectionqueue.Options{Size: 8, Workers: 1})
 	srv, err := NewServer(
 		WithRateStore(rs),
 		WithAuditLogger(logger),
-		WithAuditQueue(queue),
+		WithRateDetectionQueue(queue),
 	)
 	require.NoError(t, err)
 	require.NoError(t, srv.Start())
 
 	srv.recordDecision(context.Background(),
-		checkResult{is: DENIED, subject: "sub", kind: authKindJWT},
+		checkResult{is: UNAUTHENTICATED, subject: "sub", kind: authKindJWT},
 		requestInfo{id: "r1", tenantID: "t1", path: "/foo", method: "POST"},
 	)
 
