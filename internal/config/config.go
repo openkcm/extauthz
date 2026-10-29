@@ -144,6 +144,10 @@ type JWT struct {
 
 	// HTTP client configuration for interacting with OIDC providers
 	HTTPClient commoncfg.HTTPClient `yaml:"httpClient"`
+
+	// PathPrefixRules configures per-path-prefix JWT claim extraction.
+	// The first rule whose PathPrefix matches the request path wins.
+	PathPrefixRules []JWTPathPrefixRule `yaml:"pathPrefixRules"`
 }
 
 type Provider struct {
@@ -163,3 +167,26 @@ type Provider struct {
 	// DisableTokenIntrospection: if set to true, will disable token introspection.
 	DisableTokenIntrospection bool `yaml:"disableTokenIntrospection"`
 }
+
+// JWTPathPrefixRule activates per-path-prefix JWT claim extraction.
+// The first rule whose PathPrefix matches the request path wins.
+type JWTPathPrefixRule struct {
+	PathPrefix                  string            `yaml:"pathPrefix"`
+	RequiredClaims              []RequiredClaim   `yaml:"requiredClaims"`
+	ClientTypeField             string            `yaml:"clientTypeField"`
+	ClientTypeMapping           map[string]string `yaml:"clientTypeMapping"`
+	AdditionalAuthContextFields []string          `yaml:"additionalAuthContextFields"`
+}
+
+type RequiredClaim struct {
+	Field     string         `yaml:"field"`
+	Value     string         `yaml:"value"`
+	MatchType ClaimMatchType `yaml:"matchType"`
+}
+
+type ClaimMatchType string
+
+const (
+	ClaimMatchTypeEquals   ClaimMatchType = "equals"
+	ClaimMatchTypeContains ClaimMatchType = "contains"
+)

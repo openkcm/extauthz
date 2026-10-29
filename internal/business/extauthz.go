@@ -71,6 +71,10 @@ func createExtAuthZServer(ctx context.Context, cfg *config.Config) (*extauthz.Se
 		opts = append(opts, extauthz.WithSessionPathPrefixes(cfg.SessionPathPrefixes))
 	}
 
+	if len(cfg.JWT.PathPrefixRules) > 0 {
+		opts = append(opts, extauthz.WithJWTPathPrefixRules(cfg.JWT.PathPrefixRules))
+	}
+
 	// Create the OIDC handler
 	oidcHandler, err := createOIDCHandler(ctx, sessionManager, &cfg.JWT, &cfg.FeatureGates)
 	if err != nil {
