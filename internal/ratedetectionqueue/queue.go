@@ -1,8 +1,7 @@
-// Package auditqueue provides a bounded, asynchronous worker pool for audit
-// work. Both the Valkey rate-store round-trip and the audit.Logger HTTP POST are
-// blocking network calls that must never run on the Check() hot path, so they
-// are submitted here as jobs and executed on worker goroutines.
-package auditqueue
+// Package ratedetectionqueue provides a bounded, asynchronous worker pool for Valkey
+// burst detection. Observations run off the Check() hot path and enqueue audit
+// events when the threshold is crossed. The SDK logger handles event delivery.
+package ratedetectionqueue
 
 import (
 	"context"
@@ -16,7 +15,7 @@ import (
 // specify one.
 const defaultDispatchTimeout = 10 * time.Second
 
-// Job is a unit of audit work executed on a worker goroutine. It receives a
+// Job is a rate-detection observation executed on a worker goroutine. It receives a
 // background context not tied to the (already-returned) request.
 type Job func(ctx context.Context)
 

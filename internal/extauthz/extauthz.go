@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
 	"github.com/samber/oops"
@@ -11,12 +12,12 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/openkcm/extauthz/internal/audit"
-	"github.com/openkcm/extauthz/internal/auditqueue"
 	"github.com/openkcm/extauthz/internal/clientdata"
 	"github.com/openkcm/extauthz/internal/handler"
 	"github.com/openkcm/extauthz/internal/metric"
 	"github.com/openkcm/extauthz/internal/policies"
 	"github.com/openkcm/extauthz/internal/policies/cedarpolicy"
+	"github.com/openkcm/extauthz/internal/ratedetectionqueue"
 	"github.com/openkcm/extauthz/internal/ratestore"
 	"github.com/openkcm/extauthz/internal/session"
 )
@@ -25,6 +26,9 @@ import (
 // application span emitted by Check(). Using the module path follows the
 // OTel Go convention.
 const tracerName = "github.com/openkcm/extauthz"
+
+// auditShutdownTimeout limits draining and retries after requests have stopped.
+const auditShutdownTimeout = 10 * time.Second
 
 const (
 	DefaultCMKPathPrefix = "/cmk/v1/"
@@ -69,10 +73,10 @@ type Server struct {
 	// rateStore detects unauthenticated request bursts across pods. Defaults to
 	// a no-op so Check() can call it unconditionally.
 	rateStore ratestore.RateStore
-	// auditQueue dispatches audit events asynchronously. When nil, events are
-	// sent inline (used only when no queue is wired).
-	auditQueue *auditqueue.Queue
-	metrics    *metric.Metrics
+	// rateDetectionQueue runs Valkey burst observations asynchronously. Audit delivery
+	// is handled by the queued logger independently.
+	rateDetectionQueue *ratedetectionqueue.Queue
+	metrics            *metric.Metrics
 	// countUnknown includes UNKNOWN results (no credentials at all) in the
 	// unauthenticated burst count.
 	countUnknown bool
@@ -103,14 +107,14 @@ func WithRateStore(rs ratestore.RateStore) ServerOption {
 	}
 }
 
-// WithAuditQueue sets the asynchronous dispatcher used to deliver audit events
+// WithRateDetectionQueue sets the worker pool for Valkey burst observations so they run
 // off the Check() hot path.
-func WithAuditQueue(q *auditqueue.Queue) ServerOption {
+func WithRateDetectionQueue(q *ratedetectionqueue.Queue) ServerOption {
 	return func(s *Server) error {
 		if q == nil {
-			return errors.New("audit queue must not be nil")
+			return errors.New("rate detection queue must not be nil")
 		}
-		s.auditQueue = q
+		s.rateDetectionQueue = q
 		return nil
 	}
 }
@@ -289,25 +293,35 @@ func (s *Server) Start() error {
 			return oops.Hint("failed to start the signing key loader").Wrap(err)
 		}
 	}
-	if s.auditQueue != nil {
-		s.auditQueue.Start()
+	if s.rateDetectionQueue != nil {
+		s.rateDetectionQueue.Start()
 	}
 	return nil
 }
 
-// Close starts any internal processes required by the server.
+// Close stops internal processes and drains accepted audit events.
 func (s *Server) Close() error {
+	var errs []error
+
 	s.cancel()
 	if s.clientDataSigner != nil {
 		err := s.clientDataSigner.Close()
 		if err != nil {
-			return oops.Hint("failed to stop the signing key loader").Wrap(err)
+			errs = append(errs, oops.Hint("failed to stop the signing key loader").Wrap(err))
 		}
 	}
 
-	// Drain buffered audit events before releasing the rate store connection.
-	if s.auditQueue != nil {
-		_ = s.auditQueue.Close()
+	// Finish observations before closing the logger: they may enqueue events.
+	if s.rateDetectionQueue != nil {
+		_ = s.rateDetectionQueue.Close()
+	}
+	// Shutdown follows request-context cancellation, so draining needs a
+	// fresh context with its own deadline.
+	ctx, cancel := context.WithTimeout(context.Background(), auditShutdownTimeout)
+	err := s.audit.Close(ctx)
+	cancel()
+	if err != nil {
+		errs = append(errs, oops.Hint("failed to drain audit logger").Wrap(err))
 	}
 	if s.rateStore != nil {
 		_ = s.rateStore.Close()
@@ -316,9 +330,9 @@ func (s *Server) Close() error {
 	if closer, ok := s.sessionManager.(interface{ Close() error }); ok {
 		err := closer.Close()
 		if err != nil {
-			return oops.Hint("failed to close session manager gRPC connection").Wrap(err)
+			errs = append(errs, oops.Hint("failed to close session manager gRPC connection").Wrap(err))
 		}
 	}
 
-	return nil
+	return errors.Join(errs...)
 }
