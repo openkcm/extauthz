@@ -1,7 +1,6 @@
 package audit_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -16,5 +15,5 @@ func TestNoopLogger_SendEvent(t *testing.T) {
 	t.Parallel()
 
 	var logger audit.Logger = audit.NoopLogger{}
-	require.NoError(t, logger.SendEvent(context.Background(), plog.NewLogs()))
+	require.NoError(t, logger.SendEvent(plog.NewLogs()))
 }

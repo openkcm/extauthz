@@ -19,7 +19,6 @@ import (
 	otlpaudit "github.com/openkcm/common-sdk/pkg/otlp/audit"
 	slogctx "github.com/veqryn/slog-context"
 
-	"github.com/openkcm/extauthz/internal/auditqueue"
 	"github.com/openkcm/extauthz/internal/clientdata"
 	"github.com/openkcm/extauthz/internal/config"
 	"github.com/openkcm/extauthz/internal/extauthz"
@@ -27,11 +26,14 @@ import (
 	"github.com/openkcm/extauthz/internal/metric"
 	"github.com/openkcm/extauthz/internal/oauth2client"
 	"github.com/openkcm/extauthz/internal/policies/cedarpolicy"
+	"github.com/openkcm/extauthz/internal/ratedetectionqueue"
 	"github.com/openkcm/extauthz/internal/ratestore"
 	"github.com/openkcm/extauthz/internal/session"
 )
 
 func createExtAuthZServer(ctx context.Context, cfg *config.Config) (*extauthz.Server, error) {
+	var srv *extauthz.Server
+
 	// prepare the options for the server
 	opts := []extauthz.ServerOption{
 		extauthz.WithFeatureGates(&cfg.FeatureGates),
@@ -95,36 +97,51 @@ func createExtAuthZServer(ctx context.Context, cfg *config.Config) (*extauthz.Se
 	// endpoint is the meaningful signal for whether audit delivery is wanted.
 	auditConfigured := cfg.Audit.Endpoint != ""
 	if auditConfigured || cfg.Valkey.RateDetection.Enabled {
-		if auditConfigured {
-			auditLogger, err := otlpaudit.NewLogger(&cfg.Audit)
-			if err != nil {
-				return nil, fmt.Errorf("creating audit logger: %w", err)
-			}
-
-			opts = append(opts, extauthz.WithAuditLogger(auditLogger))
-		}
-
 		metrics, err := metric.New(nil)
 		if err != nil {
 			return nil, fmt.Errorf("creating audit metrics: %w", err)
 		}
 		opts = append(opts, extauthz.WithMetrics(metrics))
 
-		// Async dispatcher: keeps the Valkey round-trip and audit HTTP POST off
-		// the Check() hot path.
-		queue := auditqueue.New(auditqueue.Options{
-			Metrics:         metrics,
-			Size:            cfg.Valkey.RateDetection.QueueSize,
-			Workers:         cfg.Valkey.RateDetection.Workers,
-			DispatchTimeout: cfg.Valkey.RateDetection.DispatchTimeout,
-		})
-		opts = append(opts, extauthz.WithAuditQueue(queue))
+		if auditConfigured {
+			sink, err := otlpaudit.NewLogger(&cfg.Audit)
+			if err != nil {
+				return nil, fmt.Errorf("creating audit logger: %w", err)
+			}
+			auditLogger := otlpaudit.NewQueuedLogger(sink, otlpaudit.QueuedOptions{
+				OnError: func(err error) {
+					slogctx.Error(context.WithoutCancel(ctx), "failed to deliver audit event after retries", "error", err)
+				},
+			})
+			defer func() {
+				if srv == nil {
+					// No events have been submitted yet, so the queue is empty.
+					_ = auditLogger.Close(context.Background())
+				}
+			}()
+
+			opts = append(opts, extauthz.WithAuditLogger(auditLogger))
+		}
 
 		if cfg.Valkey.RateDetection.Enabled {
+			// Valkey observations still need workers; the SDK owns audit delivery.
+			rateDetectionQueue := ratedetectionqueue.New(ratedetectionqueue.Options{
+				Metrics:         metrics,
+				Size:            cfg.Valkey.RateDetection.QueueSize,
+				Workers:         cfg.Valkey.RateDetection.Workers,
+				DispatchTimeout: cfg.Valkey.RateDetection.DispatchTimeout,
+			})
+			opts = append(opts, extauthz.WithRateDetectionQueue(rateDetectionQueue))
+
 			rateStore, err := createRateStore(ctx, cfg)
 			if err != nil {
 				return nil, fmt.Errorf("creating rate store: %w", err)
 			}
+			defer func() {
+				if srv == nil {
+					_ = rateStore.Close()
+				}
+			}()
 			opts = append(opts,
 				extauthz.WithRateStore(rateStore),
 				extauthz.WithCountUnknown(cfg.Valkey.RateDetection.CountUnknown),
@@ -133,7 +150,7 @@ func createExtAuthZServer(ctx context.Context, cfg *config.Config) (*extauthz.Se
 	}
 
 	// Create the ExtAuthZ server
-	srv, err := extauthz.NewServer(opts...)
+	srv, err = extauthz.NewServer(opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create the ExtAuthZ server: %w", err)
 	}

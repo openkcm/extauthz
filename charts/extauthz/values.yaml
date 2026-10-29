@@ -1042,6 +1042,10 @@ config:
   #   httpClient: timeout (default 10s), client authentication (basicAuth, oauth2Auth or
   #     apiToken), mtls and transportAttributes; the same settings as `jwt.httpClient`
   #   additionalProperties: attributes added to every event, as a YAML map in a string
+  # Delivery uses the SDK defaults: a 1024-event queue, one worker, and five retries
+  # with exponential backoff, independently of valkey.rateDetection. Each attempt
+  # uses httpClient.timeout. Shutdown drains accepted events for up to 10s after
+  # the Valkey observations finish.
   # Example:
   # audit:
   #   endpoint: https://otel-collector:4318/v1/logs
@@ -1099,10 +1103,9 @@ config:
   #     cooldown: 1m           # no further event for the identity for this long; at least
   #                            # as long as window (default: window)
   #     countUnknown: false    # also count requests without any credentials
-  #     queueSize: 1024        # audit queue; events are dropped when it is full
-  #     workers: 4             # number of senders draining the audit queue
-  #     dispatchTimeout: 10s   # time limit for one queued event (Valkey and audit call)
-  # queueSize, workers and dispatchTimeout also apply when only `audit` is set.
+  #     queueSize: 1024        # capacity of the Valkey observation queue
+  #     workers: 4             # Valkey observation workers
+  #     dispatchTimeout: 10s   # time limit for one queued Valkey observation
   # Example with the address and credentials from environment variables, without
   # Sentinel:
   # valkey:
