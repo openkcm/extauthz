@@ -251,3 +251,267 @@ func TestCheckJWTToken(t *testing.T) {
 		})
 	}
 }
+
+func TestCheckEnrichedJWTToken(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+
+	var (
+		wkocResponse []byte
+		jwksResponse []byte
+	)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, string(wkocResponse))
+	})
+	mux.HandleFunc("/jwks", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, string(jwksResponse))
+	})
+	mux.HandleFunc("/oauth2/introspect", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"active": true}`)
+	})
+
+	ts := httptest.NewTLSServer(mux)
+	t.Cleanup(ts.Close)
+
+	exp := time.Now().Add(48 * time.Hour).Unix()
+
+	makeToken := func(claims jwt.MapClaims) string {
+		tok := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+		tok.Header["kid"] = rsaKeyID
+		tok.Header["jku"] = ts.URL + "/jwks"
+		s, err := tok.SignedString(rsaPrivateKey)
+		if err != nil {
+			t.Fatalf("could not sign token: %s", err)
+		}
+		return s
+	}
+
+	certDER, err := createX509CertDER(time.Now(), time.Now().Add(5*time.Minute))
+	if err != nil {
+		t.Fatalf("could not create x509 certificate: %s", err)
+	}
+	eBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(eBytes, uint64(rsaPrivateKey.E))
+	eBytes = bytes.TrimLeft(eBytes, "\x00")
+	sum := sha256.Sum256(certDER)
+
+	jwksResponse, err = json.Marshal(map[string]any{
+		"keys": []map[string]any{{
+			"kty":      "RSA",
+			"x5t#S256": base64.RawURLEncoding.EncodeToString(sum[:]),
+			"e":        base64.RawURLEncoding.EncodeToString(eBytes),
+			"use":      "sig",
+			"kid":      rsaKeyID,
+			"x5c":      []string{base64.StdEncoding.EncodeToString(certDER)},
+			"alg":      "RS256",
+			"n":        base64.RawURLEncoding.EncodeToString(rsaPrivateKey.N.Bytes()),
+		}},
+	})
+	if err != nil {
+		t.Fatalf("could not marshal JWKS response: %s", err)
+	}
+	wkocResponse, err = json.Marshal(map[string]any{
+		"issuer":   ts.URL,
+		"jwks_uri": ts.URL + "/jwks",
+	})
+	if err != nil {
+		t.Fatalf("could not marshal WKOC response: %s", err)
+	}
+
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "keyId"), []byte("key01"), 0644))
+	require.NoError(t, createFileWithGeneratedKey(filepath.Join(dir, "key01.pem")))
+
+	rule := config.JWTPathPrefixRule{
+		PathPrefix: "/spi/",
+		RequiredClaims: []config.RequiredClaim{
+			{Field: "ias_apis", Value: "task-center-api", MatchType: config.ClaimMatchTypeContains},
+		},
+		ClientTypeField:             "sap_id_type",
+		ClientTypeMapping:           map[string]string{"app": "TechnicalUser", "user": "User"},
+		AdditionalAuthContextFields: []string{"app_tid"},
+	}
+
+	tests := []struct {
+		name           string
+		bearerToken    string
+		reqPath        string
+		wantCode       checkResultCode
+		wantClientType *clientdata.ClientType
+		wantAppTID     string
+		wantGroups     []string
+		wantEmail      string
+	}{
+		{
+			name: "no matching prefix falls through to standard check",
+			bearerToken: makeToken(jwt.MapClaims{
+				"sub":      "std-user",
+				"iss":      ts.URL,
+				"exp":      exp,
+				"mail":     "std@example.com",
+				"groups":   []string{"g1"},
+				"ias_apis": []string{"task-center-api"},
+			}),
+			reqPath:  "/cmk/v1/tenant/keys",
+			wantCode: ALLOWED,
+		},
+		{
+			name: "matching prefix, requiredClaims contains passes, app token",
+			bearerToken: makeToken(jwt.MapClaims{
+				"sub":         "app-client",
+				"iss":         ts.URL,
+				"exp":         exp,
+				"email":       "svc@example.com",
+				"ias_apis":    []string{"task-center-api", "other-api"},
+				"sap_id_type": "app",
+				"app_tid":     "tenant-abc",
+				"aud":         "client-123",
+			}),
+			reqPath:        "/spi/tenant1/tasks",
+			wantCode:       ALLOWED,
+			wantClientType: ptr(clientdata.TechnicalUser),
+			wantAppTID:     "tenant-abc",
+			wantEmail:      "svc@example.com",
+		},
+		{
+			name: "matching prefix, requiredClaims contains passes, user token",
+			bearerToken: makeToken(jwt.MapClaims{
+				"sub":         "human-user",
+				"iss":         ts.URL,
+				"exp":         exp,
+				"email":       "human@example.com",
+				"ias_apis":    []string{"task-center-api"},
+				"sap_id_type": "user",
+				"app_tid":     "tenant-xyz",
+			}),
+			reqPath:        "/spi/tenant1/tasks",
+			wantCode:       ALLOWED,
+			wantClientType: ptr(clientdata.User),
+			wantAppTID:     "tenant-xyz",
+			wantEmail:      "human@example.com",
+		},
+		{
+			name: "matching prefix, requiredClaims contains fails - wrong value",
+			bearerToken: makeToken(jwt.MapClaims{
+				"sub":      "bad-client",
+				"iss":      ts.URL,
+				"exp":      exp,
+				"ias_apis": []string{"other-api"},
+			}),
+			reqPath:  "/spi/tenant1/tasks",
+			wantCode: DENIED,
+		},
+		{
+			name: "matching prefix, requiredClaims contains fails - field missing",
+			bearerToken: makeToken(jwt.MapClaims{
+				"sub": "no-apis-claim",
+				"iss": ts.URL,
+				"exp": exp,
+			}),
+			reqPath:  "/spi/tenant1/tasks",
+			wantCode: DENIED,
+		},
+		{
+			name: "matching prefix, clientTypeField value not in mapping leaves override nil",
+			bearerToken: makeToken(jwt.MapClaims{
+				"sub":         "unknown-type",
+				"iss":         ts.URL,
+				"exp":         exp,
+				"ias_apis":    []string{"task-center-api"},
+				"sap_id_type": "service",
+			}),
+			reqPath:        "/spi/tenant1/tasks",
+			wantCode:       ALLOWED,
+			wantClientType: nil,
+		},
+		{
+			name: "matching prefix, user_attributes.groups fallback",
+			bearerToken: makeToken(jwt.MapClaims{
+				"sub":      "grouped-user",
+				"iss":      ts.URL,
+				"exp":      exp,
+				"ias_apis": []string{"task-center-api"},
+				"user_attributes": map[string]any{
+					"groups": []any{"grpA", "grpB"},
+				},
+			}),
+			reqPath:    "/spi/tenant1/tasks",
+			wantCode:   ALLOWED,
+			wantGroups: []string{"grpA", "grpB"},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			certpool := x509.NewCertPool()
+			certpool.AddCert(ts.Certificate())
+			cl := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: certpool}}}
+
+			p, err := oidc.NewProvider(ts.URL, []string{},
+				oidc.WithPublicHTTPClient(cl),
+				oidc.WithSecureHTTPClient(cl),
+			)
+			require.NoError(t, err)
+
+			hdl, err := handler.NewOIDC(ctx, handler.WithStaticProvider(p))
+			require.NoError(t, err)
+
+			pe, err := cedarpolicy.NewEngine(cedarpolicy.WithBytes("my policies", []byte("permit(principal, action, resource);")))
+			require.NoError(t, err)
+
+			signer, err := clientdata.NewSigner(&commoncfg.FeatureGates{}, &config.ClientData{
+				SigningKeyIDFilePath: filepath.Join(dir, "keyId"),
+			})
+			require.NoError(t, err)
+
+			srv, err := NewServer(
+				WithClientDataSigner(signer),
+				WithPolicyEngine(pe),
+				WithOIDCHandler(hdl),
+				WithJWTPathPrefixRules([]config.JWTPathPrefixRule{rule}),
+			)
+			require.NoError(t, err)
+			defer func() { require.NoError(t, srv.Close()) }()
+			require.NoError(t, srv.Start())
+
+			result := srv.checkJWTToken(t.Context(), tc.bearerToken, requestInfo{
+				method: "GET",
+				host:   "our.service.com",
+				path:   tc.reqPath,
+			})
+
+			require.Equal(t, tc.wantCode, result.is, "check result code")
+
+			if tc.wantClientType != nil {
+				require.NotNil(t, result.clientTypeOverride)
+				require.Equal(t, *tc.wantClientType, *result.clientTypeOverride)
+			} else {
+				require.Nil(t, result.clientTypeOverride, "expected no client type override")
+			}
+
+			if tc.wantAppTID != "" {
+				require.Equal(t, tc.wantAppTID, result.authContext["app_tid"])
+			}
+
+			if tc.wantEmail != "" {
+				require.Equal(t, tc.wantEmail, result.email)
+			}
+
+			if tc.wantGroups != nil {
+				require.Equal(t, tc.wantGroups, result.groups)
+			}
+		})
+	}
+}
+
+// ptr returns a pointer to a clientdata.ClientType value.
+func ptr(ct clientdata.ClientType) *clientdata.ClientType {
+	return &ct
+}

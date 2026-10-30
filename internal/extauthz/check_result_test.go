@@ -87,4 +87,14 @@ func TestMerge(t *testing.T) {
 			}
 		})
 	}
+
+	// withXFCCHeader uses OR semantics: a true flag on the losing side must not
+	// be cleared when the more-restrictive result wins the merge.
+	t.Run("withXFCCHeader is ORed across results", func(t *testing.T) {
+		r1 := checkResult{is: ALLOWED, withXFCCHeader: true, kind: authKindX509}
+		r2 := checkResult{is: DENIED, withXFCCHeader: false, kind: authKindJWT}
+		r1.merge(r2)
+		assert.Equal(t, DENIED, r1.is)
+		assert.True(t, r1.withXFCCHeader, "XFCC flag must survive when more-restrictive result wins")
+	})
 }

@@ -15,6 +15,8 @@ import (
 	"uuid"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/openkcm/extauthz/internal/config"
 )
 
 var (
@@ -114,5 +116,22 @@ func TestNewServer(t *testing.T) {
 			//nolint:errcheck
 			NewServer(nil)
 		})
+	})
+}
+
+func TestWithJWTPathPrefixRules(t *testing.T) {
+	t.Parallel()
+	t.Run("invalid MatchType returns error at construction", func(t *testing.T) {
+		t.Parallel()
+		_, err := NewServer(WithJWTPathPrefixRules([]config.JWTPathPrefixRule{
+			{
+				PathPrefix: "/spi/",
+				RequiredClaims: []config.RequiredClaim{
+					{Field: "scope", Value: "read", MatchType: "unknown"},
+				},
+			},
+		}))
+		assert.ErrorContains(t, err, "invalid matchType")
+		assert.ErrorContains(t, err, "scope")
 	})
 }

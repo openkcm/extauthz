@@ -13,6 +13,7 @@ import (
 	"github.com/openkcm/extauthz/internal/audit"
 	"github.com/openkcm/extauthz/internal/auditqueue"
 	"github.com/openkcm/extauthz/internal/clientdata"
+	"github.com/openkcm/extauthz/internal/config"
 	"github.com/openkcm/extauthz/internal/handler"
 	"github.com/openkcm/extauthz/internal/metric"
 	"github.com/openkcm/extauthz/internal/policies"
@@ -60,8 +61,9 @@ type Server struct {
 	trustedSubjectToRegion map[string]string
 	featureGates           *commoncfg.FeatureGates
 	sessionManager         sessionManagerInterface
-	sessionPathPrefixes    []string
-	csrfSecret             []byte
+	sessionPathPrefixes []string
+	jwtPathPrefixRules  []config.JWTPathPrefixRule
+	csrfSecret          []byte
 	tracer                 trace.Tracer
 	cancel                 context.CancelFunc
 	audit                  audit.Logger
@@ -208,6 +210,25 @@ func WithSessionPathPrefixes(sessionPathPrefixes []string) ServerOption {
 			sessionPathPrefixesCopy[i] = p
 		}
 		server.sessionPathPrefixes = sessionPathPrefixesCopy
+		return nil
+	}
+}
+
+func WithJWTPathPrefixRules(rules []config.JWTPathPrefixRule) ServerOption {
+	return func(server *Server) error {
+		rulesCopy := make([]config.JWTPathPrefixRule, len(rules))
+		for i, r := range rules {
+			if !strings.HasSuffix(r.PathPrefix, "/") {
+				r.PathPrefix += "/"
+			}
+			for _, rc := range r.RequiredClaims {
+				if rc.MatchType != config.ClaimMatchTypeEquals && rc.MatchType != config.ClaimMatchTypeContains {
+					return errors.New("invalid matchType " + string(rc.MatchType) + " for field " + rc.Field + " in pathPrefix " + r.PathPrefix)
+				}
+			}
+			rulesCopy[i] = r
+		}
+		server.jwtPathPrefixRules = rulesCopy
 		return nil
 	}
 }
