@@ -15,6 +15,8 @@ import (
 	"uuid"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/openkcm/extauthz/internal/config"
 )
 
 var (
@@ -114,5 +116,77 @@ func TestNewServer(t *testing.T) {
 			//nolint:errcheck
 			NewServer(nil)
 		})
+	})
+}
+
+func TestWithJWTPathPrefixRules(t *testing.T) {
+	t.Parallel()
+	t.Run("invalid MatchType returns error at construction", func(t *testing.T) {
+		t.Parallel()
+		_, err := NewServer(WithJWTPathPrefixRules([]config.JWTPathPrefixRule{
+			{
+				PathPrefix: "/api/",
+				RequiredClaims: []config.RequiredClaim{
+					{Field: "scope", Value: "read", MatchType: "unknown"},
+				},
+			},
+		}))
+		assert.ErrorContains(t, err, "invalid matchType")
+		assert.ErrorContains(t, err, "scope")
+	})
+	t.Run("empty PathPrefix returns error at construction", func(t *testing.T) {
+		t.Parallel()
+		_, err := NewServer(WithJWTPathPrefixRules([]config.JWTPathPrefixRule{
+			{PathPrefix: ""},
+		}))
+		assert.ErrorContains(t, err, "pathPrefix must not be empty")
+	})
+	t.Run("unrecognised ClientTypeMapping target returns error at construction", func(t *testing.T) {
+		t.Parallel()
+		_, err := NewServer(WithJWTPathPrefixRules([]config.JWTPathPrefixRule{
+			{
+				PathPrefix:        "/api/",
+				ClientTypeField:   "id_type",
+				ClientTypeMapping: map[string]string{"app": "TechnicalUsr"}, // typo
+			},
+		}))
+		assert.ErrorContains(t, err, "unrecognised ClientTypeMapping target")
+		assert.ErrorContains(t, err, "TechnicalUsr")
+	})
+	t.Run("empty RequiredClaim field returns error at construction", func(t *testing.T) {
+		t.Parallel()
+		_, err := NewServer(WithJWTPathPrefixRules([]config.JWTPathPrefixRule{
+			{
+				PathPrefix: "/api/",
+				RequiredClaims: []config.RequiredClaim{
+					{Field: "", Value: "val", MatchType: config.ClaimMatchTypeEquals},
+				},
+			},
+		}))
+		assert.ErrorContains(t, err, "requiredClaim field must not be empty")
+	})
+	t.Run("clientTypeMapping without clientTypeField returns error at construction", func(t *testing.T) {
+		t.Parallel()
+		_, err := NewServer(WithJWTPathPrefixRules([]config.JWTPathPrefixRule{
+			{
+				PathPrefix:        "/api/",
+				ClientTypeMapping: map[string]string{"app": "TechnicalUser"},
+			},
+		}))
+		assert.ErrorContains(t, err, "clientTypeField must not be empty when clientTypeMapping is set")
+	})
+	t.Run("duplicate auth context key returns error at construction", func(t *testing.T) {
+		t.Parallel()
+		_, err := NewServer(WithJWTPathPrefixRules([]config.JWTPathPrefixRule{
+			{
+				PathPrefix: "/api/",
+				AdditionalAuthContextFields: map[string]string{
+					"claim_a": "my_key",
+					"claim_b": "my_key",
+				},
+			},
+		}))
+		assert.ErrorContains(t, err, "duplicate auth context key")
+		assert.ErrorContains(t, err, "my_key")
 	})
 }
