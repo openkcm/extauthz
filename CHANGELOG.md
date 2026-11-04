@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.14.2](https://github.com/openkcm/extauthz/compare/v0.14.1...v0.14.2) (2026-11-04)
+
+
+### Bug Fixes
+
+* address golangci-lint findings in helm-tests ([#373](https://github.com/openkcm/extauthz/issues/373)) ([af6080b](https://github.com/openkcm/extauthz/commit/af6080b4ecd046a2447febfa966a87e321774d3d))
+* Bump Go version ([#374](https://github.com/openkcm/extauthz/issues/374)) ([58648f8](https://github.com/openkcm/extauthz/commit/58648f812e3991fb279cc7263cf477a200d53747))
+* comment-out the charts notification steps ([93b6b9b](https://github.com/openkcm/extauthz/commit/93b6b9b5805e1c3d70cea431b2e8021a4eed5c10))
+* **deps:** bump the gomod-group group with 8 updates ([#378](https://github.com/openkcm/extauthz/issues/378)) ([5ca2860](https://github.com/openkcm/extauthz/commit/5ca28602e7ffb2e49a71ea4fb80ad570a7d00274))
+* update golang.org/x/net ([#375](https://github.com/openkcm/extauthz/issues/375)) ([b1ea996](https://github.com/openkcm/extauthz/commit/b1ea9961b0e28cc8e1c7ee6cc29b74eb8b11b858))
+
 ## [0.14.1](https://github.com/openkcm/extauthz/compare/v0.14.0...v0.14.1) (2026-10-20)
 
 
