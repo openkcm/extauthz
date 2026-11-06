@@ -20,4 +20,4 @@ version: 0.15.0
 # ExtAuthZ release this chart deploys by default: the tag of its image. release-please updates
 # it in each release pull request (marker on the line). Increase `version` in the same pull
 # request, otherwise the chart release workflow skips the already-published chart version.
-appVersion: "v0.14.0" # x-release-please-version
+appVersion: "v0.15.0" # x-release-please-version
