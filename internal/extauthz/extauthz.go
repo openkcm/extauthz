@@ -3,6 +3,7 @@ package extauthz
 import (
 	"context"
 	"errors"
+	"maps"
 	"strings"
 
 	"github.com/openkcm/common-sdk/pkg/commoncfg"
@@ -13,6 +14,7 @@ import (
 	"github.com/openkcm/extauthz/internal/audit"
 	"github.com/openkcm/extauthz/internal/auditqueue"
 	"github.com/openkcm/extauthz/internal/clientdata"
+	"github.com/openkcm/extauthz/internal/config"
 	"github.com/openkcm/extauthz/internal/handler"
 	"github.com/openkcm/extauthz/internal/metric"
 	"github.com/openkcm/extauthz/internal/policies"
@@ -61,6 +63,7 @@ type Server struct {
 	featureGates           *commoncfg.FeatureGates
 	sessionManager         sessionManagerInterface
 	sessionPathPrefixes    []string
+	jwtPathPrefixRules     []config.JWTPathPrefixRule
 	csrfSecret             []byte
 	tracer                 trace.Tracer
 	cancel                 context.CancelFunc
@@ -208,6 +211,69 @@ func WithSessionPathPrefixes(sessionPathPrefixes []string) ServerOption {
 			sessionPathPrefixesCopy[i] = p
 		}
 		server.sessionPathPrefixes = sessionPathPrefixesCopy
+		return nil
+	}
+}
+
+func WithJWTPathPrefixRules(rules []config.JWTPathPrefixRule) ServerOption {
+	return func(server *Server) error {
+		rulesCopy := make([]config.JWTPathPrefixRule, len(rules))
+		for i, r := range rules {
+			if r.PathPrefix == "" {
+				return errors.New("pathPrefix must not be empty")
+			}
+			if !strings.HasSuffix(r.PathPrefix, "/") {
+				r.PathPrefix += "/"
+			}
+			for _, rc := range r.RequiredClaims {
+				if rc.Field == "" {
+					return errors.New("requiredClaim field must not be empty in pathPrefix " + r.PathPrefix)
+				}
+				if rc.MatchType != config.ClaimMatchTypeEquals && rc.MatchType != config.ClaimMatchTypeContains {
+					return errors.New("invalid matchType " + string(rc.MatchType) + " for field " + rc.Field + " in pathPrefix " + r.PathPrefix)
+				}
+			}
+			if len(r.ClientTypeMapping) > 0 && r.ClientTypeField == "" {
+				return errors.New("clientTypeField must not be empty when clientTypeMapping is set in pathPrefix " + r.PathPrefix)
+			}
+			for val, target := range r.ClientTypeMapping {
+				switch clientdata.ClientType(target) {
+				case clientdata.TechnicalUser, clientdata.System, clientdata.User:
+				default:
+					return errors.New("unrecognised ClientTypeMapping target " + target + " for value " + val + " in pathPrefix " + r.PathPrefix)
+				}
+			}
+			seenCtxKeys := make(map[string]string, len(r.AdditionalAuthContextFields))
+			for claim, ctxKey := range r.AdditionalAuthContextFields {
+				if ctxKey == contextKeyIssuer || ctxKey == "client_id" {
+					continue
+				}
+				if prev, exists := seenCtxKeys[ctxKey]; exists {
+					return errors.New("duplicate auth context key " + ctxKey + " mapped from both " + prev + " and " + claim + " in pathPrefix " + r.PathPrefix)
+				}
+				seenCtxKeys[ctxKey] = claim
+			}
+			// Deep-copy slices and maps so the server is not affected by
+			// any post-construction mutation of the caller's config.
+			rCopy := config.JWTPathPrefixRule{
+				PathPrefix:      r.PathPrefix,
+				ClientTypeField: r.ClientTypeField,
+			}
+			if len(r.RequiredClaims) > 0 {
+				rCopy.RequiredClaims = make([]config.RequiredClaim, len(r.RequiredClaims))
+				copy(rCopy.RequiredClaims, r.RequiredClaims)
+			}
+			if len(r.ClientTypeMapping) > 0 {
+				rCopy.ClientTypeMapping = make(map[string]string, len(r.ClientTypeMapping))
+				maps.Copy(rCopy.ClientTypeMapping, r.ClientTypeMapping)
+			}
+			if len(r.AdditionalAuthContextFields) > 0 {
+				rCopy.AdditionalAuthContextFields = make(map[string]string, len(r.AdditionalAuthContextFields))
+				maps.Copy(rCopy.AdditionalAuthContextFields, r.AdditionalAuthContextFields)
+			}
+			rulesCopy[i] = rCopy
+		}
+		server.jwtPathPrefixRules = rulesCopy
 		return nil
 	}
 }

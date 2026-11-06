@@ -62,7 +62,8 @@ type checkResult struct {
 
 	authContext map[string]string
 
-	withXFCCHeader bool
+	withXFCCHeader     bool
+	clientTypeOverride *clientdata.ClientType
 
 	// kind records which credential channel produced this result. It rides
 	// the same merge precedence as `is`: when a more-restrictive result wins,
@@ -74,6 +75,8 @@ func (r *checkResult) toClientDataOptions() []clientdata.Option {
 	clientType := clientdata.User
 
 	switch {
+	case r.clientTypeOverride != nil:
+		clientType = *r.clientTypeOverride
 	case r.withXFCCHeader && r.email != "":
 		clientType = clientdata.TechnicalUser
 	case r.withXFCCHeader && r.email == "":
@@ -81,16 +84,13 @@ func (r *checkResult) toClientDataOptions() []clientdata.Option {
 	}
 
 	return []clientdata.Option{
-		// Mandatory user attributes
 		clientdata.WithIdentifier(r.subject),
 		clientdata.WithEmail(r.email),
 		clientdata.WithGivenName(r.givenname),
 		clientdata.WithFamilyName(r.familyname),
 		clientdata.WithGroups(r.groups),
-		// Optional user attributes
 		clientdata.WithClientType(clientType),
 		clientdata.WithRegion(r.region),
-		// Authentication context
 		clientdata.WithAuthContext(r.authContext),
 	}
 }
@@ -112,6 +112,17 @@ func (cr *checkResult) merge(other checkResult) {
 		cr.groups = other.groups
 		cr.authContext = other.authContext
 		cr.kind = other.kind
+		cr.withXFCCHeader = cr.withXFCCHeader || other.withXFCCHeader
+		// clientTypeOverride uses replace semantics: the winning result's value takes over.
+		// toClientDataOptions is only called on ALLOWED, so a nil override from a DENIED
+		// winner is harmless.
+		cr.clientTypeOverride = other.clientTypeOverride
+	} else if other.clientTypeOverride != nil {
+		// Equal or less restrictive, but an explicit JWT path-prefix override always
+		// wins over an XFCC-inferred type — adopt it even without a full merge.
+		// Last non-nil wins: only one JWT result is produced per request (checkJWTToken
+		// returns on the first matching prefix rule), so this branch fires at most once.
+		cr.clientTypeOverride = other.clientTypeOverride
 	}
 }
 

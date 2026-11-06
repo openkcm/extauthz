@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"path"
 	"strings"
 
 	"github.com/openkcm/common-sdk/pkg/auth"
@@ -72,8 +73,16 @@ func (srv *Server) Check(ctx context.Context, req *envoyauth.CheckRequest) (*env
 	headers := httpreq.GetHeaders()
 	method := httpreq.GetMethod()
 	host := httpreq.GetHost()
-	path := httpreq.GetPath()
-	tenantID, isSessionPath := srv.extractTenantID(path)
+	// Normalize the path to prevent bypass via double-slash or dot segments
+	// (e.g. /foo//bar or /foo/./bar bypassing a rule defined for /foo/bar/).
+	rawPath := httpreq.GetPath()
+	cleanPath := path.Clean(rawPath)
+	// path.Clean strips trailing slashes; restore one if the original ended with /
+	// so that prefix-rule matching for paths like /spi/ still works correctly.
+	if len(rawPath) > 1 && rawPath[len(rawPath)-1] == '/' && cleanPath[len(cleanPath)-1] != '/' {
+		cleanPath += "/"
+	}
+	tenantID, isSessionPath := srv.extractTenantID(cleanPath)
 
 	// Extract W3C trace context from the inbound HTTP headers carried by the
 	// CheckRequest. Envoy delivers header keys lower-cased, which is what the
@@ -87,7 +96,7 @@ func (srv *Server) Check(ctx context.Context, req *envoyauth.CheckRequest) (*env
 		"method", method,
 		"scheme", httpreq.GetScheme(),
 		"host", host,
-		"path", path,
+		"path", cleanPath,
 		"tenant_id", tenantID,
 	)
 
@@ -97,7 +106,7 @@ func (srv *Server) Check(ctx context.Context, req *envoyauth.CheckRequest) (*env
 		trace.WithSpanKind(trace.SpanKindServer),
 		trace.WithAttributes(
 			semconv.HTTPRequestMethodKey.String(method),
-			semconv.URLPath(path),
+			semconv.URLPath(cleanPath),
 			semconv.ServerAddress(host),
 		),
 	)
@@ -105,7 +114,7 @@ func (srv *Server) Check(ctx context.Context, req *envoyauth.CheckRequest) (*env
 
 	slogctx.Debug(ctx, LogPrefixCheck+"called")
 
-	reqInfo := requestInfo{id: httpreq.GetId(), method: method, host: host, path: path, tenantID: tenantID}
+	reqInfo := requestInfo{id: httpreq.GetId(), method: method, host: host, path: cleanPath, tenantID: tenantID}
 
 	if isSessionPath && tenantID == "" {
 		slogctx.Warn(ctx, LogPrefixSessionCookie+"failed to extract tenant ID from path", "sessionPathPrefixes", srv.sessionPathPrefixes)
@@ -135,8 +144,8 @@ func (srv *Server) Check(ctx context.Context, req *envoyauth.CheckRequest) (*env
 			r := srv.checkClientCert(ctx, part, reqInfo)
 			slogctx.Debug(ctx, LogPrefixClientCert+"access "+r.is.String(), "part", nr)
 			r.kind = authKindX509
+			r.withXFCCHeader = true
 			result.merge(r)
-			result.withXFCCHeader = true
 		}
 	} else {
 		slogctx.Debug(ctx, LogPrefixClientCert+"not found")
