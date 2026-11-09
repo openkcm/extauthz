@@ -56,7 +56,7 @@ func New(meter metric.Meter) (*Metrics, error) {
 
 	dropped, err := meter.Int64Counter(
 		"extauthz_audit_dropped_total",
-		metric.WithDescription("Audit events dropped because the async dispatch queue was full."),
+		metric.WithDescription("Audit events or observations dropped because a queue rejected them."),
 	)
 	if err != nil {
 		return nil, err
@@ -72,7 +72,7 @@ func New(meter metric.Meter) (*Metrics, error) {
 
 	panics, err := meter.Int64Counter(
 		"extauthz_audit_panics_total",
-		metric.WithDescription("Audit dispatch jobs that panicked and were recovered by the worker pool."),
+		metric.WithDescription("Valkey observation jobs that panicked and were recovered by the worker pool."),
 	)
 	if err != nil {
 		return nil, err
@@ -80,7 +80,7 @@ func New(meter metric.Meter) (*Metrics, error) {
 
 	queueDepth, err := meter.Int64UpDownCounter(
 		"extauthz_audit_queue_depth",
-		metric.WithDescription("Current number of audit events buffered in the async dispatch queue."),
+		metric.WithDescription("Current number of Valkey observations buffered in the async queue; excludes SDK audit delivery."),
 	)
 	if err != nil {
 		return nil, err
@@ -115,7 +115,7 @@ func (m *Metrics) IncUnauthorized(ctx context.Context, authType, decision string
 	))
 }
 
-// IncDropped records an audit event that was dropped due to a full queue.
+// IncDropped records an audit event or observation rejected by a queue.
 func (m *Metrics) IncDropped(ctx context.Context) {
 	if m == nil {
 		return
@@ -131,7 +131,7 @@ func (m *Metrics) IncRateStoreError(ctx context.Context) {
 	m.rateStoreErrors.Add(ctx, 1)
 }
 
-// IncPanic records an audit dispatch job that panicked and was recovered.
+// IncPanic records a Valkey observation job that panicked and was recovered.
 func (m *Metrics) IncPanic(ctx context.Context) {
 	if m == nil {
 		return
@@ -139,7 +139,7 @@ func (m *Metrics) IncPanic(ctx context.Context) {
 	m.panics.Add(ctx, 1)
 }
 
-// AddQueueDepth adjusts the current audit queue depth by delta (+1 on enqueue,
+// AddQueueDepth adjusts the Valkey observation queue depth by delta (+1 on enqueue,
 // -1 on drain).
 func (m *Metrics) AddQueueDepth(ctx context.Context, delta int64) {
 	if m == nil {

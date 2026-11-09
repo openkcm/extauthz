@@ -89,16 +89,16 @@ type RateDetection struct {
 	// traffic are not counted as auth failures.
 	CountUnknown bool `yaml:"countUnknown"`
 
-	// QueueSize bounds the async audit dispatch queue. When full, events are
-	// dropped and counted rather than blocking the Check() hot path.
+	// QueueSize bounds the Valkey observation queue. Rejected observations are
+	// dropped and counted without blocking Check().
 	QueueSize int `yaml:"queueSize" default:"1024"`
 
-	// Workers is the number of goroutines draining the audit dispatch queue.
+	// Workers is the number of Valkey observation workers, started only when
+	// rate detection is enabled.
 	Workers int `yaml:"workers" default:"4"`
 
-	// DispatchTimeout bounds how long a single queued audit job (Valkey observe
-	// + audit send) may run before its context is cancelled, so a hung backend
-	// cannot permanently occupy a worker.
+	// DispatchTimeout bounds a queued Valkey observation. Audit delivery uses
+	// Audit.HTTPClient.Timeout per attempt and the SDK's retry policy.
 	DispatchTimeout time.Duration `yaml:"dispatchTimeout" default:"10s"`
 }
 

@@ -16,12 +16,8 @@ import (
 )
 
 func startGRPCServer(ctx context.Context, cfg *config.Config, extauthzSrv *extauthz.Server) error {
-	// Start internal processes of the server
-	err := extauthzSrv.Start()
-	if err != nil {
-		return oops.Hint("failed to start internal processes of server").Wrap(err)
-	}
-
+	// The audit logger starts its workers during construction, so cleanup is
+	// required even if another server component fails to start.
 	defer func() {
 		// Stop internal processes of the server
 		err := extauthzSrv.Close()
@@ -29,6 +25,12 @@ func startGRPCServer(ctx context.Context, cfg *config.Config, extauthzSrv *extau
 			slogctx.Error(ctx, "failed to stop internal processes of server", "error", err)
 		}
 	}()
+
+	// Start internal processes of the server
+	err := extauthzSrv.Start()
+	if err != nil {
+		return oops.Hint("failed to start internal processes of server").Wrap(err)
+	}
 
 	// Create a new gRPC server
 	grpcServer := commongrpc.NewServer(ctx, &cfg.GRPCServer.GRPCServer)

@@ -57,6 +57,10 @@ clientData:
 # When configured, extauthz sends audit log events (unauthenticated bursts and
 # unauthorised requests) to this OTLP logs endpoint (the ALS collector). Leave
 # the whole block out to disable audit delivery (events become no-ops).
+# Delivery uses the SDK defaults: a 1024-event queue, one worker, and five
+# retries with exponential backoff. These are independent of valkey.rateDetection.
+# Shutdown allows up to 10s to drain accepted events after Valkey observations
+# finish. Each delivery attempt uses httpClient.timeout.
 #
 # audit:
 #   endpoint: http://als-collector:4317/v1/logs
@@ -91,9 +95,9 @@ clientData:
 #     cooldown: 1m             # suppress repeat events per identity/window;
 #                              # should be >= window (defaults to window if unset)
 #     countUnknown: false      # count requests with no credentials at all
-#     queueSize: 1024          # bounded async audit dispatch queue
-#     workers: 4
-#     dispatchTimeout: 10s     # per-job timeout (Valkey observe + audit send)
+#     queueSize: 1024          # capacity of the Valkey observation queue
+#     workers: 4               # Valkey observation workers
+#     dispatchTimeout: 10s     # per-observation Valkey timeout
 
 # Telemetry / OpenTelemetry (commented out by default).
 #
