@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.15.0 (2026-11-06)
+
+## What's Changed
+* fix: address golangci-lint findings in helm-tests by @bkieling in https://github.com/openkcm/extauthz/pull/373
+* fix: Bump Go version by @cb80 in https://github.com/openkcm/extauthz/pull/374
+* fix: update golang.org/x/net by @cb80 in https://github.com/openkcm/extauthz/pull/375
+* fix(deps): bump the gomod-group group with 8 updates by @dependabot[bot] in https://github.com/openkcm/extauthz/pull/378
+* feat: add JWT path-prefix rules with enriched claims extraction by @doanhluongsap in https://github.com/openkcm/extauthz/pull/377
+
+## New Contributors
+* @doanhluongsap made their first contribution in https://github.com/openkcm/extauthz/pull/377
+
+**Full Changelog**: https://github.com/openkcm/extauthz/compare/v0.14.1...v0.15.0
+
 ## [0.14.1](https://github.com/openkcm/extauthz/compare/v0.14.0...v0.14.1) (2026-10-20)
 
 
