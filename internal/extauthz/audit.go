@@ -17,8 +17,9 @@ import (
 // anonymous / failed-credential traffic. NewEventMetadata rejects empty values.
 const unspecified = "UNSPECIFIED"
 
-// recordDecision emits audit signals for a non-ALLOWED Check() decision. The
-// synchronous cost is a metric increment plus a non-blocking job submission.
+// recordDecision emits audit signals for a non-ALLOWED Check() decision.
+// Request handling only prepares events and submits non-blocking work; network
+// calls run on the Valkey workers or the queued audit logger's workers.
 func (srv *Server) recordDecision(ctx context.Context, result checkResult, reqInfo requestInfo) {
 	authType := result.authType()
 
@@ -28,7 +29,7 @@ func (srv *Server) recordDecision(ctx context.Context, result checkResult, reqIn
 		srv.recordUnauthenticated(ctx, result, reqInfo, authType)
 	case TENANT_BLOCKED, DENIED:
 		srv.metrics.IncUnauthorized(ctx, authType, result.is.String())
-		srv.recordUnauthorized(result, reqInfo, authType)
+		srv.recordUnauthorized(ctx, result, reqInfo, authType)
 	case ALLOWED:
 	}
 }
@@ -63,27 +64,27 @@ func (srv *Server) recordUnauthenticated(ctx context.Context, result checkResult
 			slogctx.Warn(jobCtx, LogPrefixCheck+"failed to build unauthenticated event", "error", err)
 			return
 		}
-		err = srv.audit.SendEvent(jobCtx, logs)
+		err = srv.audit.SendEvent(logs)
 		if err != nil {
-			slogctx.Warn(jobCtx, LogPrefixCheck+"failed to send unauthenticated event", "error", err)
+			srv.metrics.IncDropped(jobCtx)
+			slogctx.Warn(jobCtx, LogPrefixCheck+"failed to enqueue unauthenticated event", "error", err)
 		}
 	})
 }
 
-// recordUnauthorized sends an unauthorised-request audit event immediately;
+// recordUnauthorized enqueues an unauthorised-request audit event immediately;
 // unauthorised requests are a per-request fact and need no rate detection.
-func (srv *Server) recordUnauthorized(result checkResult, reqInfo requestInfo, authType string) {
-	srv.submit(context.Background(), func(jobCtx context.Context) {
-		logs, err := srv.buildUnauthorizedEvent(result, reqInfo, authType)
-		if err != nil {
-			slogctx.Warn(jobCtx, LogPrefixCheck+"failed to build unauthorized event", "error", err)
-			return
-		}
-		err = srv.audit.SendEvent(jobCtx, logs)
-		if err != nil {
-			slogctx.Warn(jobCtx, LogPrefixCheck+"failed to send unauthorized event", "error", err)
-		}
-	})
+func (srv *Server) recordUnauthorized(ctx context.Context, result checkResult, reqInfo requestInfo, authType string) {
+	logs, err := srv.buildUnauthorizedEvent(result, reqInfo, authType)
+	if err != nil {
+		slogctx.Warn(ctx, LogPrefixCheck+"failed to build unauthorized event", "error", err)
+		return
+	}
+	err = srv.audit.SendEvent(logs)
+	if err != nil {
+		srv.metrics.IncDropped(ctx)
+		slogctx.Warn(ctx, LogPrefixCheck+"failed to enqueue unauthorized event", "error", err)
+	}
 }
 
 // burstKey returns the hashed identity key used to window unauthenticated
@@ -158,8 +159,8 @@ func annotateAuthType(logs plog.Logs, authType string) {
 // submit runs the job on the async worker pool when configured; without a queue
 // it runs synchronously (only used in tests / when no queue is wired).
 func (srv *Server) submit(ctx context.Context, job func(ctx context.Context)) {
-	if srv.auditQueue != nil {
-		srv.auditQueue.Submit(ctx, job)
+	if srv.rateDetectionQueue != nil {
+		srv.rateDetectionQueue.Submit(ctx, job)
 		return
 	}
 	job(ctx)
