@@ -1,6 +1,6 @@
 module github.com/openkcm/extauthz
 
-go 1.27.3
+go 1.27.4
 
 require (
 	github.com/cedar-policy/cedar-go v1.9.2
