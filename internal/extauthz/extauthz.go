@@ -343,7 +343,7 @@ func NewServer(opts ...ServerOption) (*Server, error) {
 	// Default tracer is acquired from the global TracerProvider after options
 	// have been applied so WithTracer can override it. Acquiring it at
 	// construction time (rather than at import time) ensures we observe the
-	// real TracerProvider installed by otlp.Init during process startup.
+	// TracerProvider installed during startup, including when export is disabled.
 	if server.tracer == nil {
 		server.tracer = otel.Tracer(tracerName)
 	}

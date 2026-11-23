@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 
 	"go.opentelemetry.io/collector/pdata/plog"
+	"go.opentelemetry.io/otel/trace"
 
 	otlpaudit "github.com/openkcm/common-sdk/pkg/otlp/audit"
 	slogctx "github.com/veqryn/slog-context"
@@ -160,7 +161,20 @@ func annotateAuthType(logs plog.Logs, authType string) {
 // it runs synchronously (only used in tests / when no queue is wired).
 func (srv *Server) submit(ctx context.Context, job func(ctx context.Context)) {
 	if srv.rateDetectionQueue != nil {
-		srv.rateDetectionQueue.Submit(ctx, job)
+		producer := trace.SpanContextFromContext(ctx)
+		requestLogger := slogctx.FromCtx(ctx)
+		srv.rateDetectionQueue.Submit(ctx, func(jobCtx context.Context) {
+			jobCtx = slogctx.NewCtx(jobCtx, requestLogger)
+			opts := []trace.SpanStartOption{trace.WithNewRoot()}
+			if producer.IsValid() {
+				opts = append(opts, trace.WithLinks(trace.Link{SpanContext: producer}))
+				jobCtx = slogctx.Prepend(jobCtx, "producer_trace_id", producer.TraceID().String(),
+					"producer_span_id", producer.SpanID().String())
+			}
+			jobCtx, span := srv.tracer.Start(jobCtx, "ext_authz.rate_detection", opts...)
+			defer span.End()
+			job(jobCtx)
+		})
 		return
 	}
 	job(ctx)

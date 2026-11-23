@@ -9,13 +9,9 @@ import (
 	"strings"
 
 	"github.com/openkcm/common-sdk/pkg/auth"
-	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
-	"go.opentelemetry.io/otel/propagation"
-	"go.opentelemetry.io/otel/trace"
 
-	envoycore "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	envoyauth "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
 	slogctx "github.com/veqryn/slog-context"
 	semconv "go.opentelemetry.io/otel/semconv/v1.41.0"
@@ -58,12 +54,18 @@ const (
 
 // Check authorizes the request based on either client certificate, bearer token or session cookie.
 func (srv *Server) Check(ctx context.Context, req *envoyauth.CheckRequest) (*envoyauth.CheckResponse, error) {
+	// Establish correlation before every log, including malformed requests.
+	ctx, span := srv.startCheckSpan(ctx, req.GetAttributes().GetRequest().GetHttp().GetHeaders())
+	defer span.End()
+
 	// check the header
 	if req == nil ||
 		req.GetAttributes() == nil ||
 		req.GetAttributes().GetRequest() == nil ||
 		req.GetAttributes().GetRequest().GetHttp() == nil ||
 		req.GetAttributes().GetRequest().GetHttp().GetHeaders() == nil {
+		span.SetAttributes(attribute.String(spanAttrDecision, UNAUTHENTICATED.String()), attribute.String(spanAttrAuthType, authTypeNone))
+		span.SetStatus(codes.Error, "invalid request")
 		slogctx.Debug(ctx, LogPrefixCheck+"called with nil request")
 		return respondUnauthenticated("Invalid request")
 	}
@@ -84,33 +86,16 @@ func (srv *Server) Check(ctx context.Context, req *envoyauth.CheckRequest) (*env
 	}
 	tenantID, isSessionPath := srv.extractTenantID(cleanPath)
 
-	// Extract W3C trace context from the inbound HTTP headers carried by the
-	// CheckRequest. Envoy delivers header keys lower-cased, which is what the
-	// OTel TextMapPropagator expects. When traceparent is missing or malformed
-	// the propagator returns ctx unchanged (per OTel spec).
-	ctx = otel.GetTextMapPropagator().Extract(ctx, propagation.MapCarrier(headers))
-
 	ctx = slogctx.With(ctx,
 		"id", httpreq.GetId(),
 		"protocol", httpreq.GetProtocol(),
 		"method", method,
 		"scheme", httpreq.GetScheme(),
 		"host", host,
-		"path", cleanPath,
 		"tenant_id", tenantID,
 	)
 
-	// Start the application span as a child of the extracted context. Span
-	// kind is server because ExtAuthz is handling an inbound gRPC call.
-	ctx, span := srv.tracer.Start(ctx, spanNameCheck,
-		trace.WithSpanKind(trace.SpanKindServer),
-		trace.WithAttributes(
-			semconv.HTTPRequestMethodKey.String(method),
-			semconv.URLPath(cleanPath),
-			semconv.ServerAddress(host),
-		),
-	)
-	defer span.End()
+	span.SetAttributes(semconv.HTTPRequestMethodKey.String(method), semconv.ServerAddress(host))
 
 	slogctx.Debug(ctx, LogPrefixCheck+"called")
 
@@ -182,6 +167,7 @@ func (srv *Server) Check(ctx context.Context, req *envoyauth.CheckRequest) (*env
 	ctx = slogctx.WithGroup(ctx, "result")
 	slogctx.Debug(ctx, LogPrefixCheck+"overall result: access "+result.is.String(),
 		"info", result.info,
+		"decision", result.is.String(),
 	)
 
 	// Decorate the span with the post-merge decision and credential channel.
@@ -189,9 +175,7 @@ func (srv *Server) Check(ctx context.Context, req *envoyauth.CheckRequest) (*env
 		attribute.String(spanAttrDecision, result.is.String()),
 		attribute.String(spanAttrAuthType, result.authType()),
 	)
-	if result.is == ALLOWED {
-		span.SetStatus(codes.Ok, "")
-	} else {
+	if result.is != ALLOWED {
 		span.SetStatus(codes.Error, result.info)
 	}
 
@@ -200,10 +184,11 @@ func (srv *Server) Check(ctx context.Context, req *envoyauth.CheckRequest) (*env
 	// Prepare the response
 	switch result.is {
 	case ALLOWED:
-		headersToAdd := []*envoycore.HeaderValueOption{}
-		headersToRemove := []string{HeaderForwardedClientCert}
+		headersToAdd, headersToRemove := replacementTraceHeaders(ctx, headers)
+		headersToRemove = append(headersToRemove, HeaderForwardedClientCert)
 
 		if srv.clientDataSigner == nil {
+			span.SetStatus(codes.Ok, "")
 			return respondAllowed(headersToAdd, headersToRemove), nil
 		}
 
@@ -212,15 +197,19 @@ func (srv *Server) Check(ctx context.Context, req *envoyauth.CheckRequest) (*env
 		)
 		if err != nil {
 			slogctx.Error(ctx, LogPrefixCheck+"failed to encode client data", "error", err)
+			span.SetAttributes(attribute.String(spanAttrDecision, UNKNOWN.String()))
+			span.SetStatus(codes.Error, "client data signing failed")
+			slogctx.Error(ctx, LogPrefixCheck+"failed to encode client data")
 			return respondInternalServerError()
 		}
 
 		slogctx.Debug(ctx, LogPrefixCheck+"client data", auth.HeaderClientData, b64data)
-		headersToAdd = []*envoycore.HeaderValueOption{
+		headersToAdd = append(headersToAdd,
 			headerValueOption(auth.HeaderClientData, b64data),
 			headerValueOption(auth.HeaderClientDataSignature, b64sig),
-		}
+		)
 
+		span.SetStatus(codes.Ok, "")
 		return respondAllowed(headersToAdd, headersToRemove), nil
 	case UNKNOWN, UNAUTHENTICATED:
 		return respondUnauthenticated(result.info)

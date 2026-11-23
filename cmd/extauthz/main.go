@@ -65,12 +65,21 @@ func run(ctx context.Context) error {
 			Wrapf(err, "Failed to initialise the logger")
 	}
 
-	// OpenTelemetry initialisation
-	err = otlp.Init(ctx, &cfg.Application, &cfg.Telemetry, &cfg.Logger)
+	// Telemetry stays active until business.Main has drained requests and jobs.
+	telemetryCtx, cancelTelemetry := context.WithCancel(context.WithoutCancel(ctx))
+	defer cancelTelemetry()
+	telemetryStopped := make(chan struct{})
+	err = otlp.Init(telemetryCtx, &cfg.Application, &cfg.Telemetry, &cfg.Logger,
+		otlp.WithShutdownComplete(telemetryStopped))
 	if err != nil {
 		return oops.In("main").
 			Wrapf(err, "Failed to load the telemetry")
 	}
+
+	defer func() {
+		cancelTelemetry()
+		<-telemetryStopped
+	}()
 
 	// Status server initialization
 	// Copy the gRPC client config to avoid race condition when modifying Client.Address
