@@ -32,6 +32,7 @@ import (
 	"github.com/openkcm/extauthz/internal/clientdata"
 	"github.com/openkcm/extauthz/internal/config"
 	"github.com/openkcm/extauthz/internal/policies/cedarpolicy"
+	"github.com/openkcm/extauthz/internal/ratedetectionqueue"
 	"github.com/openkcm/extauthz/internal/session"
 )
 
@@ -441,7 +442,7 @@ func TestCheck_LogsCarryTraceID(t *testing.T) {
 	assert.Contains(t, logs, knownTraceID, "expected log output to carry the inbound TraceID")
 }
 
-func TestCheck_NilRequest_NoSpan(t *testing.T) {
+func TestCheck_NilRequest_HasSpan(t *testing.T) {
 	tracer, exp := newTestTracer(t)
 	srv := newTestServer(t, tracer, nil)
 
@@ -449,16 +450,126 @@ func TestCheck_NilRequest_NoSpan(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, int32(code.Code_UNAUTHENTICATED), resp.GetStatus().GetCode())
 
-	for _, s := range exp.GetSpans() {
-		if s.Name == spanNameCheck {
-			t.Fatalf("unexpected %q span on nil request", spanNameCheck)
-		}
+	assert.True(t, findCheckSpan(t, exp).SpanContext.IsValid())
+}
+
+func TestCheck_AllowedRepairsMissingOrInvalidContext(t *testing.T) {
+	for _, parent := range []string{"", "garbage",
+		"00-00000000000000000000000000000000-bbbbbbbbbbbbbbbb-01",
+		"00-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-0000000000000000-01",
+	} {
+		t.Run(parent, func(t *testing.T) {
+			tracer, exp := newTestTracer(t)
+			srv := newTestServer(t, tracer, nil)
+			srv.trustedSubjectToRegion = map[string]string{"CN=minime": "minime-region"}
+			// Exercise both signed and unsigned allowed responses.
+			if parent == "" {
+				srv.clientDataSigner = nil
+			}
+			req := validRequest()
+			headers := req.GetAttributes().GetRequest().GetHttp().GetHeaders()
+			headers[HeaderForwardedClientCert] = "Hash=123;Subject=\"CN=minime\";Cert=" + x509CertPEMURLEncoded
+			headers[HeaderTraceparent] = parent
+			headers[HeaderTracestate] = "orphan=value"
+			headers[HeaderBaggage] = "vendor=value"
+
+			resp, err := srv.Check(t.Context(), req)
+			require.NoError(t, err)
+			require.Equal(t, int32(code.Code_OK), resp.GetStatus().GetCode())
+			forwarded := propagation.MapCarrier{}
+			for _, h := range resp.GetOkResponse().GetHeaders() {
+				if h.GetHeader().GetKey() == HeaderTraceparent {
+					assert.Equal(t, int32(2), int32(h.GetAppendAction()), "must overwrite, never append traceparent")
+				}
+				forwarded[h.GetHeader().GetKey()] = h.GetHeader().GetValue()
+			}
+			sc := trace.SpanContextFromContext(propagation.TraceContext{}.Extract(t.Context(), forwarded))
+			require.True(t, sc.IsValid(), "allowed response must supply a valid replacement context")
+			assert.Equal(t, findCheckSpan(t, exp).SpanContext.TraceID(), sc.TraceID())
+			assert.Equal(t, findCheckSpan(t, exp).SpanContext.SpanID(), sc.SpanID())
+			assert.Contains(t, resp.GetOkResponse().GetHeadersToRemove(), HeaderTracestate)
+			assert.NotContains(t, resp.GetOkResponse().GetHeadersToRemove(), HeaderBaggage)
+			assert.Equal(t, parent, headers[HeaderTraceparent], "request must not be mutated")
+		})
 	}
 }
 
-func TestCheck_TelemetryDisabled_NoOp(t *testing.T) {
-	// No WithTracer option — NewServer falls back to the global no-op tracer
-	// because no real TracerProvider is installed.
+func TestCheck_HTTPParentLinksDistinctTransport(t *testing.T) {
+	tracer, exp := newTestTracer(t)
+	ctx, transport := tracer.Start(t.Context(), "transport")
+	defer transport.End()
+	srv := newTestServer(t, tracer, nil)
+	req := validRequest()
+	req.Attributes.Request.Http.Headers[HeaderTraceparent] = knownTraceparentVal
+	req.Attributes.Request.Http.Headers[HeaderTracestate] = "vendor=value"
+	_, err := srv.Check(ctx, req)
+	require.NoError(t, err)
+	span := findCheckSpan(t, exp)
+	assert.Equal(t, knownTraceID, span.SpanContext.TraceID().String())
+	assert.Equal(t, "vendor=value", span.SpanContext.TraceState().String())
+	require.Len(t, span.Links, 1)
+	assert.Equal(t, transport.SpanContext(), span.Links[0].SpanContext)
+}
+
+func TestCheck_TransportParentFallback(t *testing.T) {
+	tracer, exp := newTestTracer(t)
+	srv := newTestServer(t, tracer, nil)
+	ctx := propagation.TraceContext{}.Extract(t.Context(), propagation.MapCarrier{HeaderTraceparent: knownTraceparentVal, HeaderTracestate: "vendor=value"})
+	req := validRequest()
+	req.Attributes.Request.Http.Headers[HeaderTraceparent] = "malformed"
+	_, err := srv.Check(ctx, req)
+	require.NoError(t, err)
+	span := findCheckSpan(t, exp)
+	assert.Equal(t, knownTraceID, span.SpanContext.TraceID().String())
+	assert.Equal(t, knownParentSpanID, span.Parent.SpanID().String())
+	assert.Equal(t, "vendor=value", span.SpanContext.TraceState().String())
+}
+
+func TestCheck_SigningFailureMarksSpanAsError(t *testing.T) {
+	tracer, exp := newTestTracer(t)
+	srv := newTestServer(t, tracer, nil)
+	require.NoError(t, srv.clientDataSigner.Close())
+	signer, err := clientdata.NewSigner(&commoncfg.FeatureGates{}, &config.ClientData{SigningKeyIDFilePath: filepath.Join(t.TempDir(), "missing-key-id")})
+	require.NoError(t, err)
+	srv.clientDataSigner = signer
+	srv.trustedSubjectToRegion = map[string]string{"CN=minime": "region"}
+	req := validRequest()
+	req.Attributes.Request.Http.Headers[HeaderForwardedClientCert] = "Hash=123;Subject=\"CN=minime\";Cert=" + x509CertPEMURLEncoded
+	response, err := srv.Check(t.Context(), req)
+	require.NoError(t, err)
+	assert.Equal(t, int32(code.Code_INTERNAL), response.GetStatus().GetCode())
+	assert.Equal(t, codes.Error, findCheckSpan(t, exp).Status.Code)
+}
+
+func TestRateDetectionLinksProducerAfterRequestCancellation(t *testing.T) {
+	tracer, exp := newTestTracer(t)
+	srv := newTestServer(t, tracer, nil)
+	queue := ratedetectionqueue.New(ratedetectionqueue.Options{Size: 1, Workers: 1})
+	srv.rateDetectionQueue = queue
+	ctx, cancel := context.WithCancel(t.Context())
+	ctx, producer := tracer.Start(ctx, "request")
+	var received trace.SpanContext
+	var jobErr error
+	srv.submit(ctx, func(jobCtx context.Context) {
+		received = trace.SpanContextFromContext(jobCtx)
+		jobErr = jobCtx.Err()
+	})
+	producer.End()
+	cancel()
+	queue.Start()
+	require.NoError(t, queue.Close())
+	require.NoError(t, jobErr)
+	require.True(t, received.IsValid())
+	assert.NotEqual(t, producer.SpanContext().TraceID(), received.TraceID())
+	spans := exp.GetSpans()
+	require.Len(t, spans, 2)
+	assert.Equal(t, "ext_authz.rate_detection", spans[1].Name)
+	require.Len(t, spans[1].Links, 1)
+	assert.Equal(t, producer.SpanContext(), spans[1].Links[0].SpanContext)
+}
+
+func TestCheck_DefaultTracerKeepsAuthorizationDecision(t *testing.T) {
+	// No WithTracer option: authorization works with the process-wide provider.
 	srv := newTestServer(t, nil, nil)
 
 	req := validRequest()

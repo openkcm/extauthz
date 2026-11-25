@@ -3,8 +3,9 @@ package session
 import (
 	"context"
 	"fmt"
-	"net/http"
 
+	"github.com/openkcm/common-sdk/pkg/commoncfg"
+	"github.com/openkcm/common-sdk/pkg/commonhttp"
 	"github.com/openkcm/common-sdk/pkg/oidc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -100,8 +101,13 @@ func (m *Manager) GetOIDCProvider(ctx context.Context, tenantID string) (*oidc.P
 
 	opts := make([]oidc.ProviderOption, 0, 2)
 
-	// Create OAuth2 HTTP client if builder is configured and clientID is provided
-	var httpClient *http.Client
+	publicHTTPClient, err := commonhttp.NewHTTPClient(&commoncfg.HTTPClient{})
+	if err != nil {
+		return nil, fmt.Errorf("creating public OIDC HTTP client: %w", err)
+	}
+
+	// The builder supplies an instrumented authenticated client when configured.
+	httpClient := publicHTTPClient
 	if m.newCreds != nil && clientID != "" {
 		var err error
 		httpClient, err = m.newCreds(clientID)
@@ -109,7 +115,7 @@ func (m *Manager) GetOIDCProvider(ctx context.Context, tenantID string) (*oidc.P
 			return nil, fmt.Errorf("creating OAuth2 HTTP client for clientID %s: %w", clientID, err)
 		}
 	}
-	opts = append(opts, oidc.WithSecureHTTPClient(httpClient))
+	opts = append(opts, oidc.WithPublicHTTPClient(publicHTTPClient), oidc.WithSecureHTTPClient(httpClient))
 	if provider.GetJwksUri() != "" {
 		opts = append(opts, oidc.WithCustomJWKSURI(provider.GetJwksUri()))
 	}

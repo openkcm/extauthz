@@ -7,7 +7,7 @@ import (
 	"github.com/openkcm/common-sdk/pkg/commonhttp"
 )
 
-// Builder creates an HTTP client with OAuth2 credentials for a given clientID.
+// Builder creates an instrumented HTTP client with OAuth2 credentials for a given clientID.
 type Builder func(clientID string) (*http.Client, error)
 
 // NewBuilder returns a Builder that uses the provided OAuth2 template.
@@ -19,6 +19,9 @@ func NewBuilder(template commoncfg.OAuth2) Builder {
 			Source: commoncfg.EmbeddedSourceValue,
 			Value:  clientID,
 		}
-		return commonhttp.NewClientFromOAuth2(&cfg)
+		return commonhttp.NewHTTPClient(&commoncfg.HTTPClient{
+			OAuth2Auth: &cfg,
+			MTLS:       cfg.MTLS,
+		})
 	}
 }

@@ -12,7 +12,7 @@ require (
 	github.com/jellydator/ttlcache/v3 v3.4.1
 	github.com/moby/moby/api v1.57.0
 	github.com/openkcm/api-sdk v0.23.0
-	github.com/openkcm/common-sdk v1.22.0
+	github.com/openkcm/common-sdk v1.23.0
 	github.com/samber/oops v1.23.2
 	github.com/stretchr/testify v1.12.1
 	github.com/testcontainers/testcontainers-go v0.45.0
