@@ -3,7 +3,7 @@ module github.com/openkcm/extauthz
 go 1.27.4
 
 require (
-	github.com/cedar-policy/cedar-go v1.9.2
+	github.com/cedar-policy/cedar-go v1.9.3
 	github.com/envoyproxy/go-control-plane/envoy v1.40.0
 	github.com/go-jose/go-jose/v4 v4.1.9
 	github.com/goccy/go-yaml v1.19.2
