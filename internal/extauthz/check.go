@@ -192,7 +192,7 @@ func (srv *Server) Check(ctx context.Context, req *envoyauth.CheckRequest) (*env
 	switch result.is {
 	case ALLOWED:
 		headersToAdd := []*envoycore.HeaderValueOption{}
-		headersToRemove := []string{HeaderForwardedClientCert}
+		headersToRemove := []string{HeaderForwardedClientCert, auth.HeaderClientData, auth.HeaderClientDataSignature}
 
 		if srv.clientDataSigner == nil {
 			return respondAllowed(headersToAdd, headersToRemove), nil

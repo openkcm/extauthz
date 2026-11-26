@@ -19,6 +19,7 @@ func headerValueOption(key, val string) *envoy_core.HeaderValueOption {
 			Key:   key,
 			Value: val,
 		},
+		AppendAction: envoy_core.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD,
 	}
 }
 
