@@ -314,6 +314,10 @@ func (handler *OIDC) ProviderFor(ctx context.Context, issuer, jwksURI, tenantID 
 		return nil, fmt.Errorf("getting provider by tenant id: %w", err)
 	}
 
+	if provider.Issuer() != issuer {
+		return nil, fmt.Errorf("%w: provider issuer %s does not match token issuer %s", ErrNoProvider, provider.Issuer(), issuer)
+	}
+
 	return provider, nil
 }
 
